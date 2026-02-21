@@ -1,0 +1,21 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAdmin() {
+      return request.auth != null && request.auth.token.admin == true;
+    }
+
+    match /channels/{id} {
+      allow read, write: if isAdmin();
+    }
+
+    match /playlists/{id} {
+      allow read, write: if isAdmin();
+    }
+
+    match /playlists_public/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+  }
+}
