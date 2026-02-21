@@ -1,0 +1,12 @@
+{
+  "name": "live-channel-tester-root",
+  "private": true,
+  "scripts": {
+    "build": "cd vercel && npm run build",
+    "dev": "cd vercel && npm run dev",
+    "start": "cd vercel && npm run start"
+  },
+  "dependencies": {
+    "next": "^15.3.2"
+  }
+}
