@@ -31,3 +31,6 @@ output/
 report.csv
 live_only.m3u
 dead_only.m3u
+
+# Local legacy folder (not tracked)
+m3u-live-checker/
