@@ -12,6 +12,8 @@ __pycache__/
 .pytest_cache/
 
 # Node / Vercel / Next.js
+node_modules/
+.next/
 vercel/node_modules/
 vercel/.next/
 vercel/.vercel/

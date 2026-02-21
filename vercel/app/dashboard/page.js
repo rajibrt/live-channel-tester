@@ -1,5 +1,8 @@
-import { requireAdmin } from "../../lib/auth";
+import Link from "next/link";
 import { getSupabaseAdmin } from "../../lib/supabaseAdmin";
+import styles from "./page.module.css";
+import AdminHeader from "./AdminHeader";
+import CopyUrlButton from "./CopyUrlButton";
 
 async function getData() {
   const supabase = getSupabaseAdmin();
@@ -16,78 +19,96 @@ async function getData() {
 }
 
 export default async function DashboardPage() {
-  await requireAdmin();
   const { playlists, tokenBySlug } = await getData();
   const base = process.env.PUBLIC_PLAYLIST_BASE_URL || "";
+  const activeTokenCount = Object.keys(tokenBySlug).length;
 
   return (
-    <main>
-      <h1>Admin Dashboard</h1>
-      <form action="/api/auth/logout" method="post" style={{ marginBottom: 18 }}>
-        <button type="submit">Logout</button>
-      </form>
+    <main className={styles.page}>
+      <div className={styles.bgGlow} />
+      <section className={styles.shell}>
+        <AdminHeader
+          title="Dashboard"
+          subtitle="Use the menu to open each function on its own route."
+        />
 
-      <section style={{ marginBottom: 24 }}>
-        <h2>Create / Update Playlist</h2>
-        <form method="post" action="/api/admin/playlists">
-          <input name="slug" placeholder="playlist-slug" required style={{ marginRight: 8 }} />
-          <input name="name" placeholder="Playlist name" required style={{ marginRight: 8 }} />
-          <button type="submit">Save Playlist</button>
-        </form>
-      </section>
+        <section className={styles.stats}>
+          <article className={styles.statCard}>
+            <p>Total Playlists</p>
+            <strong>{playlists.length}</strong>
+          </article>
+          <article className={styles.statCard}>
+            <p>Active Tokens</p>
+            <strong>{activeTokenCount}</strong>
+          </article>
+          <article className={styles.statCard}>
+            <p>Total Channels</p>
+            <strong>{playlists.reduce((sum, p) => sum + (Number(p.channel_count) || 0), 0)}</strong>
+          </article>
+        </section>
 
-      <section style={{ marginBottom: 24 }}>
-        <h2>Add / Update Channel + Attach Playlist</h2>
-        <form method="post" action="/api/admin/channels">
-          <input name="playlist_slug" placeholder="playlist slug" required style={{ marginRight: 8 }} />
-          <input name="stream_url" placeholder="stream url" required style={{ marginRight: 8 }} />
-          <input name="name" placeholder="channel name" required style={{ marginRight: 8 }} />
-          <input name="category" placeholder="category" style={{ marginRight: 8 }} />
-          <input name="logo_url" placeholder="logo url" style={{ marginRight: 8 }} />
-          <button type="submit">Save Channel</button>
-        </form>
-      </section>
+        <section className={styles.grid}>
+          <article className={styles.card}>
+            <h2>Playlists</h2>
+            <p className={styles.hint}>Create/update playlist and rotate permanent token.</p>
+            <Link href="/dashboard/playlists" className={styles.navCta}>Open Playlists</Link>
+          </article>
+          <article className={styles.card}>
+            <h2>Channels</h2>
+            <p className={styles.hint}>Attach stream URLs and metadata to a playlist.</p>
+            <Link href="/dashboard/channels" className={styles.navCta}>Open Channels</Link>
+          </article>
+          <article className={styles.card}>
+            <h2>Local Check</h2>
+            <p className={styles.hint}>Run Local IP/ISP check with progress + live preview.</p>
+            <Link href="/dashboard/local-check" className={styles.navCta}>Open Local Check</Link>
+          </article>
+        </section>
 
-      <section style={{ marginBottom: 24 }}>
-        <h2>Generate Permanent Token</h2>
-        <form method="post" action="/api/admin/tokens">
-          <input name="playlist_slug" placeholder="playlist slug" required style={{ marginRight: 8 }} />
-          <button type="submit">Generate / Rotate Token</button>
-        </form>
-      </section>
-
-      <section>
-        <h2>Playlists</h2>
-        <table cellPadding="8" style={{ borderCollapse: "collapse", width: "100%" }}>
-          <thead>
-            <tr>
-              <th align="left">Slug</th>
-              <th align="left">Name</th>
-              <th align="left">Channels</th>
-              <th align="left">Token URL</th>
-            </tr>
-          </thead>
-          <tbody>
-            {playlists.map((p) => {
-              const token = tokenBySlug[p.slug];
-              const url = token && base ? `${base}/playlist/${token}.m3u` : "";
-              return (
-                <tr key={p.slug}>
-                  <td>{p.slug}</td>
-                  <td>{p.name}</td>
-                  <td>{p.channel_count}</td>
-                  <td>
-                    {url ? (
-                      <a href={url} target="_blank" rel="noreferrer">{url}</a>
-                    ) : (
-                      <span>Generate token</span>
-                    )}
-                  </td>
+        <section className={`${styles.card} ${styles.tableCard}`}>
+          <h2>Playlists</h2>
+          <div className={styles.tableWrap}>
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Slug</th>
+                  <th>Channels</th>
+                  <th>Token URL</th>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
+              </thead>
+              <tbody>
+                {playlists.map((p) => {
+                  const token = tokenBySlug[p.slug];
+                  const url = token && base ? `${base}/playlist/${token}.m3u` : "";
+                  return (
+                    <tr key={p.slug}>
+                      <td>
+                        <Link href={`/dashboard/playlists/${p.slug}`} className={styles.url}>
+                          {p.name}
+                        </Link>
+                      </td>
+                      <td>{p.slug}</td>
+                      <td>{p.channel_count}</td>
+                      <td>
+                        {url ? (
+                          <div className={styles.urlCell}>
+                            <a href={url} target="_blank" rel="noreferrer" className={styles.url}>
+                              {url}
+                            </a>
+                            <CopyUrlButton value={url} />
+                          </div>
+                        ) : (
+                          <span className={styles.pending}>Generate token</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
       </section>
     </main>
   );

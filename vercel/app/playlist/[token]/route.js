@@ -8,12 +8,22 @@ function sanitizeAttr(value) {
   return (value || "").replaceAll('"', "'").trim();
 }
 
+function normalizeTokenParam(rawToken) {
+  const value = String(rawToken || "").trim();
+  if (!value) return "";
+  return value.toLowerCase().endsWith(".m3u") ? value.slice(0, -4) : value;
+}
+
 export async function GET(_request, context) {
   const { token } = await context.params;
+  const normalizedToken = normalizeTokenParam(token);
   const supabaseUrl = process.env.SUPABASE_URL || "";
   const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
   if (!supabaseUrl || !serviceRole) {
     return new Response("Server not configured", { status: 500 });
+  }
+  if (!normalizedToken) {
+    return new Response("Playlist not found", { status: 404 });
   }
 
   const supabase = createClient(supabaseUrl, serviceRole, {
@@ -23,7 +33,7 @@ export async function GET(_request, context) {
   const { data: tokenRow, error: tokenErr } = await supabase
     .from("playlist_tokens")
     .select("playlist_slug,is_active")
-    .eq("token", token)
+    .eq("token", normalizedToken)
     .single();
   if (tokenErr || !tokenRow || tokenRow.is_active !== true) {
     return new Response("Playlist not found", { status: 404 });

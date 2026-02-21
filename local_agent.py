@@ -15,7 +15,6 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from checker import Entry, check_live, fetch_text, parse_m3u
 from env_loader import load_dotenv_if_exists
-from firebase_publisher import publish_curated_playlist
 from supabase_publisher import publish_curated_playlist_supabase
 
 app = FastAPI(title="M3U Local Agent", version="1.0.0")
@@ -402,7 +401,7 @@ def publish_online(payload: dict):
     job_id = (payload.get("job_id") or "").strip()
     playlist_slug = (payload.get("playlist_slug") or "").strip()
     playlist_name = (payload.get("playlist_name") or "").strip()
-    provider = (payload.get("provider") or "firebase").strip().lower()
+    provider = (payload.get("provider") or "supabase").strip().lower()
     publish_all_live = bool(payload.get("publish_all_live"))
     if not job_id:
         raise HTTPException(status_code=400, detail="job_id is required.")
@@ -428,18 +427,14 @@ def publish_online(payload: dict):
         raise HTTPException(status_code=400, detail="No channels to publish. Save curated channels or enable publish_all_live.")
 
     try:
-        if provider == "supabase":
-            result = publish_curated_playlist_supabase(
-                playlist_slug=playlist_slug,
-                playlist_name=playlist_name or playlist_slug,
-                channels=channels,
-            )
-        else:
-            result = publish_curated_playlist(
-                playlist_slug=playlist_slug,
-                playlist_name=playlist_name or playlist_slug,
-                channels=channels,
-            )
+        if provider != "supabase":
+            raise HTTPException(status_code=400, detail="Unsupported provider. Use supabase.")
+
+        result = publish_curated_playlist_supabase(
+            playlist_slug=playlist_slug,
+            playlist_name=playlist_name or playlist_slug,
+            channels=channels,
+        )
         return {"ok": True, "result": result}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))

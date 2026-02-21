@@ -13,7 +13,6 @@ from flask import Flask, Response, jsonify, render_template, request, send_file,
 
 from checker import Entry, check_live, fetch_text, parse_m3u
 from env_loader import load_dotenv_if_exists
-from firebase_publisher import publish_curated_playlist
 from supabase_publisher import publish_curated_playlist_supabase
 
 app = Flask(__name__)
@@ -438,7 +437,7 @@ def publish_online():
     job_id = (payload.get("job_id") or "").strip()
     playlist_slug = (payload.get("playlist_slug") or "").strip()
     playlist_name = (payload.get("playlist_name") or "").strip()
-    provider = (payload.get("provider") or "firebase").strip().lower()
+    provider = (payload.get("provider") or "supabase").strip().lower()
     publish_all_live = bool(payload.get("publish_all_live"))
 
     if not job_id:
@@ -465,18 +464,14 @@ def publish_online():
         return jsonify({"error": "No channels to publish. Save curated channels or enable publish_all_live."}), 400
 
     try:
-        if provider == "supabase":
-            result = publish_curated_playlist_supabase(
-                playlist_slug=playlist_slug,
-                playlist_name=playlist_name or playlist_slug,
-                channels=channels,
-            )
-        else:
-            result = publish_curated_playlist(
-                playlist_slug=playlist_slug,
-                playlist_name=playlist_name or playlist_slug,
-                channels=channels,
-            )
+        if provider != "supabase":
+            return jsonify({"error": "Unsupported provider. Use supabase."}), 400
+
+        result = publish_curated_playlist_supabase(
+            playlist_slug=playlist_slug,
+            playlist_name=playlist_name or playlist_slug,
+            channels=channels,
+        )
         return jsonify({"ok": True, "result": result})
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500

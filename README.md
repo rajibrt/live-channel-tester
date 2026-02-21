@@ -101,61 +101,7 @@ source .venv/bin/activate
 python -m uvicorn local_agent:app --host 127.0.0.1 --port 8787
 ```
 
-## Publish Curated Playlist To Firebase (Permanent)
-
-After checking and saving curated channels, use `Publish Online Playlist` section in UI.
-
-Required env vars (for `app.py` or `local_agent.py` process):
-
-- `FIREBASE_SERVICE_ACCOUNT_JSON`:
-  - service account JSON file path, or
-  - raw JSON string
-- `FIREBASE_STORAGE_BUCKET` (example: `your-project.appspot.com`)
-- `FIREBASE_PLAYLIST_BASE_URL` (example: `https://us-central1-your-project.cloudfunctions.net`)
-
-Example (file path mode):
-
-```bash
-export FIREBASE_SERVICE_ACCOUNT_JSON="/absolute/path/service-account.json"
-export FIREBASE_STORAGE_BUCKET="your-project.appspot.com"
-export FIREBASE_PLAYLIST_BASE_URL="https://us-central1-your-project.cloudfunctions.net"
-```
-
-Publish result:
-- Firestore `channels`, `playlists`, `playlists_public` updated
-- Storage `playlists/{slug}/current.m3u` updated
-- Public URL returned as: `{FIREBASE_PLAYLIST_BASE_URL}/playlist/{slug}.m3u`
-
-## Firebase Deploy Scaffold
-
-Project files are in `firebase/`:
-
-- `firebase/firebase.json`
-- `firebase/firestore.rules`
-- `firebase/storage.rules`
-- `firebase/functions/index.js`
-
-Deploy high-level steps:
-
-```bash
-cd m3u-live-checker/firebase
-firebase login
-firebase use <your-project-id>
-cd functions && npm install && cd ..
-firebase deploy
-```
-
-Or one-command deploy:
-
-```bash
-cd m3u-live-checker/firebase
-./deploy.sh <your-project-id>
-```
-
-Optional project file template:
-- copy `firebase/.firebaserc.example` -> `firebase/.firebaserc`
-
-## Vercel + Supabase (No Firebase Billing Path)
+## Publish Curated Playlist (Supabase)
 
 If Firebase billing blocks App Engine/Functions, use Supabase + Vercel.
 
