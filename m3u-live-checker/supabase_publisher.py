@@ -1,5 +1,6 @@
 import os
 import re
+import secrets
 from datetime import datetime, timezone
 from typing import Dict, List, Tuple
 
@@ -126,7 +127,6 @@ def publish_curated_playlist_supabase(playlist_slug: str, playlist_name: str, ch
 
     records = [
         {
-            "playlist_slug": slug,
             "name": e.title,
             "category": e.category,
             "logo_url": e.logo_url,
@@ -144,6 +144,24 @@ def publish_curated_playlist_supabase(playlist_slug: str, playlist_name: str, ch
     )
     if rc.status_code >= 300:
         raise RuntimeError(f"Supabase channels upsert failed: {rc.status_code} {rc.text[:300]}")
+    rows = rc.json() if rc.text else []
+    channel_id_by_url = {
+        _normalize_url(r.get("stream_url", "")): r.get("id")
+        for r in rows
+        if isinstance(r, dict)
+    }
+    missing_urls = [_normalize_url(e.url) for e in deduped_entries if _normalize_url(e.url) not in channel_id_by_url]
+    if missing_urls:
+        q = ",".join(f"stream_url.eq.{u}" for u in missing_urls[:1000])
+        rs_get = requests.get(
+            f"{supabase_url}/rest/v1/channels?select=id,stream_url&or=({q})",
+            headers=_headers(service_role),
+            timeout=20,
+        )
+        if rs_get.status_code >= 300:
+            raise RuntimeError(f"Supabase channel requery failed: {rs_get.status_code} {rs_get.text[:300]}")
+        for r in rs_get.json() if rs_get.text else []:
+            channel_id_by_url[_normalize_url(r.get("stream_url", ""))] = r.get("id")
 
     rp = requests.post(
         f"{supabase_url}/rest/v1/playlists?on_conflict=slug",
@@ -162,6 +180,29 @@ def publish_curated_playlist_supabase(playlist_slug: str, playlist_name: str, ch
     if rp.status_code >= 300:
         raise RuntimeError(f"Supabase playlists upsert failed: {rp.status_code} {rp.text[:300]}")
 
+    rd = requests.delete(
+        f"{supabase_url}/rest/v1/playlist_channels?playlist_slug=eq.{slug}",
+        headers=_headers(service_role),
+        timeout=20,
+    )
+    if rd.status_code >= 300:
+        raise RuntimeError(f"Supabase playlist_channels cleanup failed: {rd.status_code} {rd.text[:300]}")
+
+    links = []
+    for idx, e in enumerate(deduped_entries):
+        cid = channel_id_by_url.get(_normalize_url(e.url))
+        if cid:
+            links.append({"playlist_slug": slug, "channel_id": cid, "position": idx})
+    if links:
+        rl = requests.post(
+            f"{supabase_url}/rest/v1/playlist_channels",
+            headers=_headers(service_role),
+            json=links,
+            timeout=20,
+        )
+        if rl.status_code >= 300:
+            raise RuntimeError(f"Supabase playlist_channels insert failed: {rl.status_code} {rl.text[:300]}")
+
     storage_headers = _headers(service_role, content_type="audio/x-mpegurl")
     storage_headers["x-upsert"] = "true"
     storage_path = f"playlists/{slug}/current.m3u"
@@ -174,8 +215,24 @@ def publish_curated_playlist_supabase(playlist_slug: str, playlist_name: str, ch
     if rs.status_code >= 300:
         raise RuntimeError(f"Supabase storage upload failed: {rs.status_code} {rs.text[:300]}")
 
+    token = secrets.token_urlsafe(24)
+    rt = requests.post(
+        f"{supabase_url}/rest/v1/playlist_tokens?on_conflict=playlist_slug",
+        headers=_headers(service_role),
+        json=[{"playlist_slug": slug, "token": token, "is_active": True}],
+        timeout=20,
+    )
+    if rt.status_code >= 300:
+        raise RuntimeError(f"Supabase token upsert failed: {rt.status_code} {rt.text[:300]}")
+    token_rows = rt.json() if rt.text else []
+    active_token = token_rows[0].get("token") if token_rows else token
+
     public_base = os.environ.get("PUBLIC_PLAYLIST_BASE_URL", "").rstrip("/")
-    playlist_url = f"{public_base}/playlist/{slug}.m3u" if public_base else f"{supabase_url}/storage/v1/object/public/{storage_path}"
+    playlist_url = (
+        f"{public_base}/playlist/{active_token}.m3u"
+        if public_base
+        else f"{supabase_url}/storage/v1/object/public/{storage_path}"
+    )
 
     return {
         "provider": "supabase",
@@ -185,5 +242,6 @@ def publish_curated_playlist_supabase(playlist_slug: str, playlist_name: str, ch
         "duplicate_urls_skipped": skipped_urls,
         "duplicate_names_renamed": renamed_names,
         "storage_path": storage_path,
+        "token": active_token,
         "playlist_url": playlist_url,
     }

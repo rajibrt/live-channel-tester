@@ -1,0 +1,33 @@
+# Environment
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# Node / Vercel / Next.js
+vercel/node_modules/
+vercel/.next/
+vercel/.vercel/
+firebase/functions/node_modules/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
+.DS_Store
+
+# Generated local outputs
+output/
+report.csv
+live_only.m3u
+dead_only.m3u

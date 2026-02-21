@@ -202,10 +202,13 @@ npm install
 Set Vercel env vars:
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `PUBLIC_PLAYLIST_BASE_URL`
 
 Deploy to Vercel. Public playlist URL format:
 
-`https://your-vercel-app.vercel.app/playlist/{slug}.m3u`
+`https://your-vercel-app.vercel.app/playlist/{token}.m3u`
 
 Or use helper:
 
@@ -215,6 +218,14 @@ cd m3u-live-checker/vercel
 ```
 
 This URL is stable and can be used directly in TV apps.
+
+### 4) Admin-only Dashboard
+
+- Login page: `/login`
+- Dashboard: `/dashboard`
+- Insert your auth user into `admin_users` table (`user_id`, `email`, `is_active=true`)
+- Dashboard/API are admin-protected
+- Generate permanent token URL per playlist from dashboard
 
 ## Notes
 
