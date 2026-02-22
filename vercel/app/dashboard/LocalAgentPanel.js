@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import styles from "./page.module.css";
 
 function slugify(value) {
@@ -12,6 +12,10 @@ function slugify(value) {
     .replace(/-+/g, "-");
 }
 
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export default function LocalAgentPanel({ defaultAgentBaseUrl }) {
   const [playlistUrl, setPlaylistUrl] = useState("");
   const [playlistFile, setPlaylistFile] = useState(null);
@@ -21,6 +25,7 @@ export default function LocalAgentPanel({ defaultAgentBaseUrl }) {
   const [maxItems, setMaxItems] = useState(0);
   const [verifySegment, setVerifySegment] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [paused, setPaused] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
   const [progress, setProgress] = useState({
@@ -36,19 +41,47 @@ export default function LocalAgentPanel({ defaultAgentBaseUrl }) {
   const [preview, setPreview] = useState(null);
   const [playlistSlug, setPlaylistSlug] = useState("");
   const [playlistName, setPlaylistName] = useState("");
+  const [mergeWithExisting, setMergeWithExisting] = useState(true);
+  const [existingPlaylists, setExistingPlaylists] = useState([]);
+  const [mergeTargetSlug, setMergeTargetSlug] = useState("");
   const [saveLoading, setSaveLoading] = useState("");
   const [saveMessage, setSaveMessage] = useState("");
   const [saveError, setSaveError] = useState("");
+  const [saveDuplicateUrls, setSaveDuplicateUrls] = useState([]);
+
+  const abortRef = useRef(null);
+  const pausedRef = useRef(false);
+
+  useEffect(() => {
+    pausedRef.current = paused;
+  }, [paused]);
+
+  useEffect(() => {
+    fetchExistingPlaylists();
+  }, []);
+
+  async function fetchExistingPlaylists() {
+    try {
+      const res = await fetch("/api/admin/playlists", { cache: "no-store" });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) return;
+      setExistingPlaylists(Array.isArray(payload?.items) ? payload.items : []);
+    } catch {
+      // ignore silently
+    }
+  }
 
   async function onSubmit(event) {
     event.preventDefault();
     setLoading(true);
+    setPaused(false);
     setError("");
     setResult(null);
     setLiveItems([]);
     setCheckedItems([]);
     setSaveMessage("");
     setSaveError("");
+    setSaveDuplicateUrls([]);
     setSaveLoading("");
     setProgress({
       total: 0,
@@ -58,6 +91,7 @@ export default function LocalAgentPanel({ defaultAgentBaseUrl }) {
       currentTitle: "",
       currentUrl: "",
     });
+    abortRef.current = new AbortController();
     try {
       if (!playlistUrl.trim() && !playlistFile) {
         throw new Error("Please provide Playlist URL or choose a .m3u file.");
@@ -75,6 +109,7 @@ export default function LocalAgentPanel({ defaultAgentBaseUrl }) {
       const res = await fetch("/api/admin/local-agent/check-stream", {
         method: "POST",
         body: form,
+        signal: abortRef.current.signal,
       });
       if (!res.ok) {
         const payload = await res.json().catch(() => ({}));
@@ -82,12 +117,14 @@ export default function LocalAgentPanel({ defaultAgentBaseUrl }) {
       }
 
       const reader = res.body?.getReader();
-      if (!reader) {
-        throw new Error("No streaming response body received.");
-      }
+      if (!reader) throw new Error("No streaming response body received.");
       const decoder = new TextDecoder();
       let buffer = "";
+
       while (true) {
+        while (pausedRef.current) {
+          await wait(120);
+        }
         const { value, done } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
@@ -166,9 +203,21 @@ export default function LocalAgentPanel({ defaultAgentBaseUrl }) {
         }
       }
     } catch (err) {
-      setError(err?.message || "Failed to run local agent check.");
+      if (err?.name === "AbortError") {
+        setError("Check stopped.");
+      } else {
+        setError(err?.message || "Failed to run local agent check.");
+      }
     } finally {
       setLoading(false);
+      setPaused(false);
+      abortRef.current = null;
+    }
+  }
+
+  function stopRun() {
+    if (abortRef.current) {
+      abortRef.current.abort();
     }
   }
 
@@ -176,9 +225,7 @@ export default function LocalAgentPanel({ defaultAgentBaseUrl }) {
     try {
       setSaveError("");
       setSaveMessage("");
-      if (!result) {
-        throw new Error("Run a check first.");
-      }
+      setSaveDuplicateUrls([]);
       const slug = playlistSlug.trim().toLowerCase();
       if (!slug) {
         throw new Error("Playlist slug is required.");
@@ -197,6 +244,8 @@ export default function LocalAgentPanel({ defaultAgentBaseUrl }) {
         body: JSON.stringify({
           playlist_slug: slug,
           playlist_name: playlistName.trim() || slug,
+          merge_with_existing: mergeWithExisting,
+          merge_playlist_slug: mergeWithExisting ? mergeTargetSlug : "",
           mode,
           items: source,
         }),
@@ -205,15 +254,21 @@ export default function LocalAgentPanel({ defaultAgentBaseUrl }) {
       if (!res.ok) {
         throw new Error(payload?.error || "Failed to save checked links.");
       }
+      const dupes = Array.isArray(payload?.duplicate_urls) ? payload.duplicate_urls : [];
+      setSaveDuplicateUrls(dupes);
       setSaveMessage(
         `Saved ${payload.saved_channels || 0} channel(s), attached ${payload.attached_channels || 0} to "${payload.playlist_slug}".`
       );
+      await fetchExistingPlaylists();
     } catch (err) {
       setSaveError(err?.message || "Failed to save checked links.");
     } finally {
       setSaveLoading("");
     }
   }
+
+  const canSave = checkedItems.length > 0;
+  const disableSaveControls = loading || !!saveLoading;
 
   return (
     <form onSubmit={onSubmit} className={styles.form}>
@@ -292,9 +347,22 @@ export default function LocalAgentPanel({ defaultAgentBaseUrl }) {
         </label>
       </div>
 
-      <button type="submit" className={styles.primaryBtn} disabled={loading}>
-        {loading ? "Running check..." : "Run Local IP Check"}
-      </button>
+      <div className={styles.controlRow}>
+        <button type="submit" className={styles.primaryBtn} disabled={loading}>
+          {loading ? "Running check..." : "Run Local IP Check"}
+        </button>
+        <button
+          type="button"
+          className={styles.secondaryBtn}
+          disabled={!loading}
+          onClick={() => setPaused((p) => !p)}
+        >
+          {paused ? "Resume" : "Pause"}
+        </button>
+        <button type="button" className={styles.secondaryBtn} disabled={!loading} onClick={stopRun}>
+          Stop
+        </button>
+      </div>
 
       {error ? <p className={styles.errorText}>{error}</p> : null}
 
@@ -352,54 +420,94 @@ export default function LocalAgentPanel({ defaultAgentBaseUrl }) {
         </div>
       ) : null}
 
-      {result ? (
-        <div className={styles.saveBox}>
-          <h3>Save Checked Result to Database</h3>
-          <div className={styles.formGrid}>
-            <label className={styles.field}>
-              <span>Playlist Name</span>
-              <input
-                value={playlistName}
-                onChange={(e) => {
-                  const nextName = e.target.value;
-                  setPlaylistName(nextName);
-                  setPlaylistSlug(slugify(nextName));
-                }}
-                placeholder="Playlist name"
-              />
-            </label>
-            <label className={styles.field}>
-              <span>Playlist Slug (Auto)</span>
-              <input
-                value={playlistSlug}
-                onChange={(e) => setPlaylistSlug(slugify(e.target.value))}
-                placeholder="playlist-slug"
-                required
-              />
-            </label>
-          </div>
-          <div className={styles.saveActions}>
-            <button
-              type="button"
-              className={styles.primaryBtn}
-              onClick={() => saveChecked("live")}
-              disabled={!!saveLoading}
-            >
-              {saveLoading === "live" ? "Saving LIVE..." : `Save LIVE only (${progress.liveCount})`}
-            </button>
-            <button
-              type="button"
-              className={styles.secondaryBtn}
-              onClick={() => saveChecked("all")}
-              disabled={!!saveLoading}
-            >
-              {saveLoading === "all" ? "Saving all..." : `Save ALL uploaded (${checkedItems.length})`}
-            </button>
-          </div>
-          {saveError ? <p className={styles.errorText}>{saveError}</p> : null}
-          {saveMessage ? <p className={styles.successText}>{saveMessage}</p> : null}
+      <div className={styles.saveBox}>
+        <h3>Save Checked Result to Database</h3>
+        <div className={styles.formGrid}>
+          <label className={styles.field}>
+            <span>Playlist Name</span>
+            <input
+              value={playlistName}
+              onChange={(e) => {
+                const nextName = e.target.value;
+                setPlaylistName(nextName);
+                setPlaylistSlug(slugify(nextName));
+              }}
+              placeholder="Playlist name"
+              disabled={disableSaveControls}
+            />
+          </label>
+          <label className={styles.field}>
+            <span>Playlist Slug (Auto)</span>
+            <input
+              value={playlistSlug}
+              onChange={(e) => setPlaylistSlug(slugify(e.target.value))}
+              placeholder="playlist-slug"
+              required
+              disabled={disableSaveControls}
+            />
+          </label>
         </div>
-      ) : null}
+        <div className={styles.mergeRow}>
+          <label className={styles.checkRow}>
+            <input
+              type="checkbox"
+              checked={mergeWithExisting}
+              onChange={(e) => setMergeWithExisting(e.target.checked)}
+              disabled={disableSaveControls}
+            />
+            <span>Merge with Existing Playlist</span>
+          </label>
+          <label className={styles.field}>
+            <span>Existing Playlist</span>
+            <select
+              value={mergeTargetSlug}
+              onChange={(e) => {
+                const next = e.target.value;
+                setMergeTargetSlug(next);
+                const selected = existingPlaylists.find((x) => x.slug === next);
+                if (selected) {
+                  setPlaylistSlug(selected.slug || "");
+                  setPlaylistName(selected.name || selected.slug || "");
+                }
+              }}
+              disabled={disableSaveControls || !mergeWithExisting}
+            >
+              <option value="">Select playlist...</option>
+              {existingPlaylists.map((p) => (
+                <option key={p.slug} value={p.slug}>
+                  {(p.name || p.slug)} ({p.slug})
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div className={styles.saveActions}>
+          <button
+            type="button"
+            className={styles.primaryBtn}
+            onClick={() => saveChecked("live")}
+            disabled={!!saveLoading || !canSave || loading}
+          >
+            {saveLoading === "live" ? "Saving LIVE..." : `Save LIVE only (${progress.liveCount})`}
+          </button>
+          <button
+            type="button"
+            className={styles.secondaryBtn}
+            onClick={() => saveChecked("all")}
+            disabled={!!saveLoading || !canSave || loading}
+          >
+            {saveLoading === "all" ? "Saving all..." : `Save ALL checked (${checkedItems.length})`}
+          </button>
+        </div>
+        {saveError ? <p className={styles.errorText}>{saveError}</p> : null}
+        {saveMessage ? <p className={styles.successText}>{saveMessage}</p> : null}
+        {saveDuplicateUrls.length ? (
+          <p className={styles.hint}>
+            Duplicate URLs skipped ({saveDuplicateUrls.length}): {saveDuplicateUrls.slice(0, 8).join(" | ")}
+            {saveDuplicateUrls.length > 8 ? " ..." : ""}
+          </p>
+        ) : null}
+      </div>
 
       {liveItems.length ? (
         <div className={styles.liveList}>

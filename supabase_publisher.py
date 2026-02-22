@@ -3,6 +3,7 @@ import re
 import secrets
 from datetime import datetime, timezone
 from typing import Dict, List, Tuple
+from urllib.parse import quote
 
 import requests
 
@@ -51,16 +52,16 @@ def _build_entries_m3u_text(entries: List[Entry]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _dedupe_entries(entries: List[Entry]) -> Tuple[List[Entry], int, int]:
+def _dedupe_entries_with_report(entries: List[Entry]) -> Tuple[List[Entry], List[str], int]:
     unique: List[Entry] = []
     seen_urls = set()
-    url_dupes = 0
+    duplicate_urls: List[str] = []
     for e in entries:
         norm_url = _normalize_url(e.url)
         if not norm_url:
             continue
         if norm_url in seen_urls:
-            url_dupes += 1
+            duplicate_urls.append(norm_url)
             continue
         seen_urls.add(norm_url)
         unique.append(Entry(title=e.title, url=e.url, category=e.category, logo_url=e.logo_url))
@@ -78,7 +79,8 @@ def _dedupe_entries(entries: List[Entry]) -> Tuple[List[Entry], int, int]:
             renamed += 1
         e.title = candidate
         used_names.add(_normalize_name(candidate))
-    return unique, url_dupes, renamed
+
+    return unique, duplicate_urls, renamed
 
 
 def _supabase_env() -> Tuple[str, str]:
@@ -102,7 +104,84 @@ def _headers(service_role: str, content_type: str = "application/json") -> Dict[
     return headers
 
 
-def publish_curated_playlist_supabase(playlist_slug: str, playlist_name: str, channels: List[dict]) -> Dict:
+def list_playlists_supabase(limit: int = 200) -> List[Dict]:
+    supabase_url, service_role = _supabase_env()
+    capped = max(1, min(int(limit or 200), 1000))
+    rq = requests.get(
+        f"{supabase_url}/rest/v1/playlists?select=slug,name,channel_count,updated_at&order=updated_at.desc&limit={capped}",
+        headers=_headers(service_role),
+        timeout=20,
+    )
+    if rq.status_code >= 300:
+        raise RuntimeError(f"Supabase playlists query failed: {rq.status_code} {rq.text[:300]}")
+    rows = rq.json() if rq.text else []
+    out: List[Dict] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        out.append(
+            {
+                "slug": (row.get("slug") or "").strip(),
+                "name": (row.get("name") or "").strip(),
+                "channel_count": int(row.get("channel_count") or 0),
+                "updated_at": row.get("updated_at") or "",
+            }
+        )
+    return out
+
+
+def _fetch_existing_playlist_entries(supabase_url: str, service_role: str, slug: str) -> List[Entry]:
+    rq = requests.get(
+        f"{supabase_url}/rest/v1/playlist_channels?select=channel_id,position&playlist_slug=eq.{quote(slug, safe='')}&order=position.asc",
+        headers=_headers(service_role),
+        timeout=20,
+    )
+    if rq.status_code >= 300:
+        raise RuntimeError(f"Supabase existing playlist query failed: {rq.status_code} {rq.text[:300]}")
+    link_rows = rq.json() if rq.text else []
+    if not link_rows:
+        return []
+
+    channel_ids = [r.get("channel_id") for r in link_rows if r.get("channel_id") is not None]
+    if not channel_ids:
+        return []
+
+    ids_csv = ",".join(str(cid) for cid in channel_ids)
+    rc = requests.get(
+        f"{supabase_url}/rest/v1/channels?select=id,name,category,logo_url,stream_url&id=in.({quote(ids_csv, safe=',')})",
+        headers=_headers(service_role),
+        timeout=20,
+    )
+    if rc.status_code >= 300:
+        raise RuntimeError(f"Supabase existing channels query failed: {rc.status_code} {rc.text[:300]}")
+    channel_rows = rc.json() if rc.text else []
+    by_id = {row.get("id"): row for row in channel_rows if isinstance(row, dict)}
+
+    ordered_entries: List[Entry] = []
+    for link in link_rows:
+        row = by_id.get(link.get("channel_id"))
+        if not row:
+            continue
+        stream_url = (row.get("stream_url") or "").strip()
+        if not stream_url:
+            continue
+        ordered_entries.append(
+            Entry(
+                title=(row.get("name") or "").strip() or "Stream",
+                url=stream_url,
+                category=(row.get("category") or "").strip(),
+                logo_url=(row.get("logo_url") or "").strip(),
+            )
+        )
+    return ordered_entries
+
+
+def publish_curated_playlist_supabase(
+    playlist_slug: str,
+    playlist_name: str,
+    channels: List[dict],
+    merge_with_existing: bool = False,
+) -> Dict:
     if not channels:
         raise ValueError("No channels to publish.")
 
@@ -120,10 +199,16 @@ def publish_curated_playlist_supabase(playlist_slug: str, playlist_name: str, ch
         for c in channels
     ]
 
-    deduped_entries, skipped_urls, renamed_names = _dedupe_entries(entries)
-    m3u_text = _build_entries_m3u_text(deduped_entries)
-
     supabase_url, service_role = _supabase_env()
+
+    existing_entries: List[Entry] = []
+    if merge_with_existing:
+        existing_entries = _fetch_existing_playlist_entries(supabase_url, service_role, slug)
+
+    merged_input = existing_entries + entries if merge_with_existing else entries
+    deduped_entries, duplicate_url_list, renamed_names = _dedupe_entries_with_report(merged_input)
+    skipped_urls = len(duplicate_url_list)
+    m3u_text = _build_entries_m3u_text(deduped_entries)
 
     records = [
         {
@@ -238,8 +323,11 @@ def publish_curated_playlist_supabase(playlist_slug: str, playlist_name: str, ch
         "provider": "supabase",
         "slug": slug,
         "name": name,
+        "merge_with_existing": bool(merge_with_existing),
+        "existing_channels_before_merge": len(existing_entries),
         "channel_count": len(deduped_entries),
         "duplicate_urls_skipped": skipped_urls,
+        "duplicate_urls": duplicate_url_list,
         "duplicate_names_renamed": renamed_names,
         "storage_path": storage_path,
         "token": active_token,

@@ -46,12 +46,22 @@ async function getPlaylistEditorData(slug) {
     savedGroups = (groupRes.data || []).map((g) => String(g.name || "").trim()).filter(Boolean);
   }
 
-  return { playlist, channels: merged, savedGroups };
+  const { data: tokenRows } = await supabase
+    .from("playlist_tokens")
+    .select("token,is_active")
+    .eq("playlist_slug", slug)
+    .eq("is_active", true)
+    .limit(1);
+  const activeToken = Array.isArray(tokenRows) && tokenRows[0] ? String(tokenRows[0].token || "") : "";
+
+  return { playlist, channels: merged, savedGroups, activeToken };
 }
 
 export default async function PlaylistEditorPage({ params }) {
   const { slug } = await params;
   const data = await getPlaylistEditorData(slug);
+  const base = process.env.PUBLIC_PLAYLIST_BASE_URL || "";
+  const playlistUrl = data?.activeToken && base ? `${base}/playlist/${data.activeToken}.m3u` : "";
 
   return (
     <main className={styles.page}>
@@ -70,6 +80,7 @@ export default async function PlaylistEditorPage({ params }) {
           <PlaylistEditor
             playlistSlug={data.playlist.slug}
             playlistName={data.playlist.name}
+            playlistUrl={playlistUrl}
             initialChannels={data.channels}
             initialGroups={data.savedGroups || []}
           />

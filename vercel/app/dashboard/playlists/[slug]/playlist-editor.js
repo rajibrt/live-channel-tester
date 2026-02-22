@@ -6,6 +6,38 @@ import styles from "../../page.module.css";
 const PLACEHOLDER_LOGO =
   "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 64 64'><rect width='64' height='64' rx='10' fill='%23e2e8f0'/><circle cx='32' cy='24' r='9' fill='%2394a3b8'/><rect x='16' y='38' width='32' height='10' rx='5' fill='%2394a3b8'/></svg>";
 
+function PencilIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+      <path fill="currentColor" d="M3 17.25V21h3.75L17.8 9.94l-3.75-3.75L3 17.25Zm17.7-10.04a1 1 0 0 0 0-1.42L18.2 3.3a1 1 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 2-1.67Z" />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+      <path fill="currentColor" d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2Z" />
+    </svg>
+  );
+}
+
+function XIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+      <path fill="currentColor" d="m18.3 5.71-1.41-1.42L12 9.17 7.11 4.29 5.7 5.71 10.59 10.6 5.7 15.49l1.41 1.42L12 12l4.89 4.91 1.41-1.42L13.41 10.6l4.89-4.89Z" />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+      <path fill="currentColor" d="M6 7h12v2H6V7Zm2 3h8v9H8v-9Zm2-7h4l1 1h4v2H5V4h4l1-1Z" />
+    </svg>
+  );
+}
+
 function cloneChannels(channels) {
   const groupBuckets = new Map();
   channels.forEach((c) => {
@@ -24,18 +56,35 @@ function cloneChannels(channels) {
           category: key,
           logo_url: c.logo_url || "",
           stream_url: c.stream_url || "",
-          status: c.status || "LIVE",
+          status: String(c.status || "LIVE").toUpperCase(),
           order: idx + 1,
           originalCategory: key,
           originalName: c.name || "Stream",
           originalLogo: c.logo_url || "",
+          originalStreamUrl: c.stream_url || "",
         });
       });
   });
   return result;
 }
 
-export default function PlaylistEditor({ playlistSlug, playlistName, initialChannels, initialGroups = [] }) {
+function CopyIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+      <path fill="currentColor" d="M16 1H4a2 2 0 0 0-2 2v12h2V3h12V1Zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Zm0 16H8V7h11v14Z" />
+    </svg>
+  );
+}
+
+function DownloadIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+      <path fill="currentColor" d="M5 20h14v-2H5v2Zm7-18v12l4-4 1.41 1.41L12 17.83 6.59 11.41 8 10l4 4V2h0Z" />
+    </svg>
+  );
+}
+
+export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl = "", initialChannels, initialGroups = [] }) {
   const [channels, setChannels] = useState(() => cloneChannels(initialChannels));
   const [initial] = useState(() => cloneChannels(initialChannels));
   const [groupOrder, setGroupOrder] = useState(() => {
@@ -64,28 +113,53 @@ export default function PlaylistEditor({ playlistSlug, playlistName, initialChan
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [newGroupName, setNewGroupName] = useState("");
+  const [editingGroup, setEditingGroup] = useState("");
+  const [groupEditValue, setGroupEditValue] = useState("");
   const [channelToolsOpen, setChannelToolsOpen] = useState(false);
   const [preview, setPreview] = useState(null);
   const [uploadingLogoId, setUploadingLogoId] = useState(null);
+  const [copiedUrl, setCopiedUrl] = useState(false);
+  const [channelStatusFilter, setChannelStatusFilter] = useState("ALL");
+  const [healthLoading, setHealthLoading] = useState(false);
+  const [healthError, setHealthError] = useState("");
+  const [healthSummary, setHealthSummary] = useState("");
+  const [healthRows, setHealthRows] = useState([]);
+  const [healthActionLoading, setHealthActionLoading] = useState(false);
 
   const groupsWithCount = useMemo(() => {
     const counts = new Map();
     channels.forEach((c) => {
       const key = c.category || "Uncategorized";
-      counts.set(key, (counts.get(key) || 0) + 1);
+      const prev = counts.get(key) || { total: 0, live: 0, dead: 0 };
+      const status = String(c.status || "LIVE").toUpperCase();
+      counts.set(key, {
+        total: prev.total + 1,
+        live: prev.live + (status === "LIVE" ? 1 : 0),
+        dead: prev.dead + (status === "LIVE" ? 0 : 1),
+      });
     });
     const merged = [...groupOrder];
     counts.forEach((_v, k) => {
       if (!merged.includes(k)) merged.push(k);
     });
-    return merged.map((name) => ({ name, count: counts.get(name) || 0 }));
+    return merged.map((name) => {
+      const summary = counts.get(name) || { total: 0, live: 0, dead: 0 };
+      return { name, ...summary };
+    });
   }, [channels, groupOrder]);
 
   const channelsInSelected = useMemo(() => {
-    return channels
+    const base = channels
       .filter((c) => c.category === selectedGroup)
       .sort((a, b) => Number(a.order || 0) - Number(b.order || 0));
-  }, [channels, selectedGroup]);
+    if (channelStatusFilter === "LIVE") {
+      return base.filter((c) => String(c.status || "LIVE").toUpperCase() === "LIVE");
+    }
+    if (channelStatusFilter === "DEAD") {
+      return base.filter((c) => String(c.status || "LIVE").toUpperCase() !== "LIVE");
+    }
+    return base;
+  }, [channels, selectedGroup, channelStatusFilter]);
 
   const changeChannel = (id, patch) => {
     setChannels((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
@@ -120,6 +194,10 @@ export default function PlaylistEditor({ playlistSlug, playlistName, initialChan
     );
   };
 
+  const deleteChannel = (id) => {
+    setChannels((prev) => prev.filter((c) => c.id !== id));
+  };
+
   const sortGroupsAZ = () => {
     setGroupOrder((prev) => [...prev].sort((a, b) => a.localeCompare(b)));
   };
@@ -132,6 +210,64 @@ export default function PlaylistEditor({ playlistSlug, playlistName, initialChan
     setNewGroupName("");
   };
 
+  const makeUniqueGroupName = (candidate, currentName) => {
+    const base = String(candidate || "").trim();
+    if (!base) return "";
+    const existing = new Set(groupOrder.filter((x) => x !== currentName));
+    if (!existing.has(base)) return base;
+    let i = 1;
+    let next = `${base} ${i}`;
+    while (existing.has(next)) {
+      i += 1;
+      next = `${base} ${i}`;
+    }
+    return next;
+  };
+
+  const renameGroup = (oldName, nextRaw) => {
+    const draft = String(nextRaw ?? "").trim();
+    if (!draft || draft === oldName) {
+      setEditingGroup("");
+      setGroupEditValue("");
+      return;
+    }
+    const finalName = makeUniqueGroupName(draft, oldName);
+    if (!finalName) return;
+    setGroupOrder((prev) => prev.map((x) => (x === oldName ? finalName : x)));
+    setChannels((prev) => prev.map((c) => (c.category === oldName ? { ...c, category: finalName } : c)));
+    setSelectedGroup((prev) => (prev === oldName ? finalName : prev));
+    setEditingGroup("");
+    setGroupEditValue("");
+    setSuccess(`Group renamed to "${finalName}".`);
+  };
+
+  const startEditGroup = (groupName) => {
+    setEditingGroup(groupName);
+    setGroupEditValue(groupName);
+    setError("");
+    setSuccess("");
+  };
+
+  const deleteGroup = (groupName) => {
+    const count = channels.filter((c) => c.category === groupName).length;
+    if (count > 0) {
+      setError(`Cannot delete "${groupName}" because it has ${count} channel(s). Move channels first.`);
+      setSuccess("");
+      return;
+    }
+    setGroupOrder((prev) => prev.filter((x) => x !== groupName));
+    if (selectedGroup === groupName) {
+      const remaining = groupOrder.filter((x) => x !== groupName);
+      setSelectedGroup(remaining[0] || "Uncategorized");
+    }
+    if (editingGroup === groupName) {
+      setEditingGroup("");
+      setGroupEditValue("");
+    }
+    setError("");
+    setSuccess(`Deleted empty group "${groupName}".`);
+  };
+
   const sortChannelsAZ = () => {
     const sorted = channelsInSelected.slice().sort((a, b) => a.name.localeCompare(b.name));
     setChannels((prev) =>
@@ -141,6 +277,31 @@ export default function PlaylistEditor({ playlistSlug, playlistName, initialChan
         return c;
       })
     );
+  };
+
+  const sortAllGroupsChannelsAZ = () => {
+    setChannels((prev) => {
+      const grouped = new Map();
+      prev.forEach((c) => {
+        const key = c.category || "Uncategorized";
+        if (!grouped.has(key)) grouped.set(key, []);
+        grouped.get(key).push(c);
+      });
+
+      const nextById = new Map();
+      grouped.forEach((list) => {
+        const sorted = list
+          .slice()
+          .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+        sorted.forEach((item, idx) => {
+          nextById.set(item.id, { ...item, order: idx + 1 });
+        });
+      });
+
+      return prev.map((c) => nextById.get(c.id) || c);
+    });
+    setSuccess("Sorted channels A-Z in all groups.");
+    setError("");
   };
 
   const uploadLogo = async (channelId, file) => {
@@ -201,6 +362,7 @@ export default function PlaylistEditor({ playlistSlug, playlistName, initialChan
         name: c.name,
         category: c.category,
         logo_url: c.logo_url || "",
+        stream_url: c.stream_url || "",
         position: idx + 1,
       }));
 
@@ -220,9 +382,90 @@ export default function PlaylistEditor({ playlistSlug, playlistName, initialChan
   };
 
   const changedCount = channels.filter((c) => {
-    const changedMeta = c.name !== c.originalName || c.category !== c.originalCategory || (c.logo_url || "") !== (c.originalLogo || "");
+    const changedMeta =
+      c.name !== c.originalName ||
+      c.category !== c.originalCategory ||
+      (c.logo_url || "") !== (c.originalLogo || "") ||
+      (c.stream_url || "") !== (c.originalStreamUrl || "");
     return changedMeta;
   }).length;
+
+  const checkedDeadRows = healthRows.filter((x) => x.check_status === "DEAD");
+  const checkedLiveRows = healthRows.filter((x) => x.check_status === "LIVE");
+
+  const runHealthCheck = async () => {
+    try {
+      setHealthLoading(true);
+      setHealthError("");
+      setHealthSummary("");
+      const res = await fetch(`/api/admin/playlists/${playlistSlug}/health-check`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ timeout: 8, concurrency: 6 }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload?.error || "Failed to run health check.");
+      const items = Array.isArray(payload.items) ? payload.items : [];
+      setHealthRows(items);
+      setHealthSummary(`Checked ${payload.total || 0}: LIVE ${payload.live_count || 0}, DEAD ${payload.dead_count || 0}.`);
+    } catch (e) {
+      setHealthError(e?.message || "Failed to run health check.");
+    } finally {
+      setHealthLoading(false);
+    }
+  };
+
+  const applyHealthAction = async (kind) => {
+    try {
+      setHealthActionLoading(true);
+      setHealthError("");
+      setHealthSummary("");
+      const deadIds = checkedDeadRows.map((x) => Number(x.id));
+      const liveIds = checkedLiveRows.map((x) => Number(x.id));
+      const body = {
+        disable_ids: kind === "disable-dead" ? deadIds : [],
+        delete_ids: kind === "delete-dead" ? deadIds : [],
+        enable_ids: kind === "enable-live" ? liveIds : [],
+      };
+      const res = await fetch(`/api/admin/playlists/${playlistSlug}/health-actions`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload?.error || "Failed to apply action.");
+
+      if (kind === "disable-dead" && deadIds.length) {
+        setChannels((prev) => prev.map((c) => (deadIds.includes(Number(c.id)) ? { ...c, status: "DEAD" } : c)));
+      }
+      if (kind === "enable-live" && liveIds.length) {
+        setChannels((prev) => prev.map((c) => (liveIds.includes(Number(c.id)) ? { ...c, status: "LIVE" } : c)));
+      }
+      if (kind === "delete-dead" && deadIds.length) {
+        setChannels((prev) => prev.filter((c) => !deadIds.includes(Number(c.id))));
+        setHealthRows((prev) => prev.filter((x) => !deadIds.includes(Number(x.id))));
+      }
+      setHealthSummary(
+        `Disabled: ${payload.disabled_count || 0}, Re-enabled: ${payload.enabled_count || 0}, Removed from playlist: ${payload.deleted_from_playlist || 0}`
+      );
+      setSuccess("Health action applied.");
+    } catch (e) {
+      setHealthError(e?.message || "Failed to apply health action.");
+    } finally {
+      setHealthActionLoading(false);
+    }
+  };
+
+  const copyPlaylistUrl = async () => {
+    try {
+      if (!playlistUrl) return;
+      await navigator.clipboard.writeText(playlistUrl);
+      setCopiedUrl(true);
+      setTimeout(() => setCopiedUrl(false), 1200);
+    } catch {
+      setCopiedUrl(false);
+    }
+  };
 
   return (
     <section className={styles.editorLayout}>
@@ -231,6 +474,35 @@ export default function PlaylistEditor({ playlistSlug, playlistName, initialChan
           <div>
             <h2>{playlistName}</h2>
             <p className={styles.hint}>Slug: <code>{playlistSlug}</code> | Channels: {channels.length}</p>
+            {playlistUrl ? (
+              <div className={styles.playlistLinkRow}>
+                <a href={playlistUrl} target="_blank" rel="noreferrer" className={styles.url}>
+                  {playlistUrl}
+                </a>
+                <button
+                  type="button"
+                  className={styles.copyBtn}
+                  onClick={copyPlaylistUrl}
+                  aria-label="Copy playlist link"
+                  title={copiedUrl ? "Copied" : "Copy link"}
+                >
+                  {copiedUrl ? "✓" : <CopyIcon />}
+                </button>
+                <a
+                  href={playlistUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={styles.copyBtn}
+                  aria-label="Download playlist"
+                  title="Download playlist"
+                  download
+                >
+                  <DownloadIcon />
+                </a>
+              </div>
+            ) : (
+              <p className={styles.pending}>Generate token to get playlist URL.</p>
+            )}
           </div>
           <div className={styles.editorActions}>
             <button type="button" className={styles.secondaryBtn} onClick={resetAll}>Reset all changes</button>
@@ -243,7 +515,7 @@ export default function PlaylistEditor({ playlistSlug, playlistName, initialChan
 
       <article className={styles.card}>
         <h2>Total Groups: {groupsWithCount.length}</h2>
-        <div className={styles.editorActions}>
+        <div className={`${styles.editorActions} ${styles.channelToolbar}`}>
           <input
             className={styles.groupInput}
             value={newGroupName}
@@ -260,7 +532,9 @@ export default function PlaylistEditor({ playlistSlug, playlistName, initialChan
             <thead>
               <tr>
                 <th>Group</th>
-                <th>Channels</th>
+                <th>Total</th>
+                <th>LIVE</th>
+                <th>DEAD</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -268,15 +542,68 @@ export default function PlaylistEditor({ playlistSlug, playlistName, initialChan
               {groupsWithCount.map((g) => (
                 <tr key={g.name} className={selectedGroup === g.name ? styles.selectedRow : ""}>
                   <td>
-                    <button type="button" className={styles.rowLinkBtn} onClick={() => setSelectedGroup(g.name)}>
-                      {g.name}
-                    </button>
+                    {editingGroup === g.name ? (
+                      <div className={styles.groupEditRow}>
+                        <input
+                          className={styles.inlineInput}
+                          value={groupEditValue}
+                          onChange={(e) => setGroupEditValue(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              renameGroup(g.name, groupEditValue);
+                            }
+                          }}
+                          autoFocus
+                        />
+                        <button
+                          type="button"
+                          className={styles.iconBtn}
+                          title="Update group name"
+                          aria-label="Update group name"
+                          onClick={() => renameGroup(g.name, groupEditValue)}
+                        >
+                          <CheckIcon />
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.iconBtn}
+                          title="Cancel"
+                          aria-label="Cancel group edit"
+                          onClick={() => {
+                            setEditingGroup("");
+                            setGroupEditValue("");
+                          }}
+                        >
+                          <XIcon />
+                        </button>
+                      </div>
+                    ) : (
+                      <button type="button" className={styles.rowLinkBtn} onClick={() => setSelectedGroup(g.name)}>
+                        {g.name}
+                      </button>
+                    )}
                   </td>
-                  <td>{g.count}</td>
+                  <td>{g.total}</td>
+                  <td>{g.live}</td>
+                  <td>{g.dead}</td>
                   <td>
                     <div className={styles.miniActions}>
-                      <button type="button" className={styles.iconBtn} onClick={() => moveGroup(g.name, "up")}>↑</button>
-                      <button type="button" className={styles.iconBtn} onClick={() => moveGroup(g.name, "down")}>↓</button>
+                      <button type="button" className={styles.iconBtn} aria-label="Move group up" title="Move up" onClick={() => moveGroup(g.name, "up")}>↑</button>
+                      <button type="button" className={styles.iconBtn} aria-label="Move group down" title="Move down" onClick={() => moveGroup(g.name, "down")}>↓</button>
+                      <button type="button" className={styles.iconBtn} title="Edit group" aria-label="Edit group" onClick={() => startEditGroup(g.name)}>
+                        <PencilIcon />
+                      </button>
+                      <button
+                        type="button"
+                        className={styles.iconBtn}
+                        title={g.total > 0 ? "Move channels to another group before deleting" : "Delete empty group"}
+                        aria-label="Delete group"
+                        onClick={() => deleteGroup(g.name)}
+                        disabled={g.total > 0}
+                      >
+                        <TrashIcon />
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -292,6 +619,18 @@ export default function PlaylistEditor({ playlistSlug, playlistName, initialChan
           {selectedGroup ? ` | Group: ${selectedGroup}` : ""}
         </h2>
         <div className={styles.editorActions}>
+          <label className={styles.field}>
+            <span>Status Filter</span>
+            <select
+              className={styles.inlineInput}
+              value={channelStatusFilter}
+              onChange={(e) => setChannelStatusFilter(e.target.value)}
+            >
+              <option value="ALL">All</option>
+              <option value="LIVE">LIVE</option>
+              <option value="DEAD">DEAD</option>
+            </select>
+          </label>
           <div className={styles.menuWrap}>
             <button
               type="button"
@@ -310,7 +649,17 @@ export default function PlaylistEditor({ playlistSlug, playlistName, initialChan
                     setChannelToolsOpen(false);
                   }}
                 >
-                  Sort channels A-Z
+                  Sort selected group A-Z
+                </button>
+                <button
+                  type="button"
+                  className={styles.menuItem}
+                  onClick={() => {
+                    sortAllGroupsChannelsAZ();
+                    setChannelToolsOpen(false);
+                  }}
+                >
+                  Sort all groups A-Z
                 </button>
               </div>
             ) : null}
@@ -324,6 +673,7 @@ export default function PlaylistEditor({ playlistSlug, playlistName, initialChan
                 <th className={styles.colName}>Name</th>
                 <th className={styles.colGroup}>Group</th>
                 <th className={styles.colLogo}>Logo URL</th>
+                <th className={styles.colStream}>Stream URL</th>
                 <th className={styles.colActions}>Actions</th>
                 <th className={styles.colPreview}>Preview</th>
               </tr>
@@ -332,11 +682,18 @@ export default function PlaylistEditor({ playlistSlug, playlistName, initialChan
               {channelsInSelected.map((c) => (
                 <tr key={c.id}>
                   <td className={styles.colLogoThumb}>
-                    <img
-                      src={c.logo_url || PLACEHOLDER_LOGO}
-                      alt={c.name || "Channel logo"}
-                      className={styles.channelLogoThumb}
-                    />
+                    <div className={styles.logoWithStatus}>
+                      <img
+                        src={c.logo_url || PLACEHOLDER_LOGO}
+                        alt={c.name || "Channel logo"}
+                        className={styles.channelLogoThumb}
+                      />
+                      <span
+                        className={`${styles.statusDot} ${String(c.status || "LIVE").toUpperCase() === "LIVE" ? styles.statusLive : styles.statusDead}`}
+                        title={String(c.status || "LIVE").toUpperCase() === "LIVE" ? "LIVE" : "DEAD"}
+                        aria-label={String(c.status || "LIVE").toUpperCase() === "LIVE" ? "LIVE" : "DEAD"}
+                      />
+                    </div>
                   </td>
                   <td className={styles.colName}>
                     <input
@@ -383,10 +740,26 @@ export default function PlaylistEditor({ playlistSlug, playlistName, initialChan
                       </label>
                     </div>
                   </td>
+                  <td className={styles.colStream}>
+                    <input
+                      className={styles.inlineInput}
+                      value={c.stream_url || ""}
+                      onChange={(e) => changeChannel(c.id, { stream_url: e.target.value })}
+                    />
+                  </td>
                   <td className={styles.colActions}>
                     <div className={styles.miniActions}>
                       <button type="button" className={styles.iconBtn} onClick={() => moveChannel(c.id, "up")}>↑</button>
                       <button type="button" className={styles.iconBtn} onClick={() => moveChannel(c.id, "down")}>↓</button>
+                      <button
+                        type="button"
+                        className={styles.iconBtn}
+                        title="Delete channel from playlist"
+                        aria-label="Delete channel from playlist"
+                        onClick={() => deleteChannel(c.id)}
+                      >
+                        <TrashIcon />
+                      </button>
                     </div>
                   </td>
                   <td className={styles.colPreview}>
@@ -410,6 +783,71 @@ export default function PlaylistEditor({ playlistSlug, playlistName, initialChan
         <p className={styles.hint}>Changed channels: {changedCount}</p>
         {error ? <p className={styles.errorText}>{error}</p> : null}
         {success ? <p className={styles.successText}>{success}</p> : null}
+      </article>
+
+      <article className={styles.card}>
+        <h2>Saved Playlist Live Check</h2>
+        <p className={styles.hint}>
+          Check current saved links. DEAD links can be temporarily disabled or permanently removed. LIVE results can be re-enabled.
+        </p>
+        <div className={styles.editorActions}>
+          <button type="button" className={styles.primaryBtn} onClick={runHealthCheck} disabled={healthLoading || healthActionLoading}>
+            {healthLoading ? "Checking..." : "Run Saved Links Check"}
+          </button>
+          <button
+            type="button"
+            className={styles.secondaryBtn}
+            disabled={healthActionLoading || !checkedDeadRows.length}
+            onClick={() => applyHealthAction("disable-dead")}
+            title="Temporarily disable dead links from public playlist"
+          >
+            Temp Disable DEAD ({checkedDeadRows.length})
+          </button>
+          <button
+            type="button"
+            className={styles.secondaryBtn}
+            disabled={healthActionLoading || !checkedLiveRows.length}
+            onClick={() => applyHealthAction("enable-live")}
+            title="Re-enable links that are currently live"
+          >
+            Re-enable LIVE ({checkedLiveRows.length})
+          </button>
+          <button
+            type="button"
+            className={styles.secondaryBtn}
+            disabled={healthActionLoading || !checkedDeadRows.length}
+            onClick={() => applyHealthAction("delete-dead")}
+            title="Permanently remove dead links from playlist"
+          >
+            Permanent Delete DEAD ({checkedDeadRows.length})
+          </button>
+        </div>
+        {healthError ? <p className={styles.errorText}>{healthError}</p> : null}
+        {healthSummary ? <p className={styles.successText}>{healthSummary}</p> : null}
+        {healthRows.length ? (
+          <div className={styles.tableWrap}>
+            <table className={styles.editorTable}>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Current Status</th>
+                  <th>Checked</th>
+                  <th>Reason</th>
+                </tr>
+              </thead>
+              <tbody>
+                {healthRows.map((r) => (
+                  <tr key={`health-${r.id}`}>
+                    <td>{r.name}</td>
+                    <td>{r.status_before}</td>
+                    <td>{r.check_status}</td>
+                    <td>{r.reason || "-"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
       </article>
 
       <div className={styles.floatingSaveWrap}>

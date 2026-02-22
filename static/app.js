@@ -1,5 +1,7 @@
 const form = document.getElementById("test-form");
 const testBtn = document.getElementById("test-btn");
+const pauseBtn = document.getElementById("pause-btn");
+const stopBtn = document.getElementById("stop-btn");
 const summaryPanel = document.getElementById("summary-panel");
 const summaryText = document.getElementById("summary-text");
 const normalDownloadLink = document.getElementById("download-normal-link");
@@ -25,14 +27,20 @@ const mergeSummary = document.getElementById("merge-summary");
 const mergeDownloadLink = document.getElementById("merge-download-link");
 const backendMode = document.getElementById("backend-mode");
 const agentBaseUrlInput = document.getElementById("agent-base-url");
+const playlistFileInput = document.getElementById("playlist");
+const playlistUrlInput = document.getElementById("playlist-url");
 const publishForm = document.getElementById("publish-form");
 const publishBtn = document.getElementById("publish-btn");
 const publishSlug = document.getElementById("publish-slug");
 const publishName = document.getElementById("publish-name");
 const publishProvider = document.getElementById("publish-provider");
 const publishAllLive = document.getElementById("publish-all-live");
+const mergeWithExisting = document.getElementById("merge-with-existing");
+const mergeTargetPlaylist = document.getElementById("merge-target-playlist");
+const refreshPlaylistsBtn = document.getElementById("refresh-playlists-btn");
 const autoPublishAfterTest = document.getElementById("auto-publish-after-test");
 const publishSummary = document.getElementById("publish-summary");
+const publishDuplicates = document.getElementById("publish-duplicates");
 const publishLink = document.getElementById("publish-link");
 
 const STORAGE_KEY = "m3u_checker_state_v1";
@@ -41,6 +49,9 @@ const COOKIE_MAX_CHUNKS = 16;
 const COOKIE_CHUNK_SIZE = 3400;
 
 let currentJobId = null;
+let runController = null;
+let runPaused = false;
+let runInProgress = false;
 
 function initialState() {
   return {
@@ -63,9 +74,13 @@ function initialState() {
     publishName: "",
     publishProvider: "supabase",
     publishAllLive: true,
+    mergeWithExisting: true,
+    mergeTargetSlug: "",
+    availablePlaylists: [],
     autoPublishAfterTest: false,
     publishedUrl: "",
     publishSummary: "",
+    duplicateUrls: [],
     completed: false,
     updatedAt: Date.now(),
   };
@@ -265,8 +280,17 @@ function renderState() {
   publishName.value = state.publishName || "";
   publishProvider.value = state.publishProvider || "supabase";
   publishAllLive.checked = state.publishAllLive !== false;
+  mergeWithExisting.checked = state.mergeWithExisting !== false;
+  renderMergeTargetOptions();
+  mergeTargetPlaylist.disabled = !mergeWithExisting.checked;
+  refreshPlaylistsBtn.disabled = runInProgress && !runPaused;
   autoPublishAfterTest.checked = state.autoPublishAfterTest === true;
   publishSummary.textContent = state.publishSummary || "";
+  if (state.duplicateUrls && state.duplicateUrls.length) {
+    publishDuplicates.textContent = `Duplicate URLs skipped (${state.duplicateUrls.length}): ${state.duplicateUrls.join(" | ")}`;
+  } else {
+    publishDuplicates.textContent = "";
+  }
   if (state.publishedUrl) {
     publishLink.hidden = false;
     publishLink.href = state.publishedUrl;
@@ -289,6 +313,33 @@ function renderState() {
     previewPlayer.removeAttribute("src");
     previewPlayer.load();
   }
+
+  setSaveMergeControlsDisabled(runInProgress && !runPaused);
+}
+
+function renderMergeTargetOptions() {
+  const items = Array.isArray(state.availablePlaylists) ? state.availablePlaylists : [];
+  const selected = state.mergeTargetSlug || "";
+  mergeTargetPlaylist.innerHTML = "";
+  const first = document.createElement("option");
+  first.value = "";
+  first.textContent = "Select existing playlist";
+  mergeTargetPlaylist.appendChild(first);
+  for (const item of items) {
+    const opt = document.createElement("option");
+    opt.value = item.slug || "";
+    const c = Number(item.channel_count || 0);
+    opt.textContent = `${item.name || item.slug} (${item.slug})${c ? ` - ${c}` : ""}`;
+    if (opt.value === selected) opt.selected = true;
+    mergeTargetPlaylist.appendChild(opt);
+  }
+}
+
+function setSaveMergeControlsDisabled(disabled) {
+  publishBtn.disabled = disabled;
+  publishAllLive.disabled = disabled;
+  mergeWithExisting.disabled = disabled;
+  mergeTargetPlaylist.disabled = disabled || !mergeWithExisting.checked;
 }
 
 function resetStateForRun() {
@@ -299,6 +350,9 @@ function resetStateForRun() {
     publishSlug: publishSlug.value.trim(),
     publishName: publishName.value.trim(),
     publishProvider: publishProvider.value || "supabase",
+    mergeWithExisting: mergeWithExisting.checked !== false,
+    mergeTargetSlug: state.mergeTargetSlug || "",
+    availablePlaylists: state.availablePlaylists || [],
     current: "Preparing playlist...",
     summary: "Starting test...",
   };
@@ -388,9 +442,11 @@ function getErrorMessage(payload, fallback) {
 }
 
 async function runStreamTest(data) {
+  runController = new AbortController();
   const res = await fetch(`${getApiBase()}/api/test-stream`, {
     method: "POST",
     body: data,
+    signal: runController.signal,
   });
 
   if (!res.ok) {
@@ -407,6 +463,9 @@ async function runStreamTest(data) {
   let buffer = "";
 
   while (true) {
+    while (runPaused) {
+      await new Promise((resolve) => setTimeout(resolve, 150));
+    }
     const { value, done } = await reader.read();
     if (done) {
       break;
@@ -429,26 +488,77 @@ async function runStreamTest(data) {
 
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
-  testBtn.disabled = true;
-  testBtn.textContent = "Testing...";
-  resetStateForRun();
-
-  const data = new FormData(form);
-  data.set("verify_segment", data.get("verify_segment") ? "true" : "false");
-
-  try {
-    await runStreamTest(data);
-  } catch (err) {
+  const hasFile = !!(playlistFileInput && playlistFileInput.files && playlistFileInput.files.length > 0);
+  const playlistUrl = (playlistUrlInput?.value || "").trim();
+  if (!hasFile && !playlistUrl) {
     state.current = "Stopped due to error.";
     state.counter = "";
-    state.summary = `Error: ${err.message}`;
-    state.normalDownloadUrl = "";
-    state.curatedDownloadUrl = "";
+    state.summary = "Error: Please upload an .m3u file or provide a playlist URL.";
+    renderState();
+    persistState();
+    return;
+  }
+  if (!hasFile && playlistUrl && !/^https?:\/\//i.test(playlistUrl)) {
+    state.current = "Stopped due to error.";
+    state.counter = "";
+    state.summary = "Error: Playlist URL must start with http:// or https://";
+    renderState();
+    persistState();
+    return;
+  }
+
+  testBtn.disabled = true;
+  testBtn.textContent = "Testing...";
+  pauseBtn.disabled = false;
+  stopBtn.disabled = false;
+  runInProgress = true;
+  runPaused = false;
+  pauseBtn.textContent = "Pause";
+  resetStateForRun();
+
+  try {
+    const data = new FormData(form);
+    data.set("verify_segment", data.get("verify_segment") ? "true" : "false");
+    await runStreamTest(data);
+  } catch (err) {
+    if (err?.name === "AbortError") {
+      state.current = "Stopped by user.";
+      state.summary = state.summary || "Stopped by user.";
+    } else {
+      state.current = "Stopped due to error.";
+      state.summary = `Error: ${err.message}`;
+      state.normalDownloadUrl = "";
+      state.curatedDownloadUrl = "";
+    }
+    state.counter = "";
     renderState();
     persistState();
   } finally {
     testBtn.disabled = false;
     testBtn.textContent = "Test Streams";
+    pauseBtn.disabled = true;
+    stopBtn.disabled = true;
+    pauseBtn.textContent = "Pause";
+    runInProgress = false;
+    runPaused = false;
+    runController = null;
+    renderState();
+  }
+});
+
+pauseBtn.addEventListener("click", () => {
+  if (!runInProgress) return;
+  runPaused = !runPaused;
+  pauseBtn.textContent = runPaused ? "Resume" : "Pause";
+  state.current = runPaused ? "Paused. You can Save/Merge current checked result." : state.current;
+  renderState();
+  persistState();
+});
+
+stopBtn.addEventListener("click", () => {
+  if (!runInProgress) return;
+  if (runController) {
+    runController.abort();
   }
 });
 
@@ -552,6 +662,10 @@ clearAllBtn.addEventListener("click", async () => {
 
 loadPersistedState();
 renderState();
+loadExistingPlaylists().then(() => {
+  persistState();
+  renderState();
+});
 
 mergeForm.addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -605,25 +719,44 @@ publishForm.addEventListener("submit", async (e) => {
 
 async function publishOnline({ silent }) {
   publishBtn.disabled = true;
-  publishBtn.textContent = "Publishing Online...";
+  publishBtn.textContent = "Saving...";
   if (!silent) {
     publishSummary.textContent = "";
+    publishDuplicates.textContent = "";
     publishLink.hidden = true;
     publishLink.href = "#";
   }
 
   try {
     const jobId = currentJobId || state.jobId;
-    if (!jobId) {
-      throw new Error("Run test and save curated channels first.");
-    }
 
     const slug = publishSlug.value.trim();
     const name = publishName.value.trim();
     const provider = (publishProvider.value || "supabase").trim().toLowerCase();
     const publishAll = publishAllLive.checked;
+    const mergeExisting = mergeWithExisting.checked;
     if (!slug) {
       throw new Error("Playlist slug is required.");
+    }
+
+    let fallbackChannels = [];
+    if (!jobId) {
+      fallbackChannels = publishAll
+        ? (state.liveItems || []).map((x) => ({
+            name: x.title || "Stream",
+            category: x.category || "",
+            logo_url: x.logo_url || "",
+            url: x.url || "",
+          }))
+        : (state.curatedItems || []).map((x) => ({
+            name: x.name || x.title || "Stream",
+            category: x.category || "",
+            logo_url: x.logo_url || "",
+            url: x.url || "",
+          }));
+      if (!fallbackChannels.length) {
+        throw new Error("No checked streams yet. Run test first, then Save.");
+      }
     }
 
     const res = await fetch(`${getApiBase()}/api/publish-online`, {
@@ -635,6 +768,8 @@ async function publishOnline({ silent }) {
         playlist_name: name || slug,
         provider,
         publish_all_live: publishAll,
+        merge_with_existing: mergeExisting,
+        channels: fallbackChannels,
       }),
     });
     const payload = await res.json();
@@ -647,10 +782,13 @@ async function publishOnline({ silent }) {
     state.publishName = name;
     state.publishProvider = provider;
     state.publishAllLive = publishAll;
+    state.mergeWithExisting = mergeExisting;
     state.autoPublishAfterTest = autoPublishAfterTest.checked;
     state.publishedUrl = result.playlist_url || "";
+    state.duplicateUrls = Array.isArray(result.duplicate_urls) ? result.duplicate_urls : [];
     state.publishSummary =
-      `Published (${provider}): ${result.slug} | Channels: ${result.channel_count} | URL dedupe: ${result.duplicate_urls_skipped} | Name rename: ${result.duplicate_names_renamed}`;
+      `Published (${provider}): ${result.slug} | Channels: ${result.channel_count} | URL dedupe: ${result.duplicate_urls_skipped} | Name rename: ${result.duplicate_names_renamed} | Merge: ${result.merge_with_existing ? "ON" : "OFF"}`;
+    await loadExistingPlaylists();
     persistState();
     renderState();
   } catch (err) {
@@ -659,7 +797,7 @@ async function publishOnline({ silent }) {
     renderState();
   } finally {
     publishBtn.disabled = false;
-    publishBtn.textContent = "Publish Online";
+    publishBtn.textContent = "Save";
   }
 }
 
@@ -673,7 +811,56 @@ publishAllLive.addEventListener("change", () => {
   persistState();
 });
 
+mergeWithExisting.addEventListener("change", () => {
+  state.mergeWithExisting = mergeWithExisting.checked;
+  if (!mergeWithExisting.checked) {
+    state.mergeTargetSlug = "";
+  }
+  persistState();
+  renderState();
+});
+
 autoPublishAfterTest.addEventListener("change", () => {
   state.autoPublishAfterTest = autoPublishAfterTest.checked;
   persistState();
 });
+
+mergeTargetPlaylist.addEventListener("change", () => {
+  const slug = mergeTargetPlaylist.value || "";
+  state.mergeTargetSlug = slug;
+  if (slug) {
+    const found = (state.availablePlaylists || []).find((x) => x.slug === slug);
+    if (found) {
+      publishSlug.value = found.slug || "";
+      publishName.value = found.name || found.slug || "";
+      state.publishSlug = publishSlug.value;
+      state.publishName = publishName.value;
+    }
+  }
+  persistState();
+});
+
+refreshPlaylistsBtn.addEventListener("click", async () => {
+  await loadExistingPlaylists();
+  persistState();
+  renderState();
+});
+
+async function loadExistingPlaylists() {
+  try {
+    const res = await fetch(`${getApiBase()}/api/playlists-existing`);
+    const payload = await res.json();
+    if (!res.ok) {
+      throw new Error(getErrorMessage(payload, "Failed to load playlists"));
+    }
+    state.availablePlaylists = Array.isArray(payload.items) ? payload.items : [];
+    if (
+      state.mergeTargetSlug &&
+      !state.availablePlaylists.some((x) => x.slug === state.mergeTargetSlug)
+    ) {
+      state.mergeTargetSlug = "";
+    }
+  } catch (_e) {
+    state.availablePlaylists = state.availablePlaylists || [];
+  }
+}

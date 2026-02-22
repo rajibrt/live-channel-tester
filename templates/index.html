@@ -9,14 +9,20 @@
 <body>
   <main class="container">
     <h1>M3U Live Checker</h1>
-    <p class="subtitle">Upload playlist, click test, see LIVE/DEAD streams, then download LIVE only playlist.</p>
+    <p class="subtitle">Upload playlist or use playlist URL, click test, see LIVE/DEAD streams, then download LIVE only playlist.</p>
 
     <section class="panel">
       <form id="test-form">
         <label class="field">
-          <span>M3U File</span>
-          <input type="file" name="playlist" id="playlist" accept=".m3u,.m3u8,text/plain" required>
+          <span>Playlist URL (.m3u/.m3u8/.m3u4)</span>
+          <input type="url" name="playlist_url" id="playlist-url" placeholder="https://example.com/list.m3u">
         </label>
+
+        <label class="field">
+          <span>M3U File (optional)</span>
+          <input type="file" name="playlist" id="playlist" accept=".m3u,.m3u8,.m3u4,text/plain">
+        </label>
+        <p class="subtitle">Use URL or file upload. If both are given, uploaded file will be used.</p>
 
         <div class="row">
           <label class="field small">
@@ -55,6 +61,10 @@
         </div>
 
         <button id="test-btn" type="submit">Test Streams</button>
+        <div class="row">
+          <button id="pause-btn" type="button" disabled>Pause</button>
+          <button id="stop-btn" type="button" disabled>Stop</button>
+        </div>
       </form>
     </section>
 
@@ -105,12 +115,26 @@
           <span>Use all LIVE streams when publishing (no manual save needed)</span>
         </label>
         <label class="checkbox">
+          <input type="checkbox" id="merge-with-existing" checked>
+          <span>Merge with existing saved playlist (skip duplicate URLs)</span>
+        </label>
+        <div class="row">
+          <label class="field">
+            <span>Existing Playlist (for merge target)</span>
+            <select id="merge-target-playlist">
+              <option value="">Select existing playlist</option>
+            </select>
+          </label>
+          <button id="refresh-playlists-btn" type="button">Refresh playlists</button>
+        </div>
+        <label class="checkbox">
           <input type="checkbox" id="auto-publish-after-test">
           <span>Auto publish all LIVE after test completes</span>
         </label>
-        <button id="publish-btn" type="submit">Publish Online</button>
+        <button id="publish-btn" type="submit">Save</button>
       </form>
       <p id="publish-summary" class="subtitle"></p>
+      <div id="publish-duplicates" class="subtitle"></div>
       <a id="publish-link" href="#" class="download" hidden target="_blank" rel="noopener noreferrer">Open Public Playlist URL</a>
     </section>
 

@@ -13,7 +13,7 @@ from flask import Flask, Response, jsonify, render_template, request, send_file,
 
 from checker import Entry, check_live, fetch_text, parse_m3u
 from env_loader import load_dotenv_if_exists
-from supabase_publisher import publish_curated_playlist_supabase
+from supabase_publisher import list_playlists_supabase, publish_curated_playlist_supabase
 
 app = Flask(__name__)
 load_dotenv_if_exists()
@@ -32,6 +32,49 @@ DEFAULT_HEADERS = {
     "User-Agent": "Mozilla/5.0",
     "Accept": "*/*",
 }
+
+
+def _is_http_url(value: str) -> bool:
+    return bool(re.match(r"^https?://", (value or "").strip(), re.IGNORECASE))
+
+
+def _parse_m3u_text(text: str) -> List[Entry]:
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".m3u", mode="w", encoding="utf-8") as tmp:
+        temp_path = Path(tmp.name)
+        tmp.write(text)
+    entries = parse_m3u(str(temp_path))
+    temp_path.unlink(missing_ok=True)
+    return entries
+
+
+def _parse_m3u_upload(upload) -> List[Entry]:
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".m3u") as tmp:
+        temp_path = Path(tmp.name)
+        tmp.write(upload.read())
+    entries = parse_m3u(str(temp_path))
+    temp_path.unlink(missing_ok=True)
+    return entries
+
+
+def _load_playlist_entries(timeout: float) -> List[Entry]:
+    upload = request.files.get("playlist")
+    playlist_url = (request.form.get("playlist_url") or "").strip()
+
+    if upload is not None and upload.filename:
+        return _parse_m3u_upload(upload)
+
+    if not playlist_url:
+        raise ValueError("Please upload an .m3u/.m3u8 file or provide playlist_url.")
+    if not _is_http_url(playlist_url):
+        raise ValueError("playlist_url must start with http:// or https://")
+
+    status, text, _ = fetch_text(playlist_url, timeout=timeout, headers=DEFAULT_HEADERS)
+    if status != 200:
+        raise ValueError(f"Failed to fetch playlist_url. HTTP {status}")
+    if not text.strip():
+        raise ValueError("Playlist content is empty.")
+
+    return _parse_m3u_text(text)
 
 
 def build_live_m3u_text(entries: List[Entry]) -> str:
@@ -167,21 +210,15 @@ def index():
 
 @app.post("/api/test")
 def api_test():
-    upload = request.files.get("playlist")
-    if upload is None or upload.filename == "":
-        return jsonify({"error": "Please upload an .m3u file."}), 400
-
     timeout = float(request.form.get("timeout", DEFAULT_TIMEOUT))
     delay = max(0.0, float(request.form.get("delay", DEFAULT_DELAY)))
     max_items = int(request.form.get("max_items", DEFAULT_MAX))
     verify_segment = request.form.get("verify_segment", "true").lower() == "true"
 
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".m3u") as tmp:
-        temp_path = Path(tmp.name)
-        tmp.write(upload.read())
-
-    entries = parse_m3u(str(temp_path))
-    temp_path.unlink(missing_ok=True)
+    try:
+        entries = _load_playlist_entries(timeout=timeout)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
 
     if max_items > 0:
         entries = entries[:max_items]
@@ -241,21 +278,15 @@ def api_test():
 
 @app.post("/api/test-stream")
 def api_test_stream():
-    upload = request.files.get("playlist")
-    if upload is None or upload.filename == "":
-        return jsonify({"error": "Please upload an .m3u file."}), 400
-
     timeout = float(request.form.get("timeout", DEFAULT_TIMEOUT))
     delay = max(0.0, float(request.form.get("delay", DEFAULT_DELAY)))
     max_items = int(request.form.get("max_items", DEFAULT_MAX))
     verify_segment = request.form.get("verify_segment", "true").lower() == "true"
 
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".m3u") as tmp:
-        temp_path = Path(tmp.name)
-        tmp.write(upload.read())
-
-    entries = parse_m3u(str(temp_path))
-    temp_path.unlink(missing_ok=True)
+    try:
+        entries = _load_playlist_entries(timeout=timeout)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
 
     if max_items > 0:
         entries = entries[:max_items]
@@ -439,29 +470,43 @@ def publish_online():
     playlist_name = (payload.get("playlist_name") or "").strip()
     provider = (payload.get("provider") or "supabase").strip().lower()
     publish_all_live = bool(payload.get("publish_all_live"))
+    merge_with_existing = bool(payload.get("merge_with_existing", False))
+    fallback_channels = payload.get("channels") or []
 
-    if not job_id:
-        return jsonify({"error": "job_id is required."}), 400
     if not playlist_slug:
         return jsonify({"error": "playlist_slug is required."}), 400
 
-    job = JOBS.get(job_id)
-    if job is None:
-        return jsonify({"error": "Job not found or expired."}), 404
-    channels = job.get("channels") or []
-    if not channels and publish_all_live:
-        channels = [
-            {
-                "name": (x.get("title") or "Stream"),
-                "category": (x.get("category") or ""),
-                "logo_url": (x.get("logo_url") or ""),
-                "url": (x.get("url") or ""),
-            }
-            for x in (job.get("live_streams") or [])
-            if (x.get("url") or "").strip()
-        ]
+    channels = []
+    if job_id:
+        job = JOBS.get(job_id)
+        if job is None:
+            return jsonify({"error": "Job not found or expired."}), 404
+        channels = job.get("channels") or []
+        if not channels and publish_all_live:
+            channels = [
+                {
+                    "name": (x.get("title") or "Stream"),
+                    "category": (x.get("category") or ""),
+                    "logo_url": (x.get("logo_url") or ""),
+                    "url": (x.get("url") or ""),
+                }
+                for x in (job.get("live_streams") or [])
+                if (x.get("url") or "").strip()
+            ]
+    else:
+        if isinstance(fallback_channels, list):
+            channels = [
+                {
+                    "name": (x.get("name") or x.get("title") or "Stream"),
+                    "category": (x.get("category") or ""),
+                    "logo_url": (x.get("logo_url") or ""),
+                    "url": (x.get("url") or ""),
+                }
+                for x in fallback_channels
+                if isinstance(x, dict) and (x.get("url") or "").strip()
+            ]
     if not channels:
-        return jsonify({"error": "No channels to publish. Save curated channels or enable publish_all_live."}), 400
+        return jsonify({"error": "No channels to publish. Run test first (or stop after some progress) and keep LIVE/curated data."}), 400
 
     try:
         if provider != "supabase":
@@ -471,8 +516,18 @@ def publish_online():
             playlist_slug=playlist_slug,
             playlist_name=playlist_name or playlist_slug,
             channels=channels,
+            merge_with_existing=merge_with_existing,
         )
         return jsonify({"ok": True, "result": result})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.get("/api/playlists-existing")
+def api_playlists_existing():
+    try:
+        items = list_playlists_supabase(limit=300)
+        return jsonify({"items": items, "count": len(items)})
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
 
