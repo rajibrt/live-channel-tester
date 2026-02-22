@@ -14,14 +14,23 @@ async function getData() {
     .from("playlist_tokens")
     .select("playlist_slug,token,is_active")
     .eq("is_active", true);
+  const { data: jobRun } = await supabase
+    .from("job_runs")
+    .select("job_name,last_run_at,last_status,last_message,last_total,last_live,last_dead")
+    .eq("job_name", "playlist_health_hourly")
+    .maybeSingle();
   const tokenBySlug = Object.fromEntries((tokens || []).map((t) => [t.playlist_slug, t.token]));
-  return { playlists: playlists || [], tokenBySlug };
+  return { playlists: playlists || [], tokenBySlug, jobRun: jobRun || null };
 }
 
 export default async function DashboardPage() {
-  const { playlists, tokenBySlug } = await getData();
+  const { playlists, tokenBySlug, jobRun } = await getData();
   const base = process.env.PUBLIC_PLAYLIST_BASE_URL || "";
   const activeTokenCount = Object.keys(tokenBySlug).length;
+  const lastRunText = jobRun?.last_run_at
+    ? new Date(jobRun.last_run_at).toLocaleString()
+    : "Not run yet";
+  const cronOk = String(jobRun?.last_status || "").toLowerCase() === "ok";
 
   return (
     <main className={styles.page}>
@@ -62,6 +71,20 @@ export default async function DashboardPage() {
             <h2>Local Check</h2>
             <p className={styles.hint}>Run Local IP/ISP check with progress + live preview.</p>
             <Link href="/dashboard/local-check" className={styles.navCta}>Open Local Check</Link>
+          </article>
+          <article className={styles.card}>
+            <h2>Last Cron Run</h2>
+            <p className={styles.hint}>Hourly playlist health auto-check status.</p>
+            <p className={styles.metaLine}>
+              <span className={`${styles.statusDot} ${cronOk ? styles.statusLive : styles.statusDead}`} aria-hidden="true" />
+              <strong>{lastRunText}</strong>
+            </p>
+            <p className={styles.metaLine}>
+              Total: <strong>{Number(jobRun?.last_total || 0)}</strong> | LIVE:{" "}
+              <strong>{Number(jobRun?.last_live || 0)}</strong> | DEAD:{" "}
+              <strong>{Number(jobRun?.last_dead || 0)}</strong>
+            </p>
+            {jobRun?.last_message ? <p className={styles.hint}>{jobRun.last_message}</p> : null}
           </article>
         </section>
 

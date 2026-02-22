@@ -392,6 +392,11 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
 
   const checkedDeadRows = healthRows.filter((x) => x.check_status === "DEAD");
   const checkedLiveRows = healthRows.filter((x) => x.check_status === "LIVE");
+  const liveCount = channels.reduce(
+    (total, c) => total + (String(c.status || "LIVE").toUpperCase() === "LIVE" ? 1 : 0),
+    0
+  );
+  const deadCount = channels.length - liveCount;
 
   const runHealthCheck = async () => {
     try {
@@ -473,7 +478,19 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
         <div className={styles.editorTop}>
           <div>
             <h2>{playlistName}</h2>
-            <p className={styles.hint}>Slug: <code>{playlistSlug}</code> | Channels: {channels.length}</p>
+            <p className={styles.hint}>
+              Slug: <code>{playlistSlug}</code> | Channels: {channels.length}
+              {" | "}
+              <span className={styles.metaStat}>
+                <span className={`${styles.statusDot} ${styles.statusLive}`} aria-hidden="true" />
+                LIVE: {liveCount}
+              </span>
+              {" | "}
+              <span className={styles.metaStat}>
+                <span className={`${styles.statusDot} ${styles.statusDead}`} aria-hidden="true" />
+                DEAD: {deadCount}
+              </span>
+            </p>
             {playlistUrl ? (
               <div className={styles.playlistLinkRow}>
                 <a href={playlistUrl} target="_blank" rel="noreferrer" className={styles.url}>

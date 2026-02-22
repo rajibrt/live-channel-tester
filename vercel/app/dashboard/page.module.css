@@ -874,6 +874,22 @@
   color: #64748b;
 }
 
+.metaLine {
+  margin: 0 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #334155;
+  font-size: 14px;
+}
+
+.metaStat {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+
 .floatingSaveWrap {
   position: fixed;
   right: 18px;

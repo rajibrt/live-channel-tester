@@ -46,6 +46,17 @@ create table if not exists public.admin_users (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.job_runs (
+  job_name text primary key,
+  last_run_at timestamptz not null default now(),
+  last_status text not null default 'ok',
+  last_message text not null default '',
+  last_total integer not null default 0,
+  last_live integer not null default 0,
+  last_dead integer not null default 0,
+  updated_at timestamptz not null default now()
+);
+
 create index if not exists channels_category_name_idx on public.channels(category, name);
 create index if not exists playlist_channels_slug_idx on public.playlist_channels(playlist_slug);
 create index if not exists playlist_tokens_slug_idx on public.playlist_tokens(playlist_slug);
@@ -57,6 +68,7 @@ alter table public.playlist_channels enable row level security;
 alter table public.playlist_tokens enable row level security;
 alter table public.playlist_groups enable row level security;
 alter table public.admin_users enable row level security;
+alter table public.job_runs enable row level security;
 
 drop policy if exists deny_all_playlists on public.playlists;
 create policy deny_all_playlists on public.playlists for all using (false) with check (false);
@@ -70,3 +82,5 @@ drop policy if exists deny_all_playlist_groups on public.playlist_groups;
 create policy deny_all_playlist_groups on public.playlist_groups for all using (false) with check (false);
 drop policy if exists deny_all_admin_users on public.admin_users;
 create policy deny_all_admin_users on public.admin_users for all using (false) with check (false);
+drop policy if exists deny_all_job_runs on public.job_runs;
+create policy deny_all_job_runs on public.job_runs for all using (false) with check (false);
