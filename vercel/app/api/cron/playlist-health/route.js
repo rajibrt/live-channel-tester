@@ -167,10 +167,27 @@ async function writeJobRunLog(payload) {
     last_dead: Number(payload?.dead_count || 0),
     updated_at: now,
   };
+  if (typeof payload?.is_enabled === "boolean") {
+    row.is_enabled = payload.is_enabled;
+  }
   const { error } = await supabase.from("job_runs").upsert(row, { onConflict: "job_name" });
   if (error) {
     throw new Error(`Failed writing job log: ${error.message}`);
   }
+}
+
+async function getCronEnabledState() {
+  const supabase = getSupabaseAdmin();
+  const { data, error } = await supabase
+    .from("job_runs")
+    .select("is_enabled")
+    .eq("job_name", "playlist_health_hourly")
+    .maybeSingle();
+  if (error) {
+    throw new Error(`Failed reading cron state: ${error.message}`);
+  }
+  if (!data || typeof data.is_enabled !== "boolean") return true;
+  return data.is_enabled;
 }
 
 export async function GET(request) {
@@ -179,6 +196,23 @@ export async function GET(request) {
   }
 
   try {
+    const isEnabled = await getCronEnabledState();
+    if (!isEnabled) {
+      await writeJobRunLog({
+        status: "paused",
+        message: "Skipped: cron is turned off from dashboard.",
+        total_checked: 0,
+        live_count: 0,
+        dead_count: 0,
+        is_enabled: false,
+      });
+      return NextResponse.json({
+        ok: true,
+        skipped: true,
+        reason: "cron_disabled",
+      });
+    }
+
     const url = new URL(request.url);
     const timeout = safeInt(
       url.searchParams.get("timeout") || process.env.CRON_CHECK_TIMEOUT_SEC,
@@ -203,6 +237,7 @@ export async function GET(request) {
     await writeJobRunLog({
       status: "ok",
       message: "Hourly playlist health check completed.",
+      is_enabled: true,
       ...result,
     });
     return NextResponse.json({

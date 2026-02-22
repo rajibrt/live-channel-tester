@@ -883,6 +883,10 @@
   font-size: 14px;
 }
 
+.metaActions {
+  margin-top: 8px;
+}
+
 .metaStat {
   display: inline-flex;
   align-items: center;

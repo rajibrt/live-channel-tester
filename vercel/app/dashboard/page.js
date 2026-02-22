@@ -16,7 +16,7 @@ async function getData() {
     .eq("is_active", true);
   const { data: jobRun } = await supabase
     .from("job_runs")
-    .select("job_name,last_run_at,last_status,last_message,last_total,last_live,last_dead")
+    .select("job_name,last_run_at,last_status,last_message,last_total,last_live,last_dead,is_enabled")
     .eq("job_name", "playlist_health_hourly")
     .maybeSingle();
   const tokenBySlug = Object.fromEntries((tokens || []).map((t) => [t.playlist_slug, t.token]));
@@ -30,7 +30,8 @@ export default async function DashboardPage() {
   const lastRunText = jobRun?.last_run_at
     ? new Date(jobRun.last_run_at).toLocaleString()
     : "Not run yet";
-  const cronOk = String(jobRun?.last_status || "").toLowerCase() === "ok";
+  const cronEnabled = typeof jobRun?.is_enabled === "boolean" ? jobRun.is_enabled : true;
+  const cronOk = cronEnabled && String(jobRun?.last_status || "").toLowerCase() === "ok";
 
   return (
     <main className={styles.page}>
@@ -77,7 +78,7 @@ export default async function DashboardPage() {
             <p className={styles.hint}>Hourly playlist health auto-check status.</p>
             <p className={styles.metaLine}>
               <span className={`${styles.statusDot} ${cronOk ? styles.statusLive : styles.statusDead}`} aria-hidden="true" />
-              <strong>{lastRunText}</strong>
+              <strong>{lastRunText}</strong> | Cron: <strong>{cronEnabled ? "ON" : "OFF"}</strong>
             </p>
             <p className={styles.metaLine}>
               Total: <strong>{Number(jobRun?.last_total || 0)}</strong> | LIVE:{" "}
@@ -85,6 +86,15 @@ export default async function DashboardPage() {
               <strong>{Number(jobRun?.last_dead || 0)}</strong>
             </p>
             {jobRun?.last_message ? <p className={styles.hint}>{jobRun.last_message}</p> : null}
+            <form method="post" action="/api/admin/cron/toggle" className={styles.metaActions}>
+              <input type="hidden" name="enabled" value={cronEnabled ? "false" : "true"} />
+              <button
+                type="submit"
+                className={cronEnabled ? styles.secondaryBtn : styles.primaryBtn}
+              >
+                Turn Cron {cronEnabled ? "OFF" : "ON"}
+              </button>
+            </form>
           </article>
         </section>
 

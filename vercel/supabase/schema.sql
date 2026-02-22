@@ -49,6 +49,7 @@ create table if not exists public.admin_users (
 create table if not exists public.job_runs (
   job_name text primary key,
   last_run_at timestamptz not null default now(),
+  is_enabled boolean not null default true,
   last_status text not null default 'ok',
   last_message text not null default '',
   last_total integer not null default 0,
@@ -56,6 +57,8 @@ create table if not exists public.job_runs (
   last_dead integer not null default 0,
   updated_at timestamptz not null default now()
 );
+
+alter table public.job_runs add column if not exists is_enabled boolean not null default true;
 
 create index if not exists channels_category_name_idx on public.channels(category, name);
 create index if not exists playlist_channels_slug_idx on public.playlist_channels(playlist_slug);
