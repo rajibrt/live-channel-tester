@@ -60,6 +60,7 @@ export default function VideoPlayer({
   const allCategoriesBtnRef = useRef(null);
   const categoryBtnRefs = useRef({});
   const channelBtnRefs = useRef({});
+  const lastVolumeBeforeMuteRef = useRef(100);
   const [status, setStatus] = useState("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const [volumePercent, setVolumePercent] = useState(100);
@@ -69,7 +70,8 @@ export default function VideoPlayer({
   const [showFsPanels, setShowFsPanels] = useState(false);
   const [fsCategorySearch, setFsCategorySearch] = useState("");
   const [fsChannelSearch, setFsChannelSearch] = useState("");
-  const [videoFitMode, setVideoFitMode] = useState("cover");
+  const [videoFitMode, setVideoFitMode] = useState("contain");
+  const [logoFailed, setLogoFailed] = useState(false);
 
   const isFullscreenActive = () => {
     if (typeof document === "undefined") return false;
@@ -128,6 +130,45 @@ export default function VideoPlayer({
   }, [status, errorMessage]);
 
   useEffect(() => {
+    setLogoFailed(false);
+  }, [channel?.logoUrl, channel?.id]);
+
+  const logoFallbackText = useMemo(() => {
+    const raw = String(channel?.logo || channel?.name || "TV").trim();
+    if (!raw) return "TV";
+    return raw.slice(0, 2).toUpperCase();
+  }, [channel?.logo, channel?.name]);
+
+  const showLogoImage = Boolean(channel?.logoUrl) && !logoFailed;
+
+  const showHud = () => {
+    setShowVolumeHud(true);
+    if (hudTimerRef.current) clearTimeout(hudTimerRef.current);
+    hudTimerRef.current = setTimeout(() => setShowVolumeHud(false), 1000);
+  };
+
+  const handleToggleMute = () => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const currentPercent = Math.round((video.volume || 0) * 100);
+    if (!video.muted && currentPercent > 0) {
+      lastVolumeBeforeMuteRef.current = currentPercent;
+      video.volume = 0;
+      video.muted = true;
+      setVolumePercent(0);
+      showHud();
+      return;
+    }
+
+    const restorePercent = Math.max(1, Math.min(100, Number(lastVolumeBeforeMuteRef.current) || 100));
+    video.muted = false;
+    video.volume = restorePercent / 100;
+    setVolumePercent(restorePercent);
+    showHud();
+  };
+
+  useEffect(() => {
     const video = videoRef.current;
     if (!video) return undefined;
 
@@ -151,8 +192,17 @@ export default function VideoPlayer({
     setStatus("loading");
     setErrorMessage("");
 
-    const markPlaying = () => !cancelled && setStatus("playing");
-    const markLoading = () => !cancelled && setStatus("loading");
+    let playbackStarted = false;
+    const markPlaying = () => {
+      if (cancelled) return;
+      playbackStarted = true;
+      setStatus("playing");
+    };
+    const markLoading = () => {
+      // Avoid fullscreen loading backdrop flash during transient buffering.
+      if (cancelled || playbackStarted) return;
+      setStatus("loading");
+    };
     const onError = () => {
       if (cancelled) return;
       setErrorMessage("Stream unavailable");
@@ -247,18 +297,15 @@ export default function VideoPlayer({
   }, [channel]);
 
   useEffect(() => {
-    const showHud = () => {
-      setShowVolumeHud(true);
-      if (hudTimerRef.current) clearTimeout(hudTimerRef.current);
-      hudTimerRef.current = setTimeout(() => setShowVolumeHud(false), 1000);
-    };
-
     const adjustVolume = (delta) => {
       const video = videoRef.current;
       if (!video) return;
       video.volume = Math.min(1, Math.max(0, (video.volume || 0) + delta));
       if (video.volume > 0 && video.muted) video.muted = false;
       setVolumePercent(Math.round(video.volume * 100));
+      if (video.volume > 0) {
+        lastVolumeBeforeMuteRef.current = Math.round(video.volume * 100);
+      }
       showHud();
     };
 
@@ -330,6 +377,12 @@ export default function VideoPlayer({
       if (key === "PageDown" || key === "ChannelDown") {
         event.preventDefault();
         onPrevChannel?.();
+        return;
+      }
+
+      if (key === "m" || key === "M" || code === "KeyM") {
+        event.preventDefault();
+        handleToggleMute();
         return;
       }
 
@@ -496,6 +549,9 @@ export default function VideoPlayer({
     const onVolumeChange = () => {
       const next = video.muted ? 0 : Math.round((video.volume || 0) * 100);
       setVolumePercent(next);
+      if (!video.muted && next > 0) {
+        lastVolumeBeforeMuteRef.current = next;
+      }
     };
     const onPlay = () => setIsPaused(false);
     const onPause = () => setIsPaused(true);
@@ -550,12 +606,21 @@ export default function VideoPlayer({
     const safe = Number.isFinite(next) ? Math.max(0, Math.min(100, next)) : 100;
     video.volume = safe / 100;
     video.muted = safe === 0;
+    if (safe > 0) {
+      lastVolumeBeforeMuteRef.current = safe;
+    }
     setVolumePercent(safe);
   };
 
   const cycleVideoFitMode = () => {
     setVideoFitMode((prev) => (prev === "cover" ? "contain" : "cover"));
   };
+
+  const hasStream = Boolean(channel?.streamUrl);
+  const isPlayingActive = hasStream && status === "playing" && !isPaused;
+  const isPauseActive = hasStream && isPaused;
+  const isStopActive = !hasStream || status === "idle" || status === "error";
+  const isMuted = volumePercent === 0;
 
   const filteredFsCategories = useMemo(() => {
     const query = fsCategorySearch.trim().toLowerCase();
@@ -814,7 +879,19 @@ export default function VideoPlayer({
 
         {status !== "playing" ? (
           <div className={styles.videoBackdrop}>
-            <div className={styles.videoBrand}>{channel?.logoUrl ? <img src={channel.logoUrl} alt={channel?.name || "Channel"} className={styles.videoBrandImg} /> : (channel?.logo || "TV")}</div>
+            <div className={styles.videoBrand}>
+              {showLogoImage ? (
+                <img
+                  src={channel.logoUrl}
+                  alt=""
+                  className={styles.videoBrandImg}
+                  loading="lazy"
+                  onError={() => setLogoFailed(true)}
+                />
+              ) : (
+                <span className={styles.videoBrandFallback}>{logoFallbackText}</span>
+              )}
+            </div>
             <h2>{channel?.name || "Select a Channel"}</h2>
             <p>{statusLabel}</p>
             {status === "loading" ? <Icon name="LoaderCircle" className={styles.spinner} size={20} /> : null}
@@ -825,34 +902,79 @@ export default function VideoPlayer({
 
       <div className={`${styles.playerControlsRow} ${isDark ? styles.darkGlass : styles.lightGlass}`}>
         <div className={styles.playerButtons}>
-          <button type="button" className={styles.navBtn} onClick={handlePlay} disabled={!channel?.streamUrl}>
+          <button
+            type="button"
+            className={`${styles.navBtn} ${isPlayingActive ? styles.navBtnActive : styles.navBtnInactive}`}
+            onClick={handlePlay}
+            disabled={!hasStream}
+            aria-pressed={isPlayingActive}
+          >
             <Icon name="Play" size={16} />
             Play
           </button>
-          <button type="button" className={styles.navBtn} onClick={handlePause} disabled={!channel?.streamUrl || isPaused}>
+          <button
+            type="button"
+            className={`${styles.navBtn} ${isPauseActive ? styles.navBtnActive : styles.navBtnInactive}`}
+            onClick={handlePause}
+            disabled={!hasStream || isPaused}
+            aria-pressed={isPauseActive}
+          >
             <Icon name="Pause" size={16} />
             Pause
           </button>
-          <button type="button" className={styles.navBtn} onClick={handleStop} disabled={!channel?.streamUrl}>
+          <button
+            type="button"
+            className={`${styles.navBtn} ${isStopActive ? styles.navBtnActive : styles.navBtnInactive}`}
+            onClick={handleStop}
+            disabled={!hasStream}
+            aria-pressed={isStopActive}
+          >
             <Icon name="Square" size={14} />
             Stop
           </button>
-          <button type="button" className={styles.navBtn} onClick={togglePlayerFullscreen} disabled={!channel?.streamUrl}>
+          <button
+            type="button"
+            className={`${styles.navBtn} ${isFullscreen ? styles.navBtnActive : styles.navBtnInactive}`}
+            onClick={togglePlayerFullscreen}
+            disabled={!hasStream}
+            aria-pressed={isFullscreen}
+          >
             <Icon name="Maximize2" size={14} />
             Fullscreen
           </button>
         </div>
-        <label className={styles.volumeControl}>
-          <Icon name="Volume2" size={16} />
+        <div className={styles.volumeControl}>
+          <button
+            type="button"
+            className={`${styles.volumeMuteBtn} ${isMuted ? styles.volumeMuteBtnActive : styles.volumeMuteBtnInactive}`}
+            onClick={handleToggleMute}
+            aria-label={isMuted ? "Unmute" : "Mute"}
+            title={isMuted ? "Unmute (M)" : "Mute (M)"}
+            aria-pressed={isMuted}
+          >
+            <Icon name={isMuted ? "VolumeX" : "Volume2"} size={16} />
+          </button>
           <input type="range" min="0" max="100" step="1" value={volumePercent} onChange={handleVolumeInput} />
           <span>{volumePercent}%</span>
-        </label>
+        </div>
       </div>
 
       {channel ? (
         <article className={`${styles.channelInfo} ${isDark ? styles.darkGlass : styles.lightGlass}`}>
           <div className={styles.channelInfoLeft}>
-            <div className={styles.channelInfoLogo} style={{ background: channel.gradientStyle }}>{channel.logoUrl ? <img src={channel.logoUrl} alt={channel.name} className={styles.channelInfoLogoImg} /> : channel.logo}</div>
+            <div className={styles.channelInfoLogo} style={{ background: channel.gradientStyle }}>
+              {showLogoImage ? (
+                <img
+                  src={channel.logoUrl}
+                  alt=""
+                  className={styles.channelInfoLogoImg}
+                  loading="lazy"
+                  onError={() => setLogoFailed(true)}
+                />
+              ) : (
+                <span className={styles.channelInfoLogoFallback}>{logoFallbackText}</span>
+              )}
+            </div>
             <div>
               <h3>{channel.name}</h3>
               <div className={styles.channelMetaRow}>
@@ -872,7 +994,12 @@ export default function VideoPlayer({
               Next
               <Icon name="ChevronRight" size={16} />
             </button>
-            <button type="button" className={styles.favoriteBtn} onClick={() => onToggleFavorite(channel.id)}>
+            <button
+              type="button"
+              className={`${styles.favoriteBtn} ${isFavorite ? styles.favoriteBtnActive : styles.favoriteBtnInactive}`}
+              onClick={() => onToggleFavorite(channel.id)}
+              aria-pressed={isFavorite}
+            >
               <Icon name="Heart" size={16} fill={isFavorite ? "currentColor" : "none"} />
               {isFavorite ? "Favorited" : "Add Favorite"}
             </button>

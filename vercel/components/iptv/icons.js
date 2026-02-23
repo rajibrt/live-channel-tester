@@ -29,6 +29,7 @@ const paths = {
   Pause: "M8 5h3v14H8zm5 0h3v14h-3z",
   Square: "M6 6h12v12H6z",
   Volume2: "M11 5 6 9H3v6h3l5 4V5zm4 3a5 5 0 0 1 0 8m2-11a8 8 0 0 1 0 14",
+  VolumeX: "M11 5 6 9H3v6h3l5 4V5zm5 4 4 4m0-4-4 4",
   Maximize2: "M15 3h6v6M9 21H3v-6M21 9V3h-6M3 15v6h6",
   ChevronLeft: "m15 18-6-6 6-6",
   ChevronRight: "m9 18 6-6-6-6",

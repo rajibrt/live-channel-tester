@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import ChannelCard from "./ChannelCard";
@@ -17,6 +18,24 @@ export default function RightPanel({
   favorites,
   onToggleFavorite,
 }) {
+  const rightBodyRef = useRef(null);
+  const channelRefs = useRef(new Map());
+
+  useEffect(() => {
+    const selectedId = String(selectedChannel?.id || "").trim();
+    if (!selectedId) return;
+
+    const container = rightBodyRef.current;
+    const card = channelRefs.current.get(selectedId);
+    if (!container || !card) return;
+
+    card.scrollIntoView({
+      block: "nearest",
+      inline: "nearest",
+      behavior: "smooth",
+    });
+  }, [selectedChannel?.id, channels.length]);
+
   return (
     <aside className={`${styles.rightPanel} ${isDark ? styles.darkGlass : styles.lightGlass}`}>
       <div className={styles.rightHeader}>
@@ -39,19 +58,28 @@ export default function RightPanel({
         </div>
       </div>
 
-      <div className={styles.rightBody}>
+      <div ref={rightBodyRef} className={styles.rightBody}>
         {channels.length ? (
           <div className={styles.channelGrid}>
             {channels.map((channel) => (
-              <ChannelCard
+              <div
+                className={styles.channelGridItem}
                 key={channel.id}
-                channel={channel}
-                isDark={isDark}
-                isActive={selectedChannel?.id === channel.id}
-                isFavorite={favorites.includes(channel.id)}
-                onToggleFavorite={onToggleFavorite}
-                onClick={() => onChannelSelect(channel)}
-              />
+                ref={(node) => {
+                  const key = String(channel.id);
+                  if (node) channelRefs.current.set(key, node);
+                  else channelRefs.current.delete(key);
+                }}
+              >
+                <ChannelCard
+                  channel={channel}
+                  isDark={isDark}
+                  isActive={selectedChannel?.id === channel.id}
+                  isFavorite={favorites.includes(channel.id)}
+                  onToggleFavorite={onToggleFavorite}
+                  onClick={() => onChannelSelect(channel)}
+                />
+              </div>
             ))}
           </div>
         ) : (

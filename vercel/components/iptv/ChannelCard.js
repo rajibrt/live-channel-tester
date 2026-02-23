@@ -1,9 +1,24 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import { Icon } from "./icons";
 import styles from "./iptv.module.css";
 
 export default function ChannelCard({ channel, isActive, isFavorite, onToggleFavorite, onClick, isDark }) {
+  const [logoFailed, setLogoFailed] = useState(false);
+
+  useEffect(() => {
+    setLogoFailed(false);
+  }, [channel.logoUrl, channel.id]);
+
+  const fallbackLogo = useMemo(() => {
+    const raw = String(channel.logo || channel.name || "TV").trim();
+    if (!raw) return "TV";
+    return raw.slice(0, 2).toUpperCase();
+  }, [channel.logo, channel.name]);
+
+  const showImage = Boolean(channel.logoUrl) && !logoFailed;
+
   return (
     <button
       type="button"
@@ -12,7 +27,17 @@ export default function ChannelCard({ channel, isActive, isFavorite, onToggleFav
     >
       <div className={styles.channelLogoWrap}>
         <div className={styles.channelLogo} style={{ background: channel.gradientStyle }}>
-          {channel.logoUrl ? <img src={channel.logoUrl} alt={channel.name} className={styles.channelLogoImg} /> : <span>{channel.logo}</span>}
+          {showImage ? (
+            <img
+              src={channel.logoUrl}
+              alt=""
+              className={styles.channelLogoImg}
+              loading="lazy"
+              onError={() => setLogoFailed(true)}
+            />
+          ) : (
+            <span className={styles.channelLogoFallback}>{fallbackLogo}</span>
+          )}
         </div>
         {channel.isLive ? <span className={styles.liveDot} /> : null}
         <span className={`${styles.playOverlay} ${isActive ? styles.playOverlayVisible : ""}`}>

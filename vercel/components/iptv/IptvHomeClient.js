@@ -19,7 +19,17 @@ function toCategoryId(value) {
 }
 
 export default function IptvHomeClient({ initialChannels = [], initialCategories = [] }) {
-  const [isDark, setIsDark] = useState(true);
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof window === "undefined") return true;
+    try {
+      const saved = window.localStorage.getItem("iptv:theme");
+      if (saved === "dark") return true;
+      if (saved === "light") return false;
+    } catch {
+      // ignore localStorage read issues
+    }
+    return document.documentElement.classList.contains("dark");
+  });
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedChannel, setSelectedChannel] = useState(null);
   const [showLeftSidebar, setShowLeftSidebar] = useState(false);
@@ -37,6 +47,11 @@ export default function IptvHomeClient({ initialChannels = [], initialCategories
     const root = document.documentElement;
     if (isDark) root.classList.add("dark");
     else root.classList.remove("dark");
+    try {
+      window.localStorage.setItem("iptv:theme", isDark ? "dark" : "light");
+    } catch {
+      // ignore localStorage write issues
+    }
   }, [isDark]);
 
   useEffect(() => {

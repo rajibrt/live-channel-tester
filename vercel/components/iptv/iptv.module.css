@@ -95,6 +95,13 @@
   cursor: pointer;
   color: inherit;
   font: inherit;
+  transition:
+    transform 0.18s ease,
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease,
+    opacity 0.18s ease;
 }
 
 .iconBtn {
@@ -308,6 +315,12 @@
   color: inherit;
   background: transparent;
   cursor: pointer;
+  transition:
+    transform 0.18s ease,
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease;
 }
 
 .iconBtn:focus-visible,
@@ -319,6 +332,7 @@
 .channelCard:focus-visible,
 .fullscreenListBtn:focus-visible,
 .fullscreenSearchInput:focus-visible,
+.volumeMuteBtn:focus-visible,
 .volumeControl input:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
@@ -393,6 +407,12 @@
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
+  transition:
+    transform 0.18s ease,
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease;
 }
 
 @media (max-width: 1023px) {
@@ -468,6 +488,12 @@
   line-height: 1.25;
   text-align: left;
   cursor: pointer;
+  transition:
+    transform 0.18s ease,
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease;
 }
 
 .fullscreenListBtnActive {
@@ -509,6 +535,7 @@
   height: 88px;
   margin: 0 auto;
   border-radius: 999px;
+  overflow: hidden;
   display: grid;
   place-items: center;
   font-size: 34px;
@@ -517,9 +544,21 @@
   background: var(--primary);
 }
 
+.videoBrandFallback {
+  max-width: 100%;
+  padding: 0 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1;
+  font-size: clamp(24px, 3vw, 34px);
+}
+
 .videoBrandImg {
+  display: block;
   width: 100%;
   height: 100%;
+  object-position: center;
   object-fit: cover;
   border-radius: 999px;
 }
@@ -568,6 +607,12 @@
   place-items: center;
   color: var(--foreground);
   background: var(--muted);
+  transition:
+    transform 0.18s ease,
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease;
 }
 
 .controlTime {
@@ -595,6 +640,7 @@
   width: 56px;
   height: 56px;
   border-radius: 16px;
+  overflow: hidden;
   display: grid;
   place-items: center;
   color: var(--primary-foreground);
@@ -602,9 +648,21 @@
   font-size: 22px;
 }
 
+.channelInfoLogoFallback {
+  max-width: 100%;
+  padding: 0 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1;
+  font-size: clamp(18px, 2.4vw, 22px);
+}
+
 .channelInfoLogoImg {
+  display: block;
   width: 100%;
   height: 100%;
+  object-position: center;
   object-fit: cover;
   border-radius: 16px;
 }
@@ -693,6 +751,35 @@
   color: var(--foreground);
 }
 
+.volumeMuteBtn {
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  color: inherit;
+  background: color-mix(in oklab, var(--muted) 75%, transparent);
+  cursor: pointer;
+  transition:
+    transform 0.18s ease,
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.volumeMuteBtnInactive {
+  color: var(--foreground);
+  background: color-mix(in oklab, var(--muted) 75%, transparent);
+}
+
+.volumeMuteBtnActive {
+  color: var(--primary-foreground);
+  background: color-mix(in oklab, var(--primary) 70%, transparent);
+  border: 1px solid var(--ring);
+}
+
 .volumeControl input {
   width: min(220px, 50vw);
   accent-color: var(--primary);
@@ -718,9 +805,35 @@
   cursor: pointer;
 }
 
+.navBtnInactive {
+  color: var(--foreground);
+  background: color-mix(in oklab, var(--muted) 75%, transparent);
+  border-color: var(--border);
+}
+
+.navBtnActive {
+  color: var(--primary-foreground);
+  background: color-mix(in oklab, var(--primary) 72%, transparent);
+  border-color: var(--ring);
+  box-shadow: var(--shadow-lg);
+}
+
 .navBtn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.favoriteBtnInactive {
+  color: var(--primary);
+  background: color-mix(in oklab, var(--primary) 12%, transparent);
+  border-color: var(--border);
+}
+
+.favoriteBtnActive {
+  color: var(--primary-foreground);
+  background: color-mix(in oklab, var(--primary) 72%, transparent);
+  border-color: var(--ring);
+  box-shadow: var(--shadow-lg);
 }
 
 .rightHeader {
@@ -746,17 +859,34 @@
 }
 
 .channelGrid {
+  --channel-logo-size: 56px;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  align-items: stretch;
+}
+
+.channelGridItem {
+  min-width: 0;
+  height: 100%;
+  display: flex;
 }
 
 .channelCard {
   border-radius: 16px;
   border: 1px solid transparent;
-  padding: 12px;
+  padding: 10px 44px 10px 12px;
+  box-sizing: border-box;
   position: relative;
-  text-align: center;
+  text-align: left;
+  width: 100%;
+  height: 88px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
   cursor: pointer;
   transition: transform 0.2s ease, border-color 0.2s ease;
 }
@@ -782,14 +912,18 @@
 
 .channelLogoWrap {
   position: relative;
-  width: 66px;
-  margin: 0 auto 10px;
+  flex: 0 0 var(--channel-logo-size);
+  width: var(--channel-logo-size);
+  height: var(--channel-logo-size);
+  margin: 0;
 }
 
 .channelLogo {
-  width: 66px;
-  height: 66px;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: 1 / 1;
   border-radius: 999px;
+  overflow: hidden;
   display: grid;
   place-items: center;
   color: var(--primary-foreground);
@@ -797,10 +931,23 @@
   font-weight: 700;
 }
 
+.channelLogoFallback {
+  max-width: 100%;
+  padding: 0 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1;
+  font-size: clamp(20px, 3.6vw, 26px);
+}
+
 .channelLogoImg {
+  display: block;
   width: 100%;
   height: 100%;
+  aspect-ratio: 1 / 1;
   object-fit: cover;
+  object-position: center;
   border-radius: 999px;
 }
 
@@ -813,7 +960,10 @@
   border-radius: 999px;
   border: 2px solid var(--background);
   background: var(--chart-2);
-  animation: pulse 1.4s infinite;
+}
+
+.channelCardActive .liveDot {
+  animation: pulse 1.6s infinite;
 }
 
 .playOverlay {
@@ -835,15 +985,24 @@
 
 .channelName {
   margin: 0;
-  font-size: 13px;
-  line-height: 1.25;
-  min-height: 33px;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  font-size: 15px;
+  line-height: 1.2;
+  height: var(--channel-logo-size);
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .favoritePin {
   position: absolute;
-  top: 8px;
-  left: 8px;
+  top: calc(50% - 11px);
+  right: 10px;
+  transform: none;
   width: 22px;
   height: 22px;
   border-radius: 999px;
@@ -851,10 +1010,76 @@
   place-items: center;
   color: var(--muted-foreground);
   background: color-mix(in oklab, var(--background) 75%, transparent);
+  cursor: pointer;
+  transition:
+    transform 0.18s ease,
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease;
 }
 
 .favoritePinOn {
   color: var(--accent);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .iconBtn:hover:not(:disabled),
+  .userBtn:hover:not(:disabled),
+  .closeBtn:hover:not(:disabled),
+  .roundBtn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    background: color-mix(in oklab, var(--primary) 18%, var(--muted));
+    box-shadow: var(--shadow-lg);
+  }
+
+  .linkBtn:hover:not(.linkBtnActive):not(:disabled) {
+    transform: translateY(-1px);
+    background: color-mix(in oklab, var(--primary) 16%, transparent);
+  }
+
+  .fullscreenListBtn:hover:not(.fullscreenListBtnActive):not(:disabled) {
+    transform: translateY(-1px);
+    border-color: var(--ring);
+    background: color-mix(in oklab, var(--primary) 16%, var(--card));
+  }
+
+  .navBtn:hover:not(.navBtnActive):not(:disabled) {
+    transform: translateY(-1px);
+    border-color: var(--ring);
+    background: color-mix(in oklab, var(--primary) 16%, var(--muted));
+  }
+
+  .favoriteBtn:hover:not(.favoriteBtnActive):not(:disabled) {
+    transform: translateY(-1px);
+    border-color: var(--ring);
+    background: color-mix(in oklab, var(--primary) 24%, transparent);
+  }
+
+  .volumeMuteBtn:hover:not(.volumeMuteBtnActive):not(:disabled) {
+    transform: translateY(-1px);
+    border-color: var(--ring);
+    background: color-mix(in oklab, var(--primary) 16%, var(--muted));
+  }
+
+  .fsAspectBtn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    border-color: var(--ring);
+    background: color-mix(in oklab, var(--primary) 16%, var(--background));
+    box-shadow: var(--shadow-lg);
+  }
+
+  .searchInput:hover,
+  .fullscreenSearchInput:hover {
+    border-color: var(--ring);
+    background: color-mix(in oklab, var(--primary) 8%, var(--muted));
+  }
+
+  .favoritePin:hover:not(.favoritePinOn) {
+    transform: translateY(-1px);
+    color: var(--foreground);
+    background: color-mix(in oklab, var(--primary) 16%, var(--background));
+  }
 }
 
 .emptyState {
@@ -1043,7 +1268,13 @@
   }
 
   .channelGrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    --channel-logo-size: 50px;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .channelCard {
+    height: 80px;
+    padding-right: 40px;
   }
 
   .debugBadgeMobile {
