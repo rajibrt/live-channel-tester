@@ -203,6 +203,18 @@ export default function IptvHomeClient({ initialChannels = [], initialCategories
     setSelectedCategory(categoryId);
   };
 
+  const handleSidebarModeSelect = (nextMode) => {
+    setMode(nextMode);
+  };
+
+  const handleSidebarCategorySelect = (categoryId) => {
+    setSelectedCategory(categoryId);
+    if (typeof window !== "undefined" && window.innerWidth < 1024) {
+      setShowLeftSidebar(false);
+      setShowRightPanel(true);
+    }
+  };
+
   const debugStats = useMemo(
     () => ({
       total: allChannels.length,
@@ -230,8 +242,8 @@ export default function IptvHomeClient({ initialChannels = [], initialCategories
             categories={allCategories}
             selectedCategory={selectedCategory}
             mode={mode}
-            onSelectCategory={setSelectedCategory}
-            onSelectMode={setMode}
+            onSelectCategory={handleSidebarCategorySelect}
+            onSelectMode={handleSidebarModeSelect}
             isDark={isDark}
             onClose={() => setShowLeftSidebar(false)}
             search={categorySearch}

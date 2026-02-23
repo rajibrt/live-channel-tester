@@ -46,6 +46,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
 }
 
 .topMiddle {
@@ -78,6 +79,9 @@
   font-size: 22px;
   font-weight: 600;
   letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .iconBtn,
@@ -111,6 +115,10 @@
   color: var(--primary-foreground);
   background: var(--primary);
   border: 1px solid var(--ring);
+}
+
+.tvControl {
+  display: grid;
 }
 
 .badge {
@@ -350,6 +358,11 @@
   object-fit: cover;
 }
 
+.videoElementContain {
+  object-fit: contain;
+  background: var(--background);
+}
+
 .volumeHud {
   position: absolute;
   top: 12px;
@@ -364,27 +377,53 @@
   font-weight: 600;
 }
 
+.fsAspectBtn {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--foreground);
+  background: color-mix(in oklab, var(--background) 72%, transparent);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+@media (max-width: 1023px) {
+  .fsAspectBtn {
+    left: 50%;
+    transform: translateX(-50%);
+  }
+}
+
 .fullscreenOverlay {
   position: absolute;
   inset: 0;
   z-index: 3;
   display: flex;
   justify-content: space-between;
-  gap: 12px;
-  padding: 14px;
+  gap: 8px;
+  padding: 8px;
   pointer-events: none;
 }
 
 .fullscreenPanel {
-  width: min(320px, 28vw);
+  width: min(260px, 24vw);
   border: 1px solid var(--border);
   border-radius: 16px;
-  padding: 10px;
+  padding: 8px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   max-height: calc(100% - 8px);
   pointer-events: auto;
+  overflow: hidden;
 }
 
 .fullscreenPanelTitle {
@@ -413,10 +452,13 @@
   overflow: auto;
   display: grid;
   gap: 6px;
-  padding-right: 2px;
+  padding-right: 8px;
+  scrollbar-gutter: stable;
 }
 
 .fullscreenListBtn {
+  width: 100%;
+  box-sizing: border-box;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: color-mix(in oklab, var(--card) 72%, transparent);
@@ -921,13 +963,69 @@
   }
 
   .fullscreenPanel {
-    width: min(260px, 42vw);
+    width: min(210px, 34vw);
+  }
+}
+
+@media (max-height: 520px) and (orientation: landscape) {
+  .fullscreenOverlay {
+    padding: 6px;
+    gap: 6px;
+  }
+
+  .fullscreenPanel {
+    width: min(180px, 32vw);
+    border-radius: 12px;
+    padding: 6px;
+  }
+
+  .fullscreenPanelTitle {
+    font-size: 11px;
+  }
+
+  .fullscreenSearchInput {
+    padding-top: 6px;
+    padding-bottom: 6px;
+    font-size: 12px;
+  }
+
+  .fullscreenListBtn {
+    padding: 6px 8px;
+    font-size: 12px;
   }
 }
 
 @media (max-width: 640px) {
+  .topNavbar {
+    padding: 0 8px;
+  }
+
+  .topLeft,
+  .topRight {
+    gap: 6px;
+  }
+
+  .brandWrap {
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .brandLogo {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+  }
+
+  .iconBtn,
+  .userBtn {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+  }
+
   .brandText {
-    font-size: 18px;
+    font-size: 17px;
+    max-width: 130px;
   }
 
   .channelInfo {
@@ -954,5 +1052,16 @@
     margin-top: 12px;
     justify-content: flex-start;
     padding: 8px 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  .brandText {
+    max-width: 106px;
+    font-size: 16px;
+  }
+
+  .tvControl {
+    display: none;
   }
 }

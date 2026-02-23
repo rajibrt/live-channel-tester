@@ -44,7 +44,7 @@ export default function TopNavbar({
           variant="ghost"
           size="icon"
           onClick={onToggleTvMode}
-          className={`${styles.iconBtn} ${isTvMode ? styles.tvBtnActive : ""}`}
+          className={`${styles.iconBtn} ${styles.tvControl} ${isTvMode ? styles.tvBtnActive : ""}`}
           title="Toggle TV Remote Mode"
           aria-label="Toggle TV Remote Mode"
         >

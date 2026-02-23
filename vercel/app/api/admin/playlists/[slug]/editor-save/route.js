@@ -12,6 +12,28 @@ function uniqueStrings(values) {
   return [...new Set((Array.isArray(values) ? values : []).map((x) => String(x || "").trim()).filter(Boolean))];
 }
 
+function isMissingIncludeOnHomeColumn(error) {
+  const msg = String(error?.message || "").toLowerCase();
+  return msg.includes("include_on_home") && (msg.includes("column") || msg.includes("schema cache"));
+}
+
+function isMissingPlaylistGroupsTable(error) {
+  const msg = String(error?.message || "").toLowerCase();
+  return msg.includes("playlist_groups") && (msg.includes("table") || msg.includes("schema cache"));
+}
+
+function toChannelUpdatePayload(channel, now, includeOnHome) {
+  const payload = {
+    name: String(channel.name || "Stream").trim() || "Stream",
+    category: String(channel.category || "").trim(),
+    logo_url: String(channel.logo_url || "").trim(),
+    stream_url: String(channel.stream_url || "").trim(),
+    updated_at: now,
+  };
+  if (includeOnHome) payload.include_on_home = channel.include_on_home !== false;
+  return payload;
+}
+
 export async function POST(request, { params }) {
   const auth = await requireAdminApi();
   if (!auth.ok) return auth.response;
@@ -51,22 +73,27 @@ export async function POST(request, { params }) {
       }
     }
 
+    let includeOnHomeSupported = true;
     for (const part of chunk(channels, 100)) {
-      const tasks = part.map((c) =>
-        supabase
-          .from("channels")
-          .update({
-            name: String(c.name || "Stream").trim() || "Stream",
-            category: String(c.category || "").trim(),
-            logo_url: String(c.logo_url || "").trim(),
-            stream_url: String(c.stream_url || "").trim(),
-            include_on_home: c.include_on_home !== false,
-            updated_at: now,
-          })
-          .eq("id", Number(c.id))
-      );
-      const results = await Promise.all(tasks);
-      const failed = results.find((r) => r.error);
+      const runPartUpdate = async (withIncludeOnHome) => {
+        const tasks = part.map((c) =>
+          supabase
+            .from("channels")
+            .update(toChannelUpdatePayload(c, now, withIncludeOnHome))
+            .eq("id", Number(c.id))
+        );
+        return Promise.all(tasks);
+      };
+
+      let results = await runPartUpdate(includeOnHomeSupported);
+      let failed = results.find((r) => r.error);
+
+      if (failed?.error && includeOnHomeSupported && isMissingIncludeOnHomeColumn(failed.error)) {
+        includeOnHomeSupported = false;
+        results = await runPartUpdate(false);
+        failed = results.find((r) => r.error);
+      }
+
       if (failed?.error) {
         const msg = String(failed.error.message || "");
         if (msg.toLowerCase().includes("duplicate key value") || msg.toLowerCase().includes("unique")) {
@@ -102,41 +129,46 @@ export async function POST(request, { params }) {
       .eq("slug", playlistSlug);
 
     let groupOrderSaved = false;
+    let groupOrderSkipped = false;
     const existingGroupsRes = await supabase
       .from("playlist_groups")
       .select("name")
       .eq("playlist_slug", playlistSlug);
-    if (existingGroupsRes.error) {
+    if (existingGroupsRes.error && !isMissingPlaylistGroupsTable(existingGroupsRes.error)) {
       return NextResponse.json({ error: `Failed loading existing groups: ${existingGroupsRes.error.message}` }, { status: 500 });
     }
-    const existingGroupNames = uniqueStrings((existingGroupsRes.data || []).map((x) => x.name));
-    const keepGroupSet = new Set(groupOrder);
-    const deleteGroups = existingGroupNames.filter((name) => !keepGroupSet.has(name));
-    if (deleteGroups.length) {
-      const delGroupsRes = await supabase
-        .from("playlist_groups")
-        .delete()
-        .eq("playlist_slug", playlistSlug)
-        .in("name", deleteGroups);
-      if (delGroupsRes.error) {
-        return NextResponse.json({ error: `Failed deleting removed groups: ${delGroupsRes.error.message}` }, { status: 500 });
+    if (existingGroupsRes.error && isMissingPlaylistGroupsTable(existingGroupsRes.error)) {
+      groupOrderSkipped = true;
+    } else {
+      const existingGroupNames = uniqueStrings((existingGroupsRes.data || []).map((x) => x.name));
+      const keepGroupSet = new Set(groupOrder);
+      const deleteGroups = existingGroupNames.filter((name) => !keepGroupSet.has(name));
+      if (deleteGroups.length) {
+        const delGroupsRes = await supabase
+          .from("playlist_groups")
+          .delete()
+          .eq("playlist_slug", playlistSlug)
+          .in("name", deleteGroups);
+        if (delGroupsRes.error) {
+          return NextResponse.json({ error: `Failed deleting removed groups: ${delGroupsRes.error.message}` }, { status: 500 });
+        }
       }
-    }
-    if (groupOrder.length) {
-      const rows = groupOrder.map((name, idx) => ({
-        playlist_slug: playlistSlug,
-        name,
-        position: idx + 1,
-        updated_at: now,
-      }));
-      const saveGroups = await supabase
-        .from("playlist_groups")
-        .upsert(rows, { onConflict: "playlist_slug,name" });
-      if (saveGroups.error) {
-        return NextResponse.json({ error: `Failed saving group order: ${saveGroups.error.message}` }, { status: 500 });
+      if (groupOrder.length) {
+        const rows = groupOrder.map((name, idx) => ({
+          playlist_slug: playlistSlug,
+          name,
+          position: idx + 1,
+          updated_at: now,
+        }));
+        const saveGroups = await supabase
+          .from("playlist_groups")
+          .upsert(rows, { onConflict: "playlist_slug,name" });
+        if (saveGroups.error) {
+          return NextResponse.json({ error: `Failed saving group order: ${saveGroups.error.message}` }, { status: 500 });
+        }
       }
+      groupOrderSaved = true;
     }
-    groupOrderSaved = true;
 
     return NextResponse.json({
       ok: true,
@@ -144,6 +176,7 @@ export async function POST(request, { params }) {
       removed_from_playlist: removeIds.length,
       playlist_slug: playlistSlug,
       group_order_saved: groupOrderSaved,
+      group_order_skipped: groupOrderSkipped,
     });
   } catch (error) {
     return NextResponse.json({ error: error?.message || "Failed to save playlist editor changes." }, { status: 500 });

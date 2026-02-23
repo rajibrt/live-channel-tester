@@ -47,7 +47,7 @@ export default function LeftSidebar({
               onSelectMode("all");
               onSelectCategory(null);
             }}
-            className={`justify-start ${styles.linkBtn} ${mode === "all" ? styles.linkBtnActive : ""}`}
+            className={`justify-start ${styles.linkBtn} ${mode === "all" && !selectedCategory ? styles.linkBtnActive : ""}`}
           >
             <Icon name="MonitorPlay" size={16} />
             <span>All Channels</span>

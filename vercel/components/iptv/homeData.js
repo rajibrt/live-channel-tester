@@ -141,12 +141,25 @@ export async function getHomeIptvData() {
   }
 
   const categoryMap = new Map();
+  const usedCategoryIds = new Set();
+  const makeUniqueCategoryId = (value) => {
+    const base = value || "uncategorized";
+    let next = base;
+    let n = 2;
+    while (usedCategoryIds.has(next)) {
+      next = `${base}-${n}`;
+      n += 1;
+    }
+    usedCategoryIds.add(next);
+    return next;
+  };
   for (const channel of channels) {
     const key = normKey(channel.category);
     if (!key) continue;
     if (!categoryMap.has(key)) {
+      const baseId = key.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "uncategorized";
       categoryMap.set(key, {
-        id: key.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "uncategorized",
+        id: makeUniqueCategoryId(baseId),
         name: channel.category,
         icon: pickIcon(channel.category),
       });

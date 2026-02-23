@@ -51,6 +51,15 @@ export default function VideoPlayer({
   const hlsNativeFallbackTriedRef = useRef(false);
   const hudTimerRef = useRef(null);
   const fsPanelsTimerRef = useRef(null);
+  const autoFullscreenByOrientationRef = useRef(false);
+  const fsInteractionActiveRef = useRef(false);
+  const lastShellTapTsRef = useRef(0);
+  const fsPanelsVisibleRef = useRef(false);
+  const categoryListRef = useRef(null);
+  const channelListRef = useRef(null);
+  const allCategoriesBtnRef = useRef(null);
+  const categoryBtnRefs = useRef({});
+  const channelBtnRefs = useRef({});
   const [status, setStatus] = useState("idle");
   const [volumePercent, setVolumePercent] = useState(100);
   const [showVolumeHud, setShowVolumeHud] = useState(false);
@@ -59,6 +68,56 @@ export default function VideoPlayer({
   const [showFsPanels, setShowFsPanels] = useState(false);
   const [fsCategorySearch, setFsCategorySearch] = useState("");
   const [fsChannelSearch, setFsChannelSearch] = useState("");
+  const [videoFitMode, setVideoFitMode] = useState("cover");
+
+  const isFullscreenActive = () => {
+    if (typeof document === "undefined") return false;
+    return (
+      document.fullscreenElement === shellRef.current ||
+      document.webkitFullscreenElement === shellRef.current
+    );
+  };
+
+  const requestPlayerFullscreen = async () => {
+    const shell = shellRef.current;
+    const video = videoRef.current;
+    if (!shell || !video || typeof document === "undefined") return false;
+    if (isFullscreenActive()) return true;
+    try {
+      if (shell.requestFullscreen) {
+        await shell.requestFullscreen();
+        return true;
+      }
+      if (video.webkitEnterFullscreen) {
+        video.webkitEnterFullscreen();
+        return true;
+      }
+    } catch {
+      // ignore fullscreen errors
+    }
+    return false;
+  };
+
+  const exitPlayerFullscreen = async () => {
+    if (typeof document === "undefined") return false;
+    try {
+      if (document.fullscreenElement && document.exitFullscreen) {
+        await document.exitFullscreen();
+        return true;
+      }
+    } catch {
+      // ignore fullscreen errors
+    }
+    return false;
+  };
+
+  const togglePlayerFullscreen = async () => {
+    if (isFullscreenActive()) {
+      await exitPlayerFullscreen();
+      return;
+    }
+    await requestPlayerFullscreen();
+  };
 
   const statusLabel = useMemo(() => {
     if (status === "loading") return "Switching channel...";
@@ -184,20 +243,6 @@ export default function VideoPlayer({
       showHud();
     };
 
-    const toggleFullscreen = async () => {
-      const shell = shellRef.current;
-      if (!shell || typeof document === "undefined") return;
-      try {
-        if (document.fullscreenElement) {
-          await document.exitFullscreen();
-        } else {
-          await shell.requestFullscreen();
-        }
-      } catch {
-        // ignore fullscreen errors
-      }
-    };
-
     const onKeyDown = (event) => {
       const target = event.target;
       if (
@@ -215,7 +260,7 @@ export default function VideoPlayer({
 
       if (key === "f" || key === "F" || key === "F11" || code === "KeyF") {
         event.preventDefault();
-        toggleFullscreen();
+        togglePlayerFullscreen();
         return;
       }
 
@@ -367,31 +412,63 @@ export default function VideoPlayer({
   }, [isTvMode, onNextChannel, onPrevChannel]);
 
   useEffect(() => {
-    const showPanels = () => {
-      if (document.fullscreenElement !== shellRef.current) return;
-      setShowFsPanels(true);
-      if (fsPanelsTimerRef.current) clearTimeout(fsPanelsTimerRef.current);
-      fsPanelsTimerRef.current = setTimeout(() => setShowFsPanels(false), 2400);
+    if (typeof window === "undefined") return undefined;
+
+    const isMobileLayout = () => window.matchMedia("(max-width: 1023px)").matches;
+    const isLandscape = () =>
+      window.matchMedia("(orientation: landscape)").matches || window.innerWidth > window.innerHeight;
+
+    const applyOrientationFullscreen = async () => {
+      if (!isMobileLayout()) return;
+      if (isLandscape()) {
+        const entered = await requestPlayerFullscreen();
+        if (entered) autoFullscreenByOrientationRef.current = true;
+        return;
+      }
+      if (autoFullscreenByOrientationRef.current) {
+        await exitPlayerFullscreen();
+        autoFullscreenByOrientationRef.current = false;
+      }
     };
 
-    const onMouseMove = () => showPanels();
+    const onResize = () => {
+      applyOrientationFullscreen();
+    };
+
+    const onFullscreenChange = () => {
+      if (!isFullscreenActive()) autoFullscreenByOrientationRef.current = false;
+    };
+
+    window.addEventListener("resize", onResize, { passive: true });
+    window.addEventListener("orientationchange", onResize);
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    applyOrientationFullscreen();
+
+    return () => {
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("orientationchange", onResize);
+      document.removeEventListener("fullscreenchange", onFullscreenChange);
+    };
+  }, []);
+
+  useEffect(() => {
     const onFullscreenChange = () => {
       const active = document.fullscreenElement === shellRef.current;
       setIsFullscreen(active);
-      if (active) showPanels();
+      if (active) showPanels({ keepVisible: false, focusSelected: true });
       else setShowFsPanels(false);
     };
 
     document.addEventListener("fullscreenchange", onFullscreenChange);
-    const shell = shellRef.current;
-    shell?.addEventListener("mousemove", onMouseMove);
-
     return () => {
       document.removeEventListener("fullscreenchange", onFullscreenChange);
-      shell?.removeEventListener("mousemove", onMouseMove);
       if (fsPanelsTimerRef.current) clearTimeout(fsPanelsTimerRef.current);
     };
-  }, [isFullscreen]);
+  }, []);
+
+  useEffect(() => {
+    fsPanelsVisibleRef.current = showFsPanels;
+  }, [showFsPanels]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -457,6 +534,10 @@ export default function VideoPlayer({
     setVolumePercent(safe);
   };
 
+  const cycleVideoFitMode = () => {
+    setVideoFitMode((prev) => (prev === "cover" ? "contain" : "cover"));
+  };
+
   const filteredFsCategories = useMemo(() => {
     const query = fsCategorySearch.trim().toLowerCase();
     if (!query) return categories;
@@ -469,16 +550,156 @@ export default function VideoPlayer({
     return channels.filter((item) => String(item?.name || "").toLowerCase().includes(query));
   }, [channels, fsChannelSearch]);
 
+  const ensureSelectedVisible = (behavior = "smooth") => {
+    requestAnimationFrame(() => {
+      const categoryBtn = selectedCategory
+        ? categoryBtnRefs.current[selectedCategory]
+        : allCategoriesBtnRef.current;
+      if (categoryBtn instanceof HTMLElement) {
+        categoryBtn.scrollIntoView({ block: "start", inline: "nearest", behavior });
+      }
+
+      const channelBtn = channel?.id ? channelBtnRefs.current[channel.id] : null;
+      if (channelBtn instanceof HTMLElement) {
+        channelBtn.scrollIntoView({ block: "start", inline: "nearest", behavior });
+      }
+    });
+  };
+
+  const scheduleFsPanelsHide = (delay = 2400) => {
+    if (!isFullscreenActive()) return;
+    if (fsPanelsTimerRef.current) clearTimeout(fsPanelsTimerRef.current);
+    fsPanelsTimerRef.current = setTimeout(() => {
+      if (fsInteractionActiveRef.current) return;
+      setShowFsPanels(false);
+    }, delay);
+  };
+
+  const showPanels = ({ keepVisible = false, focusSelected = false } = {}) => {
+    if (!isFullscreenActive()) return;
+    const becameVisible = !fsPanelsVisibleRef.current;
+    setShowFsPanels(true);
+    if (focusSelected || becameVisible) ensureSelectedVisible("auto");
+    if (keepVisible) {
+      if (fsPanelsTimerRef.current) clearTimeout(fsPanelsTimerRef.current);
+      return;
+    }
+    scheduleFsPanelsHide();
+  };
+
+  const togglePanelsByShellTap = () => {
+    if (!isFullscreen) return;
+    if (showFsPanels) {
+      if (fsPanelsTimerRef.current) clearTimeout(fsPanelsTimerRef.current);
+      setShowFsPanels(false);
+      return;
+    }
+    showPanels({ keepVisible: false, focusSelected: true });
+  };
+
   return (
     <div className={styles.videoSection}>
-      <div ref={shellRef} className={styles.videoShell}>
-        <video ref={videoRef} className={styles.videoElement} playsInline />
+      <div
+        ref={shellRef}
+        className={styles.videoShell}
+        onPointerMove={() => {
+          if (!isFullscreen) return;
+          showPanels({ keepVisible: fsInteractionActiveRef.current, focusSelected: !fsPanelsVisibleRef.current });
+        }}
+        onPointerDown={(event) => {
+          fsInteractionActiveRef.current = true;
+          if (!isFullscreen) return;
+          if (event.pointerType !== "touch") {
+            showPanels({ keepVisible: true, focusSelected: !fsPanelsVisibleRef.current });
+          }
+        }}
+        onPointerUp={(event) => {
+          fsInteractionActiveRef.current = false;
+          if (isFullscreen && event.pointerType === "touch") {
+            lastShellTapTsRef.current = Date.now();
+            togglePanelsByShellTap();
+            return;
+          }
+          scheduleFsPanelsHide(1200);
+        }}
+        onTouchStart={() => {
+          fsInteractionActiveRef.current = true;
+        }}
+        onTouchEnd={() => {
+          fsInteractionActiveRef.current = false;
+          if (!isFullscreen) return;
+          if (Date.now() - lastShellTapTsRef.current < 220) return;
+          lastShellTapTsRef.current = Date.now();
+          togglePanelsByShellTap();
+        }}
+        onClick={() => {
+          if (Date.now() - lastShellTapTsRef.current < 350) return;
+          togglePanelsByShellTap();
+        }}
+      >
+        <video
+          ref={videoRef}
+          className={`${styles.videoElement} ${videoFitMode === "contain" ? styles.videoElementContain : ""}`}
+          playsInline
+        />
 
         {showVolumeHud ? <div className={styles.volumeHud}>Volume {volumePercent}%</div> : null}
+        {isFullscreen && showFsPanels ? (
+          <button
+            type="button"
+            className={styles.fsAspectBtn}
+            onClick={(event) => {
+              event.stopPropagation();
+              cycleVideoFitMode();
+              showPanels({ keepVisible: false, focusSelected: false });
+            }}
+          >
+            <Icon name="MonitorPlay" size={14} />
+            {videoFitMode === "cover" ? "Fit" : "Fill"}
+          </button>
+        ) : null}
 
         {isFullscreen && showFsPanels ? (
-          <div className={styles.fullscreenOverlay}>
-            <aside className={`${styles.fullscreenPanel} ${isDark ? styles.darkGlass : styles.lightGlass}`}>
+          <div
+            className={styles.fullscreenOverlay}
+            onClick={(event) => event.stopPropagation()}
+            onPointerDown={(event) => event.stopPropagation()}
+            onPointerUp={(event) => event.stopPropagation()}
+            onTouchStart={(event) => {
+              event.stopPropagation();
+              fsInteractionActiveRef.current = true;
+              showPanels({ keepVisible: true });
+            }}
+            onTouchMove={(event) => {
+              event.stopPropagation();
+              fsInteractionActiveRef.current = true;
+              showPanels({ keepVisible: true });
+            }}
+            onTouchEnd={(event) => {
+              event.stopPropagation();
+              fsInteractionActiveRef.current = false;
+              scheduleFsPanelsHide(1600);
+            }}
+          >
+            <aside
+              className={`${styles.fullscreenPanel} ${isDark ? styles.darkGlass : styles.lightGlass}`}
+              onPointerDown={() => {
+                fsInteractionActiveRef.current = true;
+                showPanels({ keepVisible: true });
+              }}
+              onPointerUp={() => {
+                fsInteractionActiveRef.current = false;
+                scheduleFsPanelsHide(1200);
+              }}
+              onTouchStart={() => {
+                fsInteractionActiveRef.current = true;
+                showPanels({ keepVisible: true });
+              }}
+              onTouchEnd={() => {
+                fsInteractionActiveRef.current = false;
+                scheduleFsPanelsHide(1200);
+              }}
+            >
               <h4 className={styles.fullscreenPanelTitle}>Categories</h4>
               <div className={styles.fullscreenSearchWrap}>
                 <Icon name="Search" size={13} className={styles.searchIcon} />
@@ -490,8 +711,13 @@ export default function VideoPlayer({
                   className={styles.fullscreenSearchInput}
                 />
               </div>
-              <div className={styles.fullscreenList}>
+              <div
+                ref={categoryListRef}
+                className={styles.fullscreenList}
+                onScroll={() => showPanels({ keepVisible: true })}
+              >
                 <button
+                  ref={allCategoriesBtnRef}
                   type="button"
                   className={`${styles.fullscreenListBtn} ${!selectedCategory ? styles.fullscreenListBtnActive : ""}`}
                   onClick={() => onSelectCategory?.(null)}
@@ -501,6 +727,9 @@ export default function VideoPlayer({
                 {filteredFsCategories.map((item) => (
                   <button
                     key={item.id}
+                    ref={(el) => {
+                      categoryBtnRefs.current[item.id] = el;
+                    }}
                     type="button"
                     className={`${styles.fullscreenListBtn} ${selectedCategory === item.id ? styles.fullscreenListBtnActive : ""}`}
                     onClick={() => onSelectCategory?.(item.id)}
@@ -511,7 +740,25 @@ export default function VideoPlayer({
               </div>
             </aside>
 
-            <aside className={`${styles.fullscreenPanel} ${isDark ? styles.darkGlass : styles.lightGlass}`}>
+            <aside
+              className={`${styles.fullscreenPanel} ${isDark ? styles.darkGlass : styles.lightGlass}`}
+              onPointerDown={() => {
+                fsInteractionActiveRef.current = true;
+                showPanels({ keepVisible: true });
+              }}
+              onPointerUp={() => {
+                fsInteractionActiveRef.current = false;
+                scheduleFsPanelsHide(1200);
+              }}
+              onTouchStart={() => {
+                fsInteractionActiveRef.current = true;
+                showPanels({ keepVisible: true });
+              }}
+              onTouchEnd={() => {
+                fsInteractionActiveRef.current = false;
+                scheduleFsPanelsHide(1200);
+              }}
+            >
               <h4 className={styles.fullscreenPanelTitle}>Channels</h4>
               <div className={styles.fullscreenSearchWrap}>
                 <Icon name="Search" size={13} className={styles.searchIcon} />
@@ -523,10 +770,17 @@ export default function VideoPlayer({
                   className={styles.fullscreenSearchInput}
                 />
               </div>
-              <div className={styles.fullscreenList}>
+              <div
+                ref={channelListRef}
+                className={styles.fullscreenList}
+                onScroll={() => showPanels({ keepVisible: true })}
+              >
                 {filteredFsChannels.map((item) => (
                   <button
                     key={item.id}
+                    ref={(el) => {
+                      channelBtnRefs.current[item.id] = el;
+                    }}
                     type="button"
                     className={`${styles.fullscreenListBtn} ${channel?.id === item.id ? styles.fullscreenListBtnActive : ""}`}
                     onClick={() => onSelectChannel?.(item)}
@@ -563,6 +817,10 @@ export default function VideoPlayer({
           <button type="button" className={styles.navBtn} onClick={handleStop} disabled={!channel?.streamUrl}>
             <Icon name="Square" size={14} />
             Stop
+          </button>
+          <button type="button" className={styles.navBtn} onClick={togglePlayerFullscreen} disabled={!channel?.streamUrl}>
+            <Icon name="Maximize2" size={14} />
+            Fullscreen
           </button>
         </div>
         <label className={styles.volumeControl}>
