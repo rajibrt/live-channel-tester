@@ -1,5 +1,6 @@
 import io
 import json
+import multiprocessing as mp
 import re
 import secrets
 import tempfile
@@ -153,6 +154,50 @@ def _parse_upload(upload: UploadFile) -> List[Entry]:
     return entries
 
 
+def _run_check_live_worker(queue, url: str, timeout: float, headers: dict, verify_segment: bool):
+    try:
+        ok, reason = check_live(
+            url,
+            timeout=timeout,
+            headers=headers,
+            verify_segment=verify_segment,
+        )
+        queue.put((ok, reason))
+    except Exception as err:
+        queue.put((False, f"error:{type(err).__name__}"))
+
+
+def check_live_with_hard_timeout(url: str, timeout: float, headers: dict, verify_segment: bool, hard_timeout: float):
+    """
+    Enforce per-channel wall-clock timeout so one problematic URL cannot block the full run.
+    """
+    max_wait = max(float(hard_timeout or 0), float(timeout or 0), 1.0)
+    ctx = mp.get_context("spawn")
+    queue = ctx.Queue(maxsize=1)
+    proc = ctx.Process(
+        target=_run_check_live_worker,
+        args=(queue, url, timeout, headers, verify_segment),
+    )
+    proc.start()
+    proc.join(max_wait)
+
+    if proc.is_alive():
+        proc.terminate()
+        proc.join(1.0)
+        return False, f"hard_timeout_{int(max_wait)}s"
+
+    if proc.exitcode not in (0, None):
+        return False, "error:worker_exit"
+
+    try:
+        result = queue.get_nowait()
+    except Exception:
+        return False, "error:no_result"
+    finally:
+        queue.close()
+    return result
+
+
 @app.get("/health")
 def health():
     return {"ok": True, "service": "m3u-local-agent", "time": datetime.utcnow().isoformat() + "Z"}
@@ -166,6 +211,7 @@ def test_stream(
     delay: float = Form(0.2),
     max_items: int = Form(0),
     verify_segment: bool = Form(True),
+    hard_timeout: float = Form(20.0),
 ):
     entries = _parse_upload(playlist)
     if max_items > 0:
@@ -195,11 +241,12 @@ def test_stream(
                 }
             ) + "\n"
 
-            ok, reason = check_live(
-                e.url,
+            ok, reason = check_live_with_hard_timeout(
+                url=e.url,
                 timeout=timeout,
                 headers=DEFAULT_HEADERS,
                 verify_segment=verify_segment,
+                hard_timeout=hard_timeout,
             )
 
             if ok:

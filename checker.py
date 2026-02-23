@@ -124,20 +124,45 @@ def extract_first_media_uri(base_url: str, text: str) -> Optional[str]:
         return urljoin(base_url, line)
     return None
 
-def fetch_text(url: str, timeout: float, headers: dict) -> Tuple[int, str, str]:
-    r = requests.get(url, headers=headers, timeout=timeout, allow_redirects=True)
-    return r.status_code, r.text, r.url
+def fetch_text(url: str, timeout: float, headers: dict, max_bytes: int = 512 * 1024) -> Tuple[int, str, str]:
+    """
+    Fetch text safely with an upper byte limit so non-playlist streaming URLs
+    cannot block by sending an endless body.
+    """
+    r = requests.get(url, headers=headers, timeout=timeout, allow_redirects=True, stream=True)
+    try:
+        chunks = []
+        total = 0
+        for chunk in r.iter_content(chunk_size=8192):
+            if not chunk:
+                continue
+            chunks.append(chunk)
+            total += len(chunk)
+            if total >= max_bytes:
+                break
+        body = b"".join(chunks)
+        enc = r.encoding or "utf-8"
+        text = body.decode(enc, errors="ignore")
+        return r.status_code, text, r.url
+    finally:
+        r.close()
 
 def fetch_head_or_small_get(url: str, timeout: float, headers: dict) -> int:
     # Some servers block HEAD. Try HEAD then fallback to GET streamed.
     try:
         r = requests.head(url, headers=headers, timeout=timeout, allow_redirects=True)
-        if r.status_code in (405, 403) or r.status_code >= 500:
-            raise RuntimeError("HEAD not reliable")
-        return r.status_code
+        try:
+            if r.status_code in (405, 403) or r.status_code >= 500:
+                raise RuntimeError("HEAD not reliable")
+            return r.status_code
+        finally:
+            r.close()
     except Exception:
         r = requests.get(url, headers=headers, timeout=timeout, allow_redirects=True, stream=True)
-        return r.status_code
+        try:
+            return r.status_code
+        finally:
+            r.close()
 
 def check_live(m3u8_url: str, timeout: float, headers: dict, verify_segment: bool) -> Tuple[bool, str]:
     """

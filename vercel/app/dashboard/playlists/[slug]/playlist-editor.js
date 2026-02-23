@@ -392,6 +392,7 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
 
   const checkedDeadRows = healthRows.filter((x) => x.check_status === "DEAD");
   const checkedLiveRows = healthRows.filter((x) => x.check_status === "LIVE");
+  const allChannelIds = channels.map((x) => Number(x.id)).filter((x) => Number.isFinite(x));
   const liveCount = channels.reduce(
     (total, c) => total + (String(c.status || "LIVE").toUpperCase() === "LIVE" ? 1 : 0),
     0
@@ -427,10 +428,11 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
       setHealthSummary("");
       const deadIds = checkedDeadRows.map((x) => Number(x.id));
       const liveIds = checkedLiveRows.map((x) => Number(x.id));
+      const allIds = allChannelIds;
       const body = {
-        disable_ids: kind === "disable-dead" ? deadIds : [],
+        disable_ids: kind === "disable-dead" ? deadIds : kind === "disable-all" ? allIds : [],
         delete_ids: kind === "delete-dead" ? deadIds : [],
-        enable_ids: kind === "enable-live" ? liveIds : [],
+        enable_ids: kind === "enable-live" ? liveIds : kind === "enable-all" ? allIds : [],
       };
       const res = await fetch(`/api/admin/playlists/${playlistSlug}/health-actions`, {
         method: "POST",
@@ -443,8 +445,14 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
       if (kind === "disable-dead" && deadIds.length) {
         setChannels((prev) => prev.map((c) => (deadIds.includes(Number(c.id)) ? { ...c, status: "DEAD" } : c)));
       }
+      if (kind === "disable-all" && allIds.length) {
+        setChannels((prev) => prev.map((c) => (allIds.includes(Number(c.id)) ? { ...c, status: "DEAD" } : c)));
+      }
       if (kind === "enable-live" && liveIds.length) {
         setChannels((prev) => prev.map((c) => (liveIds.includes(Number(c.id)) ? { ...c, status: "LIVE" } : c)));
+      }
+      if (kind === "enable-all" && allIds.length) {
+        setChannels((prev) => prev.map((c) => (allIds.includes(Number(c.id)) ? { ...c, status: "LIVE" } : c)));
       }
       if (kind === "delete-dead" && deadIds.length) {
         setChannels((prev) => prev.filter((c) => !deadIds.includes(Number(c.id))));
@@ -823,11 +831,29 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
           <button
             type="button"
             className={styles.secondaryBtn}
+            disabled={healthActionLoading || !allChannelIds.length}
+            onClick={() => applyHealthAction("disable-all")}
+            title="Mark every link in this playlist as DEAD"
+          >
+            Set ALL DEAD ({allChannelIds.length})
+          </button>
+          <button
+            type="button"
+            className={styles.secondaryBtn}
             disabled={healthActionLoading || !checkedLiveRows.length}
             onClick={() => applyHealthAction("enable-live")}
             title="Re-enable links that are currently live"
           >
             Re-enable LIVE ({checkedLiveRows.length})
+          </button>
+          <button
+            type="button"
+            className={styles.secondaryBtn}
+            disabled={healthActionLoading || !allChannelIds.length}
+            onClick={() => applyHealthAction("enable-all")}
+            title="Mark every link in this playlist as LIVE"
+          >
+            Set ALL LIVE ({allChannelIds.length})
           </button>
           <button
             type="button"

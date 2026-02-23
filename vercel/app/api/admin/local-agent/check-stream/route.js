@@ -7,6 +7,18 @@ function normalizeBaseUrl(value) {
   return String(value || "").trim().replace(/\/+$/, "");
 }
 
+function isLoopbackBaseUrl(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return false;
+  try {
+    const u = new URL(raw);
+    const host = String(u.hostname || "").toLowerCase();
+    return host === "localhost" || host === "127.0.0.1" || host === "::1";
+  } catch {
+    return false;
+  }
+}
+
 function safeNumber(value, fallback) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
@@ -54,6 +66,7 @@ async function parseIncoming(request) {
       playlist_url: String(form.get("playlist_url") || ""),
       agent_base_url: String(form.get("agent_base_url") || ""),
       timeout: form.get("timeout"),
+      hard_timeout: form.get("hard_timeout"),
       delay: form.get("delay"),
       max_items: form.get("max_items"),
       verify_segment: form.get("verify_segment"),
@@ -79,6 +92,7 @@ export async function POST(request) {
       body.agent_base_url || process.env.LOCAL_AGENT_BASE_URL || "http://127.0.0.1:8787"
     );
     const timeout = safeNumber(body.timeout, 10);
+    const hardTimeout = Math.max(1, safeNumber(body.hard_timeout, 20));
     const delay = safeNumber(body.delay, 0.2);
     const maxItems = Math.max(0, Math.floor(safeNumber(body.max_items, 0)));
     const verifySegment = parseBoolean(body.verify_segment, true);
@@ -89,6 +103,17 @@ export async function POST(request) {
     if (!agentBaseUrl || !/^https?:\/\//i.test(agentBaseUrl)) {
       return NextResponse.json({ error: "agent_base_url must be a valid http/https URL." }, { status: 400 });
     }
+    const requestHost = String(request.nextUrl?.hostname || "").toLowerCase();
+    const isHostedRequest = !!requestHost && requestHost !== "localhost" && requestHost !== "127.0.0.1" && requestHost !== "::1";
+    if (isHostedRequest && isLoopbackBaseUrl(agentBaseUrl)) {
+      return NextResponse.json(
+        {
+          error:
+            "Local Agent Base URL uses localhost/127.0.0.1, which is unreachable from hosted server. Use a public/local-network reachable agent URL (e.g. https://<your-agent-domain> or http://192.168.x.x:8787).",
+        },
+        { status: 400 }
+      );
+    }
 
     let playlistText = "";
     let uploadName = "remote_playlist.m3u";
@@ -96,7 +121,18 @@ export async function POST(request) {
       playlistText = await uploadFile.text();
       uploadName = uploadFile.name || uploadName;
     } else {
-      const playlistRes = await fetch(playlistUrl);
+      let playlistRes;
+      try {
+        playlistRes = await fetch(playlistUrl);
+      } catch {
+        return NextResponse.json(
+          {
+            error:
+              "Failed to fetch playlist URL from server. If this is a short-link, open it in browser and use the final direct .m3u/.m3u8 URL.",
+          },
+          { status: 400 }
+        );
+      }
       if (!playlistRes.ok) {
         return NextResponse.json({ error: `Failed to fetch playlist URL. HTTP ${playlistRes.status}` }, { status: 400 });
       }
@@ -109,11 +145,22 @@ export async function POST(request) {
     const form = new FormData();
     form.append("playlist", new Blob([playlistText], { type: "audio/x-mpegurl" }), uploadName);
     form.append("timeout", String(timeout));
+    form.append("hard_timeout", String(hardTimeout));
     form.append("delay", String(delay));
     form.append("max_items", String(maxItems));
     form.append("verify_segment", verifySegment ? "true" : "false");
 
-    const localRes = await fetch(`${agentBaseUrl}/api/test-stream`, { method: "POST", body: form });
+    let localRes;
+    try {
+      localRes = await fetch(`${agentBaseUrl}/api/test-stream`, { method: "POST", body: form });
+    } catch {
+      return NextResponse.json(
+        {
+          error: `Failed to reach local agent at ${agentBaseUrl}. Make sure the agent is running and accessible (example: python3 -m uvicorn local_agent:app --host 127.0.0.1 --port 8787).`,
+        },
+        { status: 502 }
+      );
+    }
     if (!localRes.ok) {
       const text = (await localRes.text().catch(() => "")).slice(0, 500);
       return NextResponse.json(

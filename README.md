@@ -7,7 +7,7 @@ Primary stack is now **Next.js admin dashboard** in `vercel/`.
 1. Run local agent (ISP route check):
 
 ```bash
-python -m uvicorn local_agent:app --host 127.0.0.1 --port 8787
+python3 -m uvicorn local_agent:app --host 127.0.0.1 --port 8787
 ```
 
 2. Run dashboard:

@@ -21,6 +21,7 @@ export default function LocalAgentPanel({ defaultAgentBaseUrl }) {
   const [playlistFile, setPlaylistFile] = useState(null);
   const [agentBaseUrl, setAgentBaseUrl] = useState(defaultAgentBaseUrl || "http://127.0.0.1:8787");
   const [timeout, setTimeoutValue] = useState(10);
+  const [hardTimeout, setHardTimeout] = useState(20);
   const [delay, setDelay] = useState(0.2);
   const [maxItems, setMaxItems] = useState(0);
   const [verifySegment, setVerifySegment] = useState(true);
@@ -102,6 +103,7 @@ export default function LocalAgentPanel({ defaultAgentBaseUrl }) {
       if (playlistFile) form.append("playlist_file", playlistFile, playlistFile.name || "upload.m3u");
       form.append("agent_base_url", agentBaseUrl.trim());
       form.append("timeout", String(timeout));
+      form.append("hard_timeout", String(hardTimeout));
       form.append("delay", String(delay));
       form.append("max_items", String(maxItems));
       form.append("verify_segment", verifySegment ? "true" : "false");
@@ -335,6 +337,16 @@ export default function LocalAgentPanel({ defaultAgentBaseUrl }) {
             min="0"
             step="1"
             onChange={(e) => setMaxItems(Number(e.target.value || 0))}
+          />
+        </label>
+        <label className={styles.field}>
+          <span>Hard Timeout (sec)</span>
+          <input
+            type="number"
+            value={hardTimeout}
+            min="1"
+            step="1"
+            onChange={(e) => setHardTimeout(Number(e.target.value || 20))}
           />
         </label>
         <label className={styles.checkRow}>
