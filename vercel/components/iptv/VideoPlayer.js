@@ -61,6 +61,7 @@ export default function VideoPlayer({
   const categoryBtnRefs = useRef({});
   const channelBtnRefs = useRef({});
   const [status, setStatus] = useState("idle");
+  const [errorMessage, setErrorMessage] = useState("");
   const [volumePercent, setVolumePercent] = useState(100);
   const [showVolumeHud, setShowVolumeHud] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -121,10 +122,10 @@ export default function VideoPlayer({
 
   const statusLabel = useMemo(() => {
     if (status === "loading") return "Switching channel...";
-    if (status === "error") return "Stream unavailable";
+    if (status === "error") return errorMessage || "Stream unavailable";
     if (status === "playing") return "Live Stream Playing";
     return "Choose from the list to start streaming";
-  }, [status]);
+  }, [status, errorMessage]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -142,15 +143,21 @@ export default function VideoPlayer({
 
     if (!channel?.streamUrl) {
       setStatus("idle");
+      setErrorMessage("");
       return undefined;
     }
 
     let cancelled = false;
     setStatus("loading");
+    setErrorMessage("");
 
     const markPlaying = () => !cancelled && setStatus("playing");
     const markLoading = () => !cancelled && setStatus("loading");
-    const onError = () => !cancelled && setStatus("error");
+    const onError = () => {
+      if (cancelled) return;
+      setErrorMessage("Stream unavailable");
+      setStatus("error");
+    };
     video.addEventListener("loadeddata", markPlaying);
     video.addEventListener("loadedmetadata", markPlaying);
     video.addEventListener("canplay", markPlaying);
@@ -160,6 +167,16 @@ export default function VideoPlayer({
     video.addEventListener("error", onError);
 
     const source = channel.streamUrl;
+    const isHttpOnHttpsPage =
+      typeof window !== "undefined" &&
+      window.location?.protocol === "https:" &&
+      /^http:\/\//i.test(String(source || ""));
+    if (isHttpOnHttpsPage) {
+      setStatus("error");
+      setErrorMessage("HTTP stream blocked on HTTPS site, use HTTPS/proxy URL");
+      return undefined;
+    }
+
     const startNativePlayback = () => {
       video.src = source;
       video.play().catch(() => {
@@ -193,6 +210,7 @@ export default function VideoPlayer({
                 startNativePlayback();
                 return;
               }
+              setErrorMessage("Stream unavailable");
               setStatus("error");
             });
             return;
@@ -207,6 +225,7 @@ export default function VideoPlayer({
           startNativePlayback();
           return;
         }
+        setErrorMessage("Stream unavailable");
         setStatus("error");
       }
     })();
@@ -799,7 +818,7 @@ export default function VideoPlayer({
             <h2>{channel?.name || "Select a Channel"}</h2>
             <p>{statusLabel}</p>
             {status === "loading" ? <Icon name="LoaderCircle" className={styles.spinner} size={20} /> : null}
-            {status === "error" ? <span className={styles.errorPill}>Stream unavailable</span> : null}
+            {status === "error" ? <span className={styles.errorPill}>{errorMessage || "Stream unavailable"}</span> : null}
           </div>
         ) : null}
       </div>
