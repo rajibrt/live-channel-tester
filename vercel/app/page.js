@@ -1,9 +1,14 @@
-export default function HomePage() {
+import IptvHomeClient from "../components/iptv/IptvHomeClient";
+import { getHomeIptvData } from "../components/iptv/homeData";
+
+export const dynamic = "force-dynamic";
+
+export default async function HomePage() {
+  const data = await getHomeIptvData();
   return (
-    <main>
-      <h1>M3U Admin System</h1>
-      <p>Admin dashboard: <code>/dashboard</code></p>
-      <p>Playlist URL format: <code>/playlist/&lt;token&gt;.m3u</code></p>
-    </main>
+    <IptvHomeClient
+      initialChannels={data.channels}
+      initialCategories={data.categories}
+    />
   );
 }

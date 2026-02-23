@@ -4,22 +4,101 @@ Primary stack is now **Next.js admin dashboard** in `vercel/`.
 
 ## Primary Workflow (Next.js)
 
-1. Run local agent (ISP route check):
+1. Install dashboard deps:
+
+```bash
+npm --prefix vercel install
+```
+
+2. Run local agent (ISP route check):
 
 ```bash
 python3 -m uvicorn local_agent:app --host 127.0.0.1 --port 8787
 ```
 
-2. Run dashboard:
+3. Run dashboard:
 
 ```bash
-npm --prefix vercel install
 npm --prefix vercel run dev
 ```
 
-3. Open:
+4. Open:
 - `http://localhost:3000/login`
 - `http://localhost:3000/dashboard/local-check`
+
+## Local Check - Hosted Vercel Workflow (Important)
+
+If you open `https://your-app.vercel.app/dashboard/local-check`, do **not** use `127.0.0.1` as agent URL.
+
+Use 2 terminals:
+
+1. Terminal 1: run local agent
+
+```bash
+python3 -m uvicorn local_agent:app --host 0.0.0.0 --port 8787
+```
+
+2. Terminal 2: expose local agent with tunnel
+
+```bash
+cloudflared tunnel --url http://127.0.0.1:8787
+```
+
+If `cloudflared` is missing:
+
+```bash
+brew install cloudflared
+```
+
+3. Copy generated `https://...trycloudflare.com` URL.
+4. In Vercel Local Check page, set `Local Agent Base URL` to that HTTPS tunnel URL.
+5. Verify tunnel health in browser:
+   - `https://<your-trycloudflare-domain>/health`
+6. Run check.
+
+## Local Check - Recommended Inputs
+
+- Prefer direct `.m3u/.m3u8` URL (avoid short links like `da.gd` when possible)
+- Or upload `.m3u` file directly
+- Start with:
+  - `Timeout (sec)`: `8`
+  - `Hard Timeout (sec)`: `15-20`
+  - `Max Items`: `20` (for first test)
+  - `Verify Segment`: enabled
+
+## Local Check Troubleshooting
+
+- Error: `Local Agent Base URL uses localhost/127.0.0.1...`
+  - Cause: hosted Vercel cannot access your PC localhost
+  - Fix: use tunnel URL (`https://...trycloudflare.com`)
+
+- Error: `Failed to reach local agent...`
+  - Fix: confirm agent is running and health works:
+    - `http://127.0.0.1:8787/health` (local)
+    - `https://<tunnel-domain>/health` (public tunnel)
+
+- Run stuck at a specific index
+  - Use `Hard Timeout (sec)` (already supported in UI)
+  - Reduce `Timeout`, or temporarily lower `Max Items` for debugging
+
+
+## IPTV Home UI
+
+- Route `/` now serves the IPTV Web Application UI.
+- Design reference source: `_IPTV_Web_Application_UI_Design/` (used for layout/components/visual style).
+- Existing admin and API routes remain unchanged (e.g. `/dashboard`, `/playlist/<token>.m3u`, `/api/*`).
+
+- Home (`/`) IPTV channels are loaded from saved playlists using LIVE status only.
+- Home now merges categories by name across multiple playlists and de-duplicates by `stream_url` (same stream appears once).
+- Per-channel "Show" toggle in Playlist Editor controls whether a LIVE channel appears on Home.
+
+### DB Update For Home Toggle
+
+Run once in Supabase SQL editor if your database was created before this feature:
+
+```sql
+alter table public.channels add column if not exists include_on_home boolean not null default true;
+```
 
 ## Local Check Features
 

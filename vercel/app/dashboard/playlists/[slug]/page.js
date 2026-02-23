@@ -23,10 +23,18 @@ async function getPlaylistEditorData(slug) {
     return { playlist, channels: [] };
   }
 
-  const { data: channels } = await supabase
+  let channels = [];
+  let channelsRes = await supabase
     .from("channels")
-    .select("id,name,category,logo_url,stream_url,status")
+    .select("id,name,category,logo_url,stream_url,status,include_on_home")
     .in("id", ids);
+  if (channelsRes.error && String(channelsRes.error.message || "").toLowerCase().includes("include_on_home")) {
+    channelsRes = await supabase
+      .from("channels")
+      .select("id,name,category,logo_url,stream_url,status")
+      .in("id", ids);
+  }
+  channels = channelsRes.data || [];
   const byId = Object.fromEntries((channels || []).map((c) => [c.id, c]));
   const merged = (links || [])
     .map((l) => {

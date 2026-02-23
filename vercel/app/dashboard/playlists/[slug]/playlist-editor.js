@@ -2,6 +2,16 @@
 
 import { useMemo, useState } from "react";
 import styles from "../../page.module.css";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../../../../components/ui/alert-dialog";
 
 const PLACEHOLDER_LOGO =
   "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 64 64'><rect width='64' height='64' rx='10' fill='%23e2e8f0'/><circle cx='32' cy='24' r='9' fill='%2394a3b8'/><rect x='16' y='38' width='32' height='10' rx='5' fill='%2394a3b8'/></svg>";
@@ -57,11 +67,13 @@ function cloneChannels(channels) {
           logo_url: c.logo_url || "",
           stream_url: c.stream_url || "",
           status: String(c.status || "LIVE").toUpperCase(),
+          include_on_home: c.include_on_home !== false,
           order: idx + 1,
           originalCategory: key,
           originalName: c.name || "Stream",
           originalLogo: c.logo_url || "",
           originalStreamUrl: c.stream_url || "",
+          originalIncludeOnHome: c.include_on_home !== false,
         });
       });
   });
@@ -87,7 +99,7 @@ function DownloadIcon() {
 export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl = "", initialChannels, initialGroups = [] }) {
   const [channels, setChannels] = useState(() => cloneChannels(initialChannels));
   const [initial] = useState(() => cloneChannels(initialChannels));
-  const [groupOrder, setGroupOrder] = useState(() => {
+  const initialGroupOrder = useMemo(() => {
     const seen = new Set();
     const arr = [];
     initialGroups.forEach((g) => {
@@ -107,6 +119,9 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
         }
       });
     return arr;
+  }, [initialChannels, initialGroups]);
+  const [groupOrder, setGroupOrder] = useState(() => {
+    return initialGroupOrder;
   });
   const [selectedGroup, setSelectedGroup] = useState(groupOrder[0] || "Uncategorized");
   const [saving, setSaving] = useState(false);
@@ -125,6 +140,23 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
   const [healthSummary, setHealthSummary] = useState("");
   const [healthRows, setHealthRows] = useState([]);
   const [healthActionLoading, setHealthActionLoading] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState({
+    open: false,
+    title: "",
+    description: "",
+    confirmText: "Confirm",
+    onConfirm: null,
+  });
+
+  const openConfirm = ({ title, description, confirmText = "Confirm", onConfirm }) => {
+    setConfirmDialog({
+      open: true,
+      title,
+      description,
+      confirmText,
+      onConfirm: typeof onConfirm === "function" ? onConfirm : null,
+    });
+  };
 
   const groupsWithCount = useMemo(() => {
     const counts = new Map();
@@ -195,7 +227,12 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
   };
 
   const deleteChannel = (id) => {
-    setChannels((prev) => prev.filter((c) => c.id !== id));
+    openConfirm({
+      title: "Delete channel?",
+      description: "This will remove the channel from the playlist.",
+      confirmText: "Delete",
+      onConfirm: () => setChannels((prev) => prev.filter((c) => c.id !== id)),
+    });
   };
 
   const sortGroupsAZ = () => {
@@ -255,17 +292,24 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
       setSuccess("");
       return;
     }
-    setGroupOrder((prev) => prev.filter((x) => x !== groupName));
-    if (selectedGroup === groupName) {
-      const remaining = groupOrder.filter((x) => x !== groupName);
-      setSelectedGroup(remaining[0] || "Uncategorized");
-    }
-    if (editingGroup === groupName) {
-      setEditingGroup("");
-      setGroupEditValue("");
-    }
-    setError("");
-    setSuccess(`Deleted empty group "${groupName}".`);
+    openConfirm({
+      title: `Delete group "${groupName}"?`,
+      description: "This empty group will be removed.",
+      confirmText: "Delete",
+      onConfirm: () => {
+        setGroupOrder((prev) => prev.filter((x) => x !== groupName));
+        if (selectedGroup === groupName) {
+          const remaining = groupOrder.filter((x) => x !== groupName);
+          setSelectedGroup(remaining[0] || "Uncategorized");
+        }
+        if (editingGroup === groupName) {
+          setEditingGroup("");
+          setGroupEditValue("");
+        }
+        setError("");
+        setSuccess(`Deleted empty group "${groupName}".`);
+      },
+    });
   };
 
   const sortChannelsAZ = () => {
@@ -363,6 +407,7 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
         category: c.category,
         logo_url: c.logo_url || "",
         stream_url: c.stream_url || "",
+        include_on_home: c.include_on_home !== false,
         position: idx + 1,
       }));
 
@@ -386,9 +431,14 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
       c.name !== c.originalName ||
       c.category !== c.originalCategory ||
       (c.logo_url || "") !== (c.originalLogo || "") ||
-      (c.stream_url || "") !== (c.originalStreamUrl || "");
+      (c.stream_url || "") !== (c.originalStreamUrl || "") ||
+      (c.include_on_home !== false) !== (c.originalIncludeOnHome !== false);
     return changedMeta;
   }).length;
+  const groupOrderChanged =
+    groupOrder.length !== initialGroupOrder.length ||
+    groupOrder.some((name, idx) => name !== initialGroupOrder[idx]);
+  const totalChangedCount = changedCount + (groupOrderChanged ? 1 : 0);
 
   const checkedDeadRows = healthRows.filter((x) => x.check_status === "DEAD");
   const checkedLiveRows = healthRows.filter((x) => x.check_status === "LIVE");
@@ -423,6 +473,15 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
 
   const applyHealthAction = async (kind) => {
     try {
+      if (kind === "delete-dead" && checkedDeadRows.length) {
+        openConfirm({
+          title: `Delete ${checkedDeadRows.length} DEAD link(s)?`,
+          description: "This will permanently remove these channels from this playlist.",
+          confirmText: "Delete permanently",
+          onConfirm: () => applyHealthAction("delete-dead-confirmed"),
+        });
+        return;
+      }
       setHealthActionLoading(true);
       setHealthError("");
       setHealthSummary("");
@@ -431,7 +490,7 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
       const allIds = allChannelIds;
       const body = {
         disable_ids: kind === "disable-dead" ? deadIds : kind === "disable-all" ? allIds : [],
-        delete_ids: kind === "delete-dead" ? deadIds : [],
+        delete_ids: kind === "delete-dead" || kind === "delete-dead-confirmed" ? deadIds : [],
         enable_ids: kind === "enable-live" ? liveIds : kind === "enable-all" ? allIds : [],
       };
       const res = await fetch(`/api/admin/playlists/${playlistSlug}/health-actions`, {
@@ -454,7 +513,7 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
       if (kind === "enable-all" && allIds.length) {
         setChannels((prev) => prev.map((c) => (allIds.includes(Number(c.id)) ? { ...c, status: "LIVE" } : c)));
       }
-      if (kind === "delete-dead" && deadIds.length) {
+      if ((kind === "delete-dead" || kind === "delete-dead-confirmed") && deadIds.length) {
         setChannels((prev) => prev.filter((c) => !deadIds.includes(Number(c.id))));
         setHealthRows((prev) => prev.filter((x) => !deadIds.includes(Number(x.id))));
       }
@@ -699,6 +758,7 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
                 <th className={styles.colGroup}>Group</th>
                 <th className={styles.colLogo}>Logo URL</th>
                 <th className={styles.colStream}>Stream URL</th>
+                <th>Home</th>
                 <th className={styles.colActions}>Actions</th>
                 <th className={styles.colPreview}>Preview</th>
               </tr>
@@ -772,6 +832,16 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
                       onChange={(e) => changeChannel(c.id, { stream_url: e.target.value })}
                     />
                   </td>
+                  <td>
+                    <label className={styles.checkRow}>
+                      <input
+                        type="checkbox"
+                        checked={c.include_on_home !== false}
+                        onChange={(e) => changeChannel(c.id, { include_on_home: e.target.checked })}
+                      />
+                      <span>Show</span>
+                    </label>
+                  </td>
                   <td className={styles.colActions}>
                     <div className={styles.miniActions}>
                       <button type="button" className={styles.iconBtn} onClick={() => moveChannel(c.id, "up")}>↑</button>
@@ -805,7 +875,7 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
 
       <article className={styles.card}>
         <h2>Pending Changes</h2>
-        <p className={styles.hint}>Changed channels: {changedCount}</p>
+        <p className={styles.hint}>Changed items: {totalChangedCount}</p>
         {error ? <p className={styles.errorText}>{error}</p> : null}
         {success ? <p className={styles.successText}>{success}</p> : null}
       </article>
@@ -895,7 +965,7 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
 
       <div className={styles.floatingSaveWrap}>
         <div className={styles.floatingSaveInner}>
-          <span className={styles.floatingMeta}>Changed: {changedCount}</span>
+          <span className={styles.floatingMeta}>Changed: {totalChangedCount}</span>
           <button type="button" className={styles.primaryBtn} onClick={saveAll} disabled={saving}>
             {saving ? "Saving..." : "Save updates"}
           </button>
@@ -929,6 +999,29 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
           </div>
         </div>
       ) : null}
+
+      <AlertDialog open={confirmDialog.open} onOpenChange={(open) => setConfirmDialog((prev) => ({ ...prev, open }))}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{confirmDialog.title}</AlertDialogTitle>
+            <AlertDialogDescription>{confirmDialog.description}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className={styles.secondaryBtn}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className={styles.primaryBtn}
+              onClick={(e) => {
+                e.preventDefault();
+                const fn = confirmDialog.onConfirm;
+                setConfirmDialog((prev) => ({ ...prev, open: false, onConfirm: null }));
+                if (typeof fn === "function") fn();
+              }}
+            >
+              {confirmDialog.confirmText || "Confirm"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </section>
   );
 }

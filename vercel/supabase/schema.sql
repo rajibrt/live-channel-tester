@@ -60,6 +60,8 @@ create table if not exists public.job_runs (
 
 alter table public.job_runs add column if not exists is_enabled boolean not null default true;
 
+
+alter table public.channels add column if not exists include_on_home boolean not null default true;
 create index if not exists channels_category_name_idx on public.channels(category, name);
 create index if not exists playlist_channels_slug_idx on public.playlist_channels(playlist_slug);
 create index if not exists playlist_tokens_slug_idx on public.playlist_tokens(playlist_slug);

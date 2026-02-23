@@ -8,6 +8,10 @@ function chunk(arr, size) {
   return out;
 }
 
+function uniqueStrings(values) {
+  return [...new Set((Array.isArray(values) ? values : []).map((x) => String(x || "").trim()).filter(Boolean))];
+}
+
 export async function POST(request, { params }) {
   const auth = await requireAdminApi();
   if (!auth.ok) return auth.response;
@@ -21,7 +25,7 @@ export async function POST(request, { params }) {
 
     const body = await request.json().catch(() => ({}));
     const channels = Array.isArray(body.channels) ? body.channels : [];
-    const groupOrder = Array.isArray(body.group_order) ? body.group_order.map((x) => String(x || "").trim()).filter(Boolean) : [];
+    const groupOrder = uniqueStrings(body.group_order);
 
     const supabase = getSupabaseAdmin();
     const now = new Date().toISOString();
@@ -56,6 +60,7 @@ export async function POST(request, { params }) {
             category: String(c.category || "").trim(),
             logo_url: String(c.logo_url || "").trim(),
             stream_url: String(c.stream_url || "").trim(),
+            include_on_home: c.include_on_home !== false,
             updated_at: now,
           })
           .eq("id", Number(c.id))
@@ -97,6 +102,26 @@ export async function POST(request, { params }) {
       .eq("slug", playlistSlug);
 
     let groupOrderSaved = false;
+    const existingGroupsRes = await supabase
+      .from("playlist_groups")
+      .select("name")
+      .eq("playlist_slug", playlistSlug);
+    if (existingGroupsRes.error) {
+      return NextResponse.json({ error: `Failed loading existing groups: ${existingGroupsRes.error.message}` }, { status: 500 });
+    }
+    const existingGroupNames = uniqueStrings((existingGroupsRes.data || []).map((x) => x.name));
+    const keepGroupSet = new Set(groupOrder);
+    const deleteGroups = existingGroupNames.filter((name) => !keepGroupSet.has(name));
+    if (deleteGroups.length) {
+      const delGroupsRes = await supabase
+        .from("playlist_groups")
+        .delete()
+        .eq("playlist_slug", playlistSlug)
+        .in("name", deleteGroups);
+      if (delGroupsRes.error) {
+        return NextResponse.json({ error: `Failed deleting removed groups: ${delGroupsRes.error.message}` }, { status: 500 });
+      }
+    }
     if (groupOrder.length) {
       const rows = groupOrder.map((name, idx) => ({
         playlist_slug: playlistSlug,
@@ -107,10 +132,11 @@ export async function POST(request, { params }) {
       const saveGroups = await supabase
         .from("playlist_groups")
         .upsert(rows, { onConflict: "playlist_slug,name" });
-      if (!saveGroups.error) {
-        groupOrderSaved = true;
+      if (saveGroups.error) {
+        return NextResponse.json({ error: `Failed saving group order: ${saveGroups.error.message}` }, { status: 500 });
       }
     }
+    groupOrderSaved = true;
 
     return NextResponse.json({
       ok: true,

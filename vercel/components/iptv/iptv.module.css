@@ -1,0 +1,958 @@
+.pageWrap {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  color: var(--foreground);
+}
+
+.pageDark {
+  background: var(--background);
+}
+
+.pageLight {
+  color: var(--foreground);
+  background: var(--background);
+}
+
+.topNavbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  height: 64px;
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+}
+
+.darkGlass {
+  background: color-mix(in oklab, var(--card) 78%, transparent);
+  border-color: var(--border);
+}
+
+.lightGlass {
+  background: color-mix(in oklab, var(--card) 88%, transparent);
+  border-color: var(--border);
+}
+
+.topLeft,
+.topRight {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.topMiddle {
+  flex: 1;
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 12px;
+}
+
+.brandWrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brandLogo {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: var(--primary);
+  display: grid;
+  place-items: center;
+  color: var(--primary-foreground);
+  font-weight: 700;
+  box-shadow: var(--shadow-lg);
+}
+
+.brandText {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.iconBtn,
+.userBtn,
+.closeBtn,
+.roundBtn,
+.favoriteBtn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+
+.iconBtn {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  position: relative;
+  background: var(--muted);
+}
+
+.pageLight .iconBtn {
+  background: var(--muted);
+}
+
+.tvBtnActive {
+  color: var(--primary-foreground);
+  background: var(--primary);
+  border: 1px solid var(--ring);
+}
+
+.badge {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--destructive);
+  color: var(--destructive-foreground);
+  font-size: 11px;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+}
+
+.userBtn {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  color: var(--primary-foreground);
+  background: var(--primary);
+}
+
+.mobileOnly {
+  display: none;
+}
+
+.hideSm {
+  display: grid;
+}
+
+.contentWrap {
+  flex: 1;
+  display: flex;
+  padding-top: 64px;
+  position: relative;
+  min-height: calc(100vh - 64px);
+}
+
+.debugBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 6px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  color: var(--foreground);
+  background: color-mix(in oklab, var(--card) 88%, transparent);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.debugBadge strong {
+  color: var(--foreground);
+}
+
+.pageLight .debugBadge {
+  color: var(--foreground);
+  background: color-mix(in oklab, var(--card) 90%, transparent);
+  border-color: var(--border);
+}
+
+.debugBadgeDesktop {
+  max-width: min(56vw, 520px);
+  white-space: nowrap;
+}
+
+.debugBadgeMobile {
+  display: none;
+}
+
+.drawerLeft,
+.drawerRight {
+  width: 280px;
+  flex: 0 0 280px;
+  position: relative;
+  z-index: 30;
+}
+
+.rightPanel,
+.leftSidebar {
+  height: calc(100vh - 64px);
+  border-right: 1px solid var(--border);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.rightPanel {
+  width: 100%;
+  border-left: 1px solid var(--border);
+  border-right: 0;
+}
+
+.leftSidebar {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebarTop {
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.sidebarHeaderMobile {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sidebarHeaderMobile h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.closeBtn {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: var(--muted);
+}
+
+.searchWrap {
+  position: relative;
+}
+
+.searchIcon {
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0.6;
+}
+
+.searchInput {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid var(--input);
+  background: color-mix(in oklab, var(--muted) 86%, transparent);
+  color: var(--foreground);
+  padding: 10px 12px 10px 34px;
+  font-size: 14px;
+}
+
+.pageLight .searchInput {
+  background: var(--muted);
+  border-color: var(--input);
+}
+
+.quickLinks,
+.sidebarList {
+  display: grid;
+  gap: 6px;
+}
+
+.sidebarList {
+  padding: 0 16px 16px;
+  overflow-y: auto;
+}
+
+.sidebarLabel {
+  margin: 8px 10px 2px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  opacity: 0.68;
+}
+
+.linkBtn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 12px;
+  border: 0;
+  padding: 10px 12px;
+  text-align: left;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.iconBtn:focus-visible,
+.userBtn:focus-visible,
+.linkBtn:focus-visible,
+.searchInput:focus-visible,
+.navBtn:focus-visible,
+.favoriteBtn:focus-visible,
+.channelCard:focus-visible,
+.fullscreenListBtn:focus-visible,
+.fullscreenSearchInput:focus-visible,
+.volumeControl input:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.linkBtnActive {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  box-shadow: var(--shadow-lg);
+}
+
+.centerCol {
+  flex: 1;
+  overflow: auto;
+  padding: 18px;
+}
+
+.videoSection {
+  max-width: 1120px;
+  margin: 0 auto;
+  display: grid;
+  gap: 14px;
+}
+
+.videoShell {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-radius: 20px;
+  overflow: hidden;
+  background: var(--muted);
+  box-shadow: var(--shadow-2xl);
+}
+
+.videoElement {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.volumeHud {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 2;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--background) 72%, transparent);
+  border: 1px solid var(--border);
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.fullscreenOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px;
+  pointer-events: none;
+}
+
+.fullscreenPanel {
+  width: min(320px, 28vw);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: calc(100% - 8px);
+  pointer-events: auto;
+}
+
+.fullscreenPanelTitle {
+  margin: 0;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+.fullscreenSearchWrap {
+  position: relative;
+}
+
+.fullscreenSearchInput {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid var(--input);
+  background: color-mix(in oklab, var(--muted) 84%, transparent);
+  color: var(--foreground);
+  padding: 8px 10px 8px 30px;
+  font-size: 13px;
+}
+
+.fullscreenList {
+  overflow: auto;
+  display: grid;
+  gap: 6px;
+  padding-right: 2px;
+}
+
+.fullscreenListBtn {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in oklab, var(--card) 72%, transparent);
+  color: var(--foreground);
+  padding: 8px 10px;
+  font-size: 13px;
+  line-height: 1.25;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fullscreenListBtnActive {
+  border-color: var(--ring);
+  background: color-mix(in oklab, var(--primary) 22%, transparent);
+  color: var(--primary-foreground);
+}
+
+.fullscreenChannelName {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.videoBackdrop {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: 8px;
+  text-align: center;
+  background: color-mix(in oklab, var(--background) 72%, transparent);
+  padding: 16px;
+}
+
+.videoBackdrop h2 {
+  margin: 0;
+  font-size: clamp(24px, 3.2vw, 40px);
+}
+
+.videoBackdrop p {
+  margin: 0;
+  color: var(--muted-foreground);
+}
+
+.videoBrand {
+  width: 88px;
+  height: 88px;
+  margin: 0 auto;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-size: 34px;
+  font-weight: 700;
+  color: var(--primary-foreground);
+  background: var(--primary);
+}
+
+.videoBrandImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 999px;
+}
+
+.spinner {
+  margin: 0 auto;
+  animation: spin 1s linear infinite;
+}
+
+.errorPill {
+  display: inline-flex;
+  margin: 0 auto;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--destructive) 18%, transparent);
+  border: 1px solid var(--destructive);
+  color: var(--destructive);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.playerControlBar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: color-mix(in oklab, var(--background) 50%, transparent);
+}
+
+.controlsLeft,
+.controlsRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.roundBtn {
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  color: var(--foreground);
+  background: var(--muted);
+}
+
+.controlTime {
+  font-size: 13px;
+  color: var(--foreground);
+}
+
+.channelInfo {
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  padding: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.channelInfoLeft {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.channelInfoLogo {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  color: var(--primary-foreground);
+  font-weight: 700;
+  font-size: 22px;
+}
+
+.channelInfoLogoImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 16px;
+}
+
+.channelInfo h3 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.channelMetaRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.categoryPill {
+  font-size: 12px;
+  border-radius: 999px;
+  padding: 4px 10px;
+  text-transform: capitalize;
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+  border: 1px solid var(--border);
+}
+
+.metaLive,
+.metaOffline {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.metaLive {
+  color: var(--chart-2);
+}
+
+.metaOffline {
+  color: var(--muted-foreground);
+}
+
+.favoriteBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  color: var(--primary);
+  background: color-mix(in oklab, var(--primary) 12%, transparent);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.channelActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.playerControlsRow {
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.playerButtons {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.volumeControl {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--foreground);
+}
+
+.volumeControl input {
+  width: min(220px, 50vw);
+  accent-color: var(--primary);
+}
+
+.volumeControl span {
+  min-width: 46px;
+  text-align: right;
+  font-weight: 600;
+}
+
+.navBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  color: var(--foreground);
+  background: color-mix(in oklab, var(--muted) 75%, transparent);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.navBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.rightHeader {
+  padding: 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.desktopTitle {
+  margin: 0;
+  font-size: 20px;
+}
+
+.rightMeta {
+  margin: 4px 0 12px;
+  opacity: 0.72;
+  font-size: 14px;
+}
+
+.rightBody {
+  height: calc(100% - 144px);
+  overflow: auto;
+  padding: 12px;
+}
+
+.channelGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.channelCard {
+  border-radius: 16px;
+  border: 1px solid transparent;
+  padding: 12px;
+  position: relative;
+  text-align: center;
+  cursor: pointer;
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.channelCard:hover {
+  transform: translateY(-1px) scale(1.02);
+}
+
+.channelDark {
+  background: color-mix(in oklab, var(--card) 76%, transparent);
+  border-color: var(--border);
+}
+
+.channelLight {
+  background: color-mix(in oklab, var(--card) 90%, transparent);
+  border-color: var(--border);
+}
+
+.channelCardActive {
+  border-color: var(--ring);
+  box-shadow: var(--shadow-lg);
+}
+
+.channelLogoWrap {
+  position: relative;
+  width: 66px;
+  margin: 0 auto 10px;
+}
+
+.channelLogo {
+  width: 66px;
+  height: 66px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  color: var(--primary-foreground);
+  font-size: 26px;
+  font-weight: 700;
+}
+
+.channelLogoImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 999px;
+}
+
+.liveDot {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  border: 2px solid var(--background);
+  background: var(--chart-2);
+  animation: pulse 1.4s infinite;
+}
+
+.playOverlay {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  color: var(--foreground);
+  background: color-mix(in oklab, var(--background) 60%, transparent);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.channelCard:hover .playOverlay,
+.playOverlayVisible {
+  opacity: 1;
+}
+
+.channelName {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.25;
+  min-height: 33px;
+}
+
+.favoritePin {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  color: var(--muted-foreground);
+  background: color-mix(in oklab, var(--background) 75%, transparent);
+}
+
+.favoritePinOn {
+  color: var(--accent);
+}
+
+.emptyState {
+  min-height: 280px;
+  display: grid;
+  place-content: center;
+  text-align: center;
+  gap: 6px;
+  opacity: 0.75;
+}
+
+.emptyState p,
+.emptyState small {
+  margin: 0;
+}
+
+.mobileOverlay {
+  position: fixed;
+  inset: 64px 0 0;
+  z-index: 20;
+  border: 0;
+  background: color-mix(in oklab, var(--background) 64%, transparent);
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.4; }
+  100% { opacity: 1; }
+}
+
+@media (max-width: 1279px) {
+  .drawerRight {
+    width: 360px;
+    flex-basis: 360px;
+  }
+}
+
+@media (max-width: 1023px) {
+  .mobileOnly {
+    display: grid;
+  }
+
+  .hideSm {
+    display: none;
+  }
+
+  .topMiddle {
+    display: none;
+  }
+
+  .sidebarHeaderMobile {
+    display: flex;
+  }
+
+  .drawerLeft,
+  .drawerRight {
+    position: fixed;
+    top: 64px;
+    bottom: 0;
+    transform: translateX(-100%);
+    transition: transform 0.26s ease;
+  }
+
+  .drawerRight {
+    right: 0;
+    left: auto;
+    transform: translateX(100%);
+    width: min(92vw, 400px);
+    flex-basis: auto;
+  }
+
+  .drawerLeft {
+    left: 0;
+    width: min(90vw, 320px);
+    flex-basis: auto;
+  }
+
+  .drawerLeftOpen {
+    transform: translateX(0);
+  }
+
+  .drawerRightOpen {
+    transform: translateX(0);
+  }
+
+  .leftSidebar,
+  .rightPanel {
+    height: 100%;
+  }
+
+  .centerCol {
+    padding: 12px;
+  }
+
+  .videoShell {
+    border-radius: 14px;
+  }
+
+  .fullscreenPanel {
+    width: min(260px, 42vw);
+  }
+}
+
+@media (max-width: 640px) {
+  .brandText {
+    font-size: 18px;
+  }
+
+  .channelInfo {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .channelActions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .volumeControl input {
+    width: min(180px, 42vw);
+  }
+
+  .channelGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .debugBadgeMobile {
+    display: inline-flex;
+    width: 100%;
+    margin-top: 12px;
+    justify-content: flex-start;
+    padding: 8px 10px;
+  }
+}
