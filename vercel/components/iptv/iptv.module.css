@@ -423,7 +423,8 @@
 .fsAspectBtn {
   position: absolute;
   top: 12px;
-  left: 12px;
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 4;
   display: inline-flex;
   align-items: center;
@@ -442,13 +443,6 @@
     border-color 0.18s ease,
     color 0.18s ease,
     box-shadow 0.18s ease;
-}
-
-@media (max-width: 1023px) {
-  .fsAspectBtn {
-    left: 50%;
-    transform: translateX(-50%);
-  }
 }
 
 .fullscreenOverlay {
@@ -1145,7 +1139,7 @@
   }
 
   .fsAspectBtn:hover:not(:disabled) {
-    transform: translateY(-1px);
+    transform: translateX(-50%) translateY(-1px);
     border-color: var(--ring);
     background: color-mix(in oklab, var(--primary) 16%, var(--background));
     box-shadow: var(--shadow-lg);
