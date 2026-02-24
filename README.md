@@ -26,6 +26,51 @@ npm --prefix vercel run dev
 - `http://localhost:3000/login`
 - `http://localhost:3000/dashboard/local-check`
 
+## New Instructions: Local Docker Live Deploy
+
+Use this section if you want full local live deployment (server + website + dashboard) from Docker.
+
+### 1) Start all services
+
+```bash
+docker compose up -d --build
+```
+
+### 2) If port `3000` is already in use
+
+```bash
+DASHBOARD_PORT=3001 docker compose up -d --build
+```
+
+### 3) Open live URLs
+
+- Dashboard Home: `http://localhost:3000` (or `http://localhost:3001` if you used `DASHBOARD_PORT=3001`)
+- Login: `http://localhost:3000/login` (or `:3001/login`)
+- Local Check Dashboard: `http://localhost:3000/dashboard/local-check` (or `:3001/dashboard/local-check`)
+- Local Agent Health: `http://localhost:8787/health`
+
+### 4) Manage running containers
+
+```bash
+# Running status
+docker compose ps
+
+# Logs
+docker compose logs -f
+
+# Restart everything with rebuild
+docker compose up -d --build
+
+# Stop everything
+docker compose down
+```
+
+### 5) Important notes
+
+- Keep `.env` in project root with required Supabase/app secrets.
+- Dashboard talks to local agent internally via Docker network using `LOCAL_AGENT_BASE_URL=http://local-agent:8787`.
+- If real secrets are exposed in tracked files, rotate them immediately.
+
 ## Local Check - Hosted Vercel Workflow (Important)
 
 If you open `https://your-app.vercel.app/dashboard/local-check`, do **not** use `127.0.0.1` as agent URL.

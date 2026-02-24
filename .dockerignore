@@ -1,0 +1,13 @@
+.git
+.gitignore
+.DS_Store
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.log
+.env
+node_modules
+vercel/node_modules
+vercel/.next
+output

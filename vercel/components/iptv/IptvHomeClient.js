@@ -239,6 +239,30 @@ export default function IptvHomeClient({ initialChannels = [], initialCategories
     setMode(nextMode);
   };
 
+  const handleToggleLeftSidebar = () => {
+    if (typeof window !== "undefined" && window.innerWidth < 1024) {
+      setShowLeftSidebar((prev) => {
+        const next = !prev;
+        if (next) setShowRightPanel(false);
+        return next;
+      });
+      return;
+    }
+    setShowLeftSidebar((prev) => !prev);
+  };
+
+  const handleToggleRightPanel = () => {
+    if (typeof window !== "undefined" && window.innerWidth < 1024) {
+      setShowRightPanel((prev) => {
+        const next = !prev;
+        if (next) setShowLeftSidebar(false);
+        return next;
+      });
+      return;
+    }
+    setShowRightPanel((prev) => !prev);
+  };
+
   const handleSidebarCategorySelect = (categoryId) => {
     setSelectedCategory(categoryId);
     if (typeof window !== "undefined" && window.innerWidth < 1024) {
@@ -264,8 +288,8 @@ export default function IptvHomeClient({ initialChannels = [], initialCategories
         isTvMode={isTvMode}
         onToggleTheme={() => setIsDark((prev) => !prev)}
         onToggleTvMode={() => setForceTvMode((prev) => !prev)}
-        onToggleLeftSidebar={() => setShowLeftSidebar((prev) => !prev)}
-        onToggleRightPanel={() => setShowRightPanel((prev) => !prev)}
+        onToggleLeftSidebar={handleToggleLeftSidebar}
+        onToggleRightPanel={handleToggleRightPanel}
         debugStats={debugStats}
       />
       <section className={styles.contentWrap}>

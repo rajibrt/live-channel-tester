@@ -1,0 +1,29 @@
+services:
+  local-agent:
+    build:
+      context: .
+      dockerfile: docker/local-agent.Dockerfile
+    container_name: local-agent
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "${LOCAL_AGENT_PORT:-8787}:8787"
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: docker/dashboard.Dockerfile
+    container_name: live-dashboard
+    depends_on:
+      - local-agent
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      NEXT_TELEMETRY_DISABLED: "1"
+      LOCAL_AGENT_BASE_URL: http://local-agent:8787
+      PUBLIC_PLAYLIST_BASE_URL: ${PUBLIC_PLAYLIST_BASE_URL:-http://localhost:3000}
+    ports:
+      - "${DASHBOARD_PORT:-3000}:3000"
