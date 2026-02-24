@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { getSupabaseAdmin } from "../../lib/supabaseAdmin";
 import styles from "./page.module.css";
-import AdminHeader from "./AdminHeader";
 import CopyUrlButton from "./CopyUrlButton";
 
 async function getData() {
@@ -34,115 +33,107 @@ export default async function DashboardPage() {
   const cronOk = cronEnabled && String(jobRun?.last_status || "").toLowerCase() === "ok";
 
   return (
-    <main className={styles.page}>
-      <div className={styles.bgGlow} />
-      <section className={styles.shell}>
-        <AdminHeader
-          title="Dashboard"
-          subtitle="Use the menu to open each function on its own route."
-        />
-
-        <section className={styles.stats}>
-          <article className={styles.statCard}>
-            <p>Total Playlists</p>
-            <strong>{playlists.length}</strong>
-          </article>
-          <article className={styles.statCard}>
-            <p>Active Tokens</p>
-            <strong>{activeTokenCount}</strong>
-          </article>
-          <article className={styles.statCard}>
-            <p>Total Channels</p>
-            <strong>{playlists.reduce((sum, p) => sum + (Number(p.channel_count) || 0), 0)}</strong>
-          </article>
-        </section>
-
-        <section className={styles.grid}>
-          <article className={styles.card}>
-            <h2>Playlists</h2>
-            <p className={styles.hint}>Create/update playlist and rotate permanent token.</p>
-            <Link href="/dashboard/playlists" className={styles.navCta}>Open Playlists</Link>
-          </article>
-          <article className={styles.card}>
-            <h2>Channels</h2>
-            <p className={styles.hint}>Attach stream URLs and metadata to a playlist.</p>
-            <Link href="/dashboard/channels" className={styles.navCta}>Open Channels</Link>
-          </article>
-          <article className={styles.card}>
-            <h2>Local Check</h2>
-            <p className={styles.hint}>Run Local IP/ISP check with progress + live preview.</p>
-            <Link href="/dashboard/local-check" className={styles.navCta}>Open Local Check</Link>
-          </article>
-          <article className={styles.card}>
-            <h2>Last Cron Run</h2>
-            <p className={styles.hint}>Hourly playlist health auto-check status.</p>
-            <p className={styles.metaLine}>
-              <span className={`${styles.statusDot} ${cronOk ? styles.statusLive : styles.statusDead}`} aria-hidden="true" />
-              <strong>{lastRunText}</strong> | Cron: <strong>{cronEnabled ? "ON" : "OFF"}</strong>
-            </p>
-            <p className={styles.metaLine}>
-              Total: <strong>{Number(jobRun?.last_total || 0)}</strong> | LIVE:{" "}
-              <strong>{Number(jobRun?.last_live || 0)}</strong> | DEAD:{" "}
-              <strong>{Number(jobRun?.last_dead || 0)}</strong>
-            </p>
-            {jobRun?.last_message ? <p className={styles.hint}>{jobRun.last_message}</p> : null}
-            <form method="post" action="/api/admin/cron/toggle" className={styles.metaActions}>
-              <input type="hidden" name="enabled" value={cronEnabled ? "false" : "true"} />
-              <button
-                type="submit"
-                className={cronEnabled ? styles.secondaryBtn : styles.primaryBtn}
-              >
-                Turn Cron {cronEnabled ? "OFF" : "ON"}
-              </button>
-            </form>
-          </article>
-        </section>
-
-        <section className={`${styles.card} ${styles.tableCard}`}>
-          <h2>Playlists</h2>
-          <div className={styles.tableWrap}>
-            <table>
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Slug</th>
-                  <th>Channels</th>
-                  <th>Token URL</th>
-                </tr>
-              </thead>
-              <tbody>
-                {playlists.map((p) => {
-                  const token = tokenBySlug[p.slug];
-                  const url = token && base ? `${base}/playlist/${token}.m3u` : "";
-                  return (
-                    <tr key={p.slug}>
-                      <td>
-                        <Link href={`/dashboard/playlists/${p.slug}`} className={styles.url}>
-                          {p.name}
-                        </Link>
-                      </td>
-                      <td>{p.slug}</td>
-                      <td>{p.channel_count}</td>
-                      <td>
-                        {url ? (
-                          <div className={styles.urlCell}>
-                            <a href={url} target="_blank" rel="noreferrer" className={styles.url}>
-                              {url}
-                            </a>
-                            <CopyUrlButton value={url} />
-                          </div>
-                        ) : (
-                          <span className={styles.pending}>Generate token</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </section>
+    <>
+      <section className={styles.stats}>
+        <article className={styles.statCard}>
+          <p>Total Playlists</p>
+          <strong>{playlists.length}</strong>
+        </article>
+        <article className={styles.statCard}>
+          <p>Active Tokens</p>
+          <strong>{activeTokenCount}</strong>
+        </article>
+        <article className={styles.statCard}>
+          <p>Total Channels</p>
+          <strong>{playlists.reduce((sum, p) => sum + (Number(p.channel_count) || 0), 0)}</strong>
+        </article>
       </section>
-    </main>
+
+      <section className={styles.grid}>
+        <article className={styles.card}>
+          <h2>Playlists</h2>
+          <p className={styles.hint}>Create/update playlist and rotate permanent token.</p>
+          <Link href="/dashboard/playlists" className={styles.navCta}>Open Playlists</Link>
+        </article>
+        <article className={styles.card}>
+          <h2>Channels</h2>
+          <p className={styles.hint}>Attach stream URLs and metadata to a playlist.</p>
+          <Link href="/dashboard/channels" className={styles.navCta}>Open Channels</Link>
+        </article>
+        <article className={styles.card}>
+          <h2>Client Users</h2>
+          <p className={styles.hint}>Create viewer accounts and control login access.</p>
+          <Link href="/dashboard/clients" className={styles.navCta}>Open Clients</Link>
+        </article>
+        <article className={styles.card}>
+          <h2>Local Check</h2>
+          <p className={styles.hint}>Run Local IP/ISP check with progress + live preview.</p>
+          <Link href="/dashboard/local-check" className={styles.navCta}>Open Local Check</Link>
+        </article>
+        <article className={styles.card}>
+          <h2>Last Cron Run</h2>
+          <p className={styles.hint}>Hourly playlist health auto-check status.</p>
+          <p className={styles.metaLine}>
+            <span className={`${styles.statusDot} ${cronOk ? styles.statusLive : styles.statusDead}`} aria-hidden="true" />
+            <strong>{lastRunText}</strong> | Cron: <strong>{cronEnabled ? "ON" : "OFF"}</strong>
+          </p>
+          <p className={styles.metaLine}>
+            Total: <strong>{Number(jobRun?.last_total || 0)}</strong> | LIVE: <strong>{Number(jobRun?.last_live || 0)}</strong> | DEAD: <strong>{Number(jobRun?.last_dead || 0)}</strong>
+          </p>
+          {jobRun?.last_message ? <p className={styles.hint}>{jobRun.last_message}</p> : null}
+          <form method="post" action="/api/admin/cron/toggle" className={styles.metaActions}>
+            <input type="hidden" name="enabled" value={cronEnabled ? "false" : "true"} />
+            <button type="submit" className={cronEnabled ? styles.secondaryBtn : styles.primaryBtn}>
+              Turn Cron {cronEnabled ? "OFF" : "ON"}
+            </button>
+          </form>
+        </article>
+      </section>
+
+      <section className={`${styles.card} ${styles.tableCard}`}>
+        <h2>Playlists</h2>
+        <div className={styles.tableWrap}>
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Slug</th>
+                <th>Channels</th>
+                <th>Token URL</th>
+              </tr>
+            </thead>
+            <tbody>
+              {playlists.map((p) => {
+                const token = tokenBySlug[p.slug];
+                const url = token && base ? `${base}/playlist/${token}.m3u` : "";
+                return (
+                  <tr key={p.slug}>
+                    <td>
+                      <Link href={`/dashboard/playlists/${p.slug}`} className={styles.url}>
+                        {p.name}
+                      </Link>
+                    </td>
+                    <td>{p.slug}</td>
+                    <td>{p.channel_count}</td>
+                    <td>
+                      {url ? (
+                        <div className={styles.urlCell}>
+                          <a href={url} target="_blank" rel="noreferrer" className={styles.url}>
+                            {url}
+                          </a>
+                          <CopyUrlButton value={url} />
+                        </div>
+                      ) : (
+                        <span className={styles.pending}>Generate token</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </>
   );
 }

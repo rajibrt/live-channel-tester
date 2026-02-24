@@ -1,4 +1,5 @@
 import styles from "./page.module.css";
+import PasswordField from "../../components/auth/PasswordField";
 
 export default function LoginPage() {
   return (
@@ -26,10 +27,7 @@ export default function LoginPage() {
               <input name="email" type="email" required placeholder="you@example.com" />
             </label>
 
-            <label className={styles.field}>
-              <span>Password</span>
-              <input name="password" type="password" required placeholder="Enter your password" />
-            </label>
+            <PasswordField styles={styles} />
 
             <div className={styles.row}>
               <label className={styles.checkbox}>

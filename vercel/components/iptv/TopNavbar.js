@@ -12,6 +12,7 @@ export default function TopNavbar({
   onToggleLeftSidebar,
   onToggleRightPanel,
   debugStats,
+  clientLabel,
 }) {
   return (
     <header className={`${styles.topNavbar} ${isDark ? styles.darkGlass : styles.lightGlass}`}>
@@ -57,9 +58,14 @@ export default function TopNavbar({
           <Icon name="Bell" size={18} />
           <span className={styles.badge}>3</span>
         </Button>
-        <Button type="button" size="icon" className={styles.userBtn}>
-          <Icon name="User" size={18} />
-        </Button>
+        <form action="/api/client/auth/logout" method="post" className={styles.clientAuthForm}>
+          <span className={`${styles.clientName} ${styles.hideSm}`} title={clientLabel || "Client"}>
+            {clientLabel || "Client"}
+          </span>
+          <Button type="submit" size="icon" className={styles.userBtn} title="Logout">
+            <Icon name="LogOut" size={17} />
+          </Button>
+        </form>
       </div>
     </header>
   );

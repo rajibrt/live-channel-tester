@@ -1,5 +1,4 @@
 import styles from "../../page.module.css";
-import AdminHeader from "../../AdminHeader";
 import { getSupabaseAdmin } from "../../../../lib/supabaseAdmin";
 import PlaylistEditor from "./playlist-editor";
 
@@ -71,29 +70,27 @@ export default async function PlaylistEditorPage({ params }) {
   const base = process.env.PUBLIC_PLAYLIST_BASE_URL || "";
   const playlistUrl = data?.activeToken && base ? `${base}/playlist/${data.activeToken}.m3u` : "";
 
-  return (
-    <main className={styles.page}>
-      <div className={styles.bgGlow} />
-      <section className={styles.shell}>
-        <AdminHeader
-          title={`Playlist Editor: ${slug}`}
-          subtitle="Edit groups, channel info, logo, ordering, then save updates."
-        />
-
-        {!data ? (
-          <section className={styles.card}>
-            <h2>Playlist not found</h2>
-          </section>
-        ) : (
-          <PlaylistEditor
-            playlistSlug={data.playlist.slug}
-            playlistName={data.playlist.name}
-            playlistUrl={playlistUrl}
-            initialChannels={data.channels}
-            initialGroups={data.savedGroups || []}
-          />
-        )}
+  if (!data) {
+    return (
+      <section className={styles.card}>
+        <h2>Playlist not found</h2>
       </section>
-    </main>
+    );
+  }
+
+  return (
+    <>
+      <section className={styles.card}>
+        <h2>{data.playlist.name}</h2>
+        <p className={styles.hint}>Slug: {slug}</p>
+      </section>
+      <PlaylistEditor
+        playlistSlug={data.playlist.slug}
+        playlistName={data.playlist.name}
+        playlistUrl={playlistUrl}
+        initialChannels={data.channels}
+        initialGroups={data.savedGroups || []}
+      />
+    </>
   );
 }

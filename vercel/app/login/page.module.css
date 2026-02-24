@@ -125,6 +125,36 @@
   transition: border-color 0.16s ease, box-shadow 0.16s ease;
 }
 
+.passwordInputWrap {
+  position: relative;
+}
+
+.passwordInputWrap input {
+  padding-right: 44px;
+}
+
+.passwordToggle {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #64748b;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.passwordToggle:hover {
+  color: #0f172a;
+  background: #f1f5f9;
+}
+
 .field input:focus {
   border-color: #1d4ed8;
   box-shadow: 0 0 0 4px rgba(29, 78, 216, 0.12);

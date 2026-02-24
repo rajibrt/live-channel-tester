@@ -8,6 +8,7 @@ const NAV_ITEMS = [
   { href: "/dashboard", label: "Overview" },
   { href: "/dashboard/playlists", label: "Playlists" },
   { href: "/dashboard/channels", label: "Channels" },
+  { href: "/dashboard/clients", label: "Clients" },
   { href: "/dashboard/local-check", label: "Local Check" },
 ];
 

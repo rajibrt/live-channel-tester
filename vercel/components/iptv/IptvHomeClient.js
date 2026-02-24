@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import LeftSidebar from "./LeftSidebar";
 import RightPanel from "./RightPanel";
 import TopNavbar from "./TopNavbar";
@@ -18,8 +18,16 @@ function toCategoryId(value) {
     .replace(/^-+|-+$/g, "");
 }
 
-export default function IptvHomeClient({ initialChannels = [], initialCategories = [] }) {
+export default function IptvHomeClient({
+  initialChannels = [],
+  initialCategories = [],
+  initialClientState = {},
+  currentClient = {},
+}) {
+  const initialTheme = String(initialClientState?.theme || "").trim().toLowerCase();
   const [isDark, setIsDark] = useState(() => {
+    if (initialTheme === "dark") return true;
+    if (initialTheme === "light") return false;
     if (typeof window === "undefined") return true;
     try {
       const saved = window.localStorage.getItem("iptv:theme");
@@ -37,11 +45,26 @@ export default function IptvHomeClient({ initialChannels = [], initialCategories
   const [channelSearch, setChannelSearch] = useState("");
   const [categorySearch, setCategorySearch] = useState("");
   const [mode, setMode] = useState("all");
-  const [favorites, setFavorites] = usePersistentArray("favorites", []);
-  const [recent, setRecent] = usePersistentArray("recent", []);
+  const [favorites, setFavorites] = usePersistentArray(
+    "favorites",
+    Array.isArray(initialClientState?.favorites) ? initialClientState.favorites : []
+  );
+  const [recent, setRecent] = usePersistentArray(
+    "recent",
+    Array.isArray(initialClientState?.recent) ? initialClientState.recent : []
+  );
   const [isTvDevice, setIsTvDevice] = useState(false);
   const [forceTvMode, setForceTvMode] = useState(false);
   const [hasRestoredChannel, setHasRestoredChannel] = useState(false);
+  const didInitialSync = useRef(false);
+
+  const trackActivity = (eventType, eventData) => {
+    fetch("/api/client/activity", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ event_type: eventType, event_data: eventData || {} }),
+    }).catch(() => {});
+  };
 
   useEffect(() => {
     const root = document.documentElement;
@@ -136,7 +159,8 @@ export default function IptvHomeClient({ initialChannels = [], initialCategories
     if (!allChannels.length) return;
 
     try {
-      const savedId = String(window.localStorage.getItem(LAST_CHANNEL_KEY) || "").trim();
+      const seeded = String(initialClientState?.lastChannelId || "").trim();
+      const savedId = seeded || String(window.localStorage.getItem(LAST_CHANNEL_KEY) || "").trim();
       if (savedId) {
         const restored = allChannels.find((item) => String(item.id) === savedId);
         if (restored) {
@@ -152,7 +176,7 @@ export default function IptvHomeClient({ initialChannels = [], initialCategories
     }
 
     setHasRestoredChannel(true);
-  }, [allChannels, hasRestoredChannel, setRecent]);
+  }, [allChannels, hasRestoredChannel, setRecent, initialClientState?.lastChannelId]);
 
   useEffect(() => {
     const id = String(selectedChannel?.id || "").trim();
@@ -163,6 +187,28 @@ export default function IptvHomeClient({ initialChannels = [], initialCategories
       // ignore localStorage write issues
     }
   }, [selectedChannel]);
+
+  useEffect(() => {
+    if (!hasRestoredChannel) return;
+    const payload = {
+      favorites,
+      recent,
+      last_channel_id: String(selectedChannel?.id || ""),
+      theme: isDark ? "dark" : "light",
+    };
+    if (!didInitialSync.current) {
+      didInitialSync.current = true;
+      return;
+    }
+    const timer = setTimeout(() => {
+      fetch("/api/client/state", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      }).catch(() => {});
+    }, 550);
+    return () => clearTimeout(timer);
+  }, [favorites, recent, selectedChannel?.id, isDark, hasRestoredChannel]);
 
   const recentSet = useMemo(() => new Set(recent), [recent]);
   const liveCount = useMemo(() => allChannels.filter((item) => item.isLive).length, [allChannels]);
@@ -200,6 +246,7 @@ export default function IptvHomeClient({ initialChannels = [], initialCategories
 
   const toggleFavorite = (channelId) => {
     setFavorites((prev) => (prev.includes(channelId) ? prev.filter((id) => id !== channelId) : [...prev, channelId]));
+    trackActivity("favorite_toggle", { channel_id: channelId });
   };
 
   const selectedIndex = useMemo(() => {
@@ -214,6 +261,7 @@ export default function IptvHomeClient({ initialChannels = [], initialCategories
       return next.slice(0, 30);
     });
     if (window.innerWidth < 1024) setShowRightPanel(false);
+    trackActivity("channel_select", { channel_id: channel.id, channel_name: channel.name || "" });
   };
 
   const handleChannelStep = (step) => {
@@ -286,11 +334,15 @@ export default function IptvHomeClient({ initialChannels = [], initialCategories
       <TopNavbar
         isDark={isDark}
         isTvMode={isTvMode}
-        onToggleTheme={() => setIsDark((prev) => !prev)}
+        onToggleTheme={() => {
+          setIsDark((prev) => !prev);
+          trackActivity("theme_change", { to: isDark ? "light" : "dark" });
+        }}
         onToggleTvMode={() => setForceTvMode((prev) => !prev)}
         onToggleLeftSidebar={handleToggleLeftSidebar}
         onToggleRightPanel={handleToggleRightPanel}
         debugStats={debugStats}
+        clientLabel={currentClient?.fullName || currentClient?.email || "Client"}
       />
       <section className={styles.contentWrap}>
         <div className={`${styles.drawerLeft} ${showLeftSidebar ? styles.drawerLeftOpen : ""}`}>

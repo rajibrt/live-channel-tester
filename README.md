@@ -71,6 +71,49 @@ docker compose down
 - Dashboard talks to local agent internally via Docker network using `LOCAL_AGENT_BASE_URL=http://local-agent:8787`.
 - If real secrets are exposed in tracked files, rotate them immediately.
 
+## Client Login System (Admin-Created Accounts Only)
+
+### Behavior
+
+- Public signup is disabled.
+- Only admin can create client accounts from dashboard.
+- Home page `/` requires client login.
+- If not logged in, user is redirected to `/client-login`.
+- Run latest DB schema before using this feature: `vercel/supabase/schema.sql`
+
+### Client Login URL
+
+- `http://localhost:3000/client-login` (or `:3001/client-login`)
+
+### Admin: Create Client User
+
+Open Dashboard:
+
+- `/dashboard/clients`
+
+Required info:
+
+- `Email` (unique)
+- `Initial Password` (minimum 8 chars)
+
+Optional info:
+
+- `Full Name`
+
+Available actions from dashboard:
+
+- Create client
+- Activate / Deactivate client
+- Reset client password
+
+### What is Stored for Logged-in Client
+
+- Favorites
+- Recent channel history
+- Last selected channel
+- Theme preference
+- Client activity events (example: login/logout, channel select, favorite toggle, theme change)
+
 ## Local Check - Hosted Vercel Workflow (Important)
 
 If you open `https://your-app.vercel.app/dashboard/local-check`, do **not** use `127.0.0.1` as agent URL.
