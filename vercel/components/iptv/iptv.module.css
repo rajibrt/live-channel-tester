@@ -456,21 +456,28 @@
   inset: 0;
   z-index: 3;
   display: flex;
+  align-items: stretch;
   justify-content: space-between;
   gap: 8px;
   padding: 8px;
+  box-sizing: border-box;
   pointer-events: none;
 }
 
 .fullscreenPanel {
+  flex: 0 1 min(260px, 24vw);
   width: min(260px, 24vw);
+  min-width: 0;
   border: 1px solid var(--border);
   border-radius: 16px;
   padding: 8px;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  max-height: calc(100% - 8px);
+  height: 100%;
+  max-height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
   pointer-events: auto;
   overflow: hidden;
 }
@@ -498,6 +505,8 @@
 }
 
 .fullscreenList {
+  flex: 1;
+  min-height: 0;
   overflow: auto;
   display: grid;
   gap: 6px;
@@ -507,6 +516,7 @@
 
 .fullscreenListBtn {
   width: 100%;
+  min-width: 0;
   box-sizing: border-box;
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -533,6 +543,7 @@
 
 .fullscreenChannelName {
   display: block;
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -772,6 +783,12 @@
   flex-wrap: wrap;
 }
 
+.desktopChannelNav {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .volumeControl {
   display: inline-flex;
   align-items: center;
@@ -917,7 +934,11 @@
   justify-content: flex-start;
   gap: 12px;
   cursor: pointer;
-  transition: transform 0.2s ease, border-color 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease,
+    background-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .channelCard:hover {
@@ -935,8 +956,40 @@
 }
 
 .channelCardActive {
-  border-color: var(--ring);
-  box-shadow: var(--shadow-lg);
+  border-color: color-mix(in oklab, var(--primary) 82%, var(--ring));
+  background: color-mix(in oklab, var(--primary) 18%, var(--card));
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--primary) 55%, transparent),
+    0 10px 24px color-mix(in oklab, var(--primary) 22%, transparent);
+  transform: translateY(-1px);
+}
+
+.channelCardActive::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 14px;
+  bottom: 14px;
+  width: 3px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--primary), color-mix(in oklab, var(--primary) 70%, #ffffff));
+  opacity: 0.95;
+}
+
+.channelCardActive .channelName {
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.channelCardActive .channelLogo {
+  box-shadow:
+    0 0 0 2px color-mix(in oklab, var(--primary) 72%, transparent),
+    0 6px 14px color-mix(in oklab, var(--primary) 30%, transparent);
+}
+
+.channelCardActive .favoritePin {
+  color: var(--primary-foreground);
+  background: color-mix(in oklab, var(--primary) 70%, transparent);
 }
 
 .channelLogoWrap {

@@ -942,6 +942,16 @@ export default function VideoPlayer({
             <Icon name="Maximize2" size={14} />
             Fullscreen
           </button>
+          <div className={styles.desktopChannelNav}>
+            <button type="button" className={styles.navBtn} onClick={onPrevChannel} disabled={!hasChannelNav}>
+              <Icon name="ChevronLeft" size={16} />
+              Prev
+            </button>
+            <button type="button" className={styles.navBtn} onClick={onNextChannel} disabled={!hasChannelNav}>
+              Next
+              <Icon name="ChevronRight" size={16} />
+            </button>
+          </div>
         </div>
         <div className={styles.volumeControl}>
           <button
@@ -986,14 +996,6 @@ export default function VideoPlayer({
             </div>
           </div>
           <div className={styles.channelActions}>
-            <button type="button" className={styles.navBtn} onClick={onPrevChannel} disabled={!hasChannelNav}>
-              <Icon name="ChevronLeft" size={16} />
-              Prev
-            </button>
-            <button type="button" className={styles.navBtn} onClick={onNextChannel} disabled={!hasChannelNav}>
-              Next
-              <Icon name="ChevronRight" size={16} />
-            </button>
             <button
               type="button"
               className={`${styles.favoriteBtn} ${isFavorite ? styles.favoriteBtnActive : styles.favoriteBtnInactive}`}
