@@ -796,6 +796,17 @@
   background: color-mix(in oklab, var(--background) 88%, var(--card));
 }
 
+.groupComboWrap {
+  width: 100%;
+}
+
+.groupComboMenu {
+  width: 100%;
+  max-height: 220px;
+  overflow-y: auto;
+  z-index: 40;
+}
+
 .editorTable {
   min-width: 0 !important;
   table-layout: fixed;
@@ -815,6 +826,10 @@
 .editorTable .colGroup {
   width: 14%;
   min-width: 0;
+}
+
+.editorTable td.colGroup {
+  overflow: visible;
 }
 
 .editorTable .colLogo {

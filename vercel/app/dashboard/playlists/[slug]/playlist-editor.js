@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import styles from "../../page.module.css";
 import {
   AlertDialog,
@@ -93,6 +93,111 @@ function DownloadIcon() {
     <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
       <path fill="currentColor" d="M5 20h14v-2H5v2Zm7-18v12l4-4 1.41 1.41L12 17.83 6.59 11.41 8 10l4 4V2h0Z" />
     </svg>
+  );
+}
+
+function GroupCombobox({ value, options, onCommit }) {
+  const rootRef = useRef(null);
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState(String(value || ""));
+
+  useEffect(() => {
+    setQuery(String(value || ""));
+  }, [value]);
+
+  useEffect(() => {
+    function onDocMouseDown(event) {
+      if (!rootRef.current) return;
+      if (rootRef.current.contains(event.target)) return;
+      setOpen(false);
+    }
+    document.addEventListener("mousedown", onDocMouseDown);
+    return () => document.removeEventListener("mousedown", onDocMouseDown);
+  }, []);
+
+  const normalizedOptions = useMemo(() => {
+    const seen = new Set();
+    const list = [];
+    for (const raw of options || []) {
+      const name = String(raw || "").trim();
+      if (!name || seen.has(name)) continue;
+      seen.add(name);
+      list.push(name);
+    }
+    return list;
+  }, [options]);
+
+  const filteredOptions = useMemo(() => {
+    const rawQuery = query.trim();
+    const currentValue = String(value || "").trim();
+    const q = rawQuery.toLowerCase();
+    const shouldFilter = q && q !== currentValue.toLowerCase();
+    if (!shouldFilter) return normalizedOptions;
+    return normalizedOptions.filter((name) => name.toLowerCase().includes(q));
+  }, [normalizedOptions, query, value]);
+
+  const hasExact = normalizedOptions.some((name) => name === query.trim());
+
+  const commit = (rawValue) => {
+    const next = String(rawValue || "").trim() || "Uncategorized";
+    setQuery(next);
+    onCommit(next);
+    setOpen(false);
+  };
+
+  return (
+    <div className={`${styles.menuWrap} ${styles.groupComboWrap}`} ref={rootRef}>
+      <input
+        className={styles.inlineInput}
+        value={query}
+        onFocus={() => setOpen(true)}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setOpen(true);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            commit(query);
+          }
+          if (e.key === "Escape") {
+            e.preventDefault();
+            setOpen(false);
+            setQuery(String(value || ""));
+          }
+        }}
+        placeholder="Select or type group"
+        aria-label="Channel group"
+      />
+      {open ? (
+        <div className={`${styles.menuList} ${styles.groupComboMenu}`}>
+          {filteredOptions.map((name) => (
+            <button
+              key={name}
+              type="button"
+              className={styles.menuItem}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => commit(name)}
+            >
+              {name}
+            </button>
+          ))}
+          {!hasExact ? (
+            <button
+              type="button"
+              className={styles.menuItem}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => commit(query)}
+            >
+              Use "{query.trim() || "Uncategorized"}"
+            </button>
+          ) : null}
+          {!filteredOptions.length && hasExact ? (
+            <div className={styles.menuItem}>No matching category</div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -195,6 +300,18 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
 
   const changeChannel = (id, patch) => {
     setChannels((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+  };
+
+  const applyChannelGroupChange = (channelId, rawCategory) => {
+    const nextCategory = String(rawCategory || "").trim() || "Uncategorized";
+    const max = Math.max(
+      0,
+      ...channels
+        .filter((x) => x.category === nextCategory && x.id !== channelId)
+        .map((x) => Number(x.order || 0))
+    );
+    changeChannel(channelId, { category: nextCategory, order: max + 1 });
+    setGroupOrder((prev) => (prev.includes(nextCategory) ? prev : [...prev, nextCategory]));
   };
 
   const moveGroup = (groupName, dir) => {
@@ -788,23 +905,11 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
                     />
                   </td>
                   <td className={styles.colGroup}>
-                    <select
-                      className={styles.inlineInput}
+                    <GroupCombobox
                       value={c.category}
-                      onChange={(e) => {
-                        const nextCategory = e.target.value || "Uncategorized";
-                        const max = Math.max(
-                          0,
-                          ...channels.filter((x) => x.category === nextCategory && x.id !== c.id).map((x) => Number(x.order || 0))
-                        );
-                        changeChannel(c.id, { category: nextCategory, order: max + 1 });
-                        setGroupOrder((prev) => (prev.includes(nextCategory) ? prev : [...prev, nextCategory]));
-                      }}
-                    >
-                      {groupsWithCount.map((g) => (
-                        <option key={g.name} value={g.name}>{g.name}</option>
-                      ))}
-                    </select>
+                      options={groupsWithCount.map((g) => g.name)}
+                      onCommit={(nextCategory) => applyChannelGroupChange(c.id, nextCategory)}
+                    />
                   </td>
                   <td className={styles.colLogo}>
                     <div className={styles.logoFieldRow}>
