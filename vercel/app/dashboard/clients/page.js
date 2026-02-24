@@ -1,6 +1,8 @@
 import ManageClientUsers from "./ManageClientUsers";
 import styles from "../page.module.css";
 import { getSupabaseAdmin } from "../../../lib/supabaseAdmin";
+import { getActiveViewerSnapshot } from "../../../lib/activeViewers";
+import ActiveViewersPanel from "../ActiveViewersPanel";
 
 async function getClientUsers() {
   const admin = getSupabaseAdmin();
@@ -12,11 +14,16 @@ async function getClientUsers() {
 }
 
 export default async function ClientsPage() {
-  const items = await getClientUsers();
+  const [items, activeViewers] = await Promise.all([getClientUsers(), getActiveViewerSnapshot()]);
 
   return (
-    <section className={styles.card}>
-      <ManageClientUsers initialItems={items} />
-    </section>
+    <>
+      <section className={styles.stats}>
+        <ActiveViewersPanel title="Watching Now" viewers={activeViewers?.viewers || []} />
+      </section>
+      <section className={styles.card}>
+        <ManageClientUsers initialItems={items} />
+      </section>
+    </>
   );
 }

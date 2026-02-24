@@ -8,6 +8,7 @@ const ALLOWED_EVENTS = new Set([
   "theme_change",
   "sidebar_toggle",
   "cookie_consent",
+  "presence_ping",
 ]);
 
 export async function POST(request) {

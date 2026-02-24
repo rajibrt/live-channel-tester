@@ -130,6 +130,24 @@
   line-height: 1;
 }
 
+.statCardButton {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.statCardButton:hover {
+  border-color: var(--ring);
+}
+
+.metaMuted {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -860,6 +878,10 @@
 
 .tableCard {
   padding-bottom: 8px;
+}
+
+.viewerModal {
+  max-width: min(1080px, 96vw);
 }
 
 .tableWrap {

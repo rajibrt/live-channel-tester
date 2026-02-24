@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Eye, EyeOff, Pencil, Plus } from "lucide-react";
+import { Eye, EyeOff, History, Pencil, Plus } from "lucide-react";
 import styles from "../page.module.css";
 import {
   AlertDialog,
@@ -27,21 +27,51 @@ const EMPTY_EDIT_FORM = {
   full_name: "",
   mobile_number: "",
   is_active: true,
+  new_password: "",
+  confirm_password: "",
 };
 
 export default function ManageClientUsers({ initialItems = [] }) {
   const [items, setItems] = useState(Array.isArray(initialItems) ? initialItems : []);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [form, setForm] = useState(EMPTY_FORM);
   const [editForm, setEditForm] = useState(EMPTY_EDIT_FORM);
   const [showPassword, setShowPassword] = useState(false);
+  const [showEditPassword, setShowEditPassword] = useState(false);
   const [busyId, setBusyId] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState("");
+  const [historyRows, setHistoryRows] = useState([]);
+  const [historyUserLabel, setHistoryUserLabel] = useState("");
 
   const activeCount = useMemo(() => items.filter((x) => x.is_active).length, [items]);
+  const filteredItems = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    return items.filter((row) => {
+      const statusMatch =
+        statusFilter === "all" ||
+        (statusFilter === "active" && row.is_active) ||
+        (statusFilter === "inactive" && !row.is_active);
+      if (!statusMatch) return false;
+
+      if (!q) return true;
+      const haystack = [
+        String(row.email || ""),
+        String(row.mobile_number || ""),
+        String(row.full_name || ""),
+      ]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [items, searchTerm, statusFilter]);
 
   function openEdit(row) {
     setError("");
@@ -52,8 +82,31 @@ export default function ManageClientUsers({ initialItems = [] }) {
       full_name: row.full_name || "",
       mobile_number: row.mobile_number || "",
       is_active: !!row.is_active,
+      new_password: "",
+      confirm_password: "",
     });
+    setShowEditPassword(false);
     setEditOpen(true);
+  }
+
+  async function openHistory(row) {
+    setError("");
+    setMessage("");
+    setHistoryError("");
+    setHistoryRows([]);
+    setHistoryUserLabel(row.full_name || row.email || row.mobile_number || "Client user");
+    setHistoryLoading(true);
+    setHistoryOpen(true);
+    try {
+      const res = await fetch(`/api/admin/client-users/${row.user_id}/history`);
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload?.error || "Failed to load history.");
+      setHistoryRows(Array.isArray(payload?.items) ? payload.items : []);
+    } catch (err) {
+      setHistoryError(err?.message || "Failed to load history.");
+    } finally {
+      setHistoryLoading(false);
+    }
   }
 
   async function createUser(event) {
@@ -84,6 +137,15 @@ export default function ManageClientUsers({ initialItems = [] }) {
   async function saveEdit(event) {
     event.preventDefault();
     if (!editForm.user_id) return;
+    const nextPassword = String(editForm.new_password || "");
+    if (nextPassword && nextPassword.length < 8) {
+      setError("New password must be at least 8 characters.");
+      return;
+    }
+    if (nextPassword && nextPassword !== String(editForm.confirm_password || "")) {
+      setError("Password and confirm password do not match.");
+      return;
+    }
 
     setSaving(true);
     setError("");
@@ -97,6 +159,7 @@ export default function ManageClientUsers({ initialItems = [] }) {
           full_name: editForm.full_name,
           mobile_number: editForm.mobile_number,
           is_active: editForm.is_active,
+          ...(nextPassword ? { new_password: nextPassword } : {}),
         }),
       });
       const payload = await res.json().catch(() => ({}));
@@ -114,6 +177,7 @@ export default function ManageClientUsers({ initialItems = [] }) {
             : row
         )
       );
+      setShowEditPassword(false);
       setMessage("Client user updated.");
       setEditOpen(false);
     } catch (err) {
@@ -143,27 +207,16 @@ export default function ManageClientUsers({ initialItems = [] }) {
     }
   }
 
-  async function resetPassword(userId) {
-    const nextPassword = window.prompt("Enter new password (min 8 chars):", "");
-    if (!nextPassword) return;
-
-    setBusyId(userId);
-    setError("");
-    setMessage("");
-    try {
-      const res = await fetch(`/api/admin/client-users/${userId}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ new_password: nextPassword }),
-      });
-      const payload = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(payload?.error || "Failed to reset password.");
-      setMessage("Password updated.");
-    } catch (err) {
-      setError(err?.message || "Failed to reset password.");
-    } finally {
-      setBusyId("");
-    }
+  function formatWatchDuration(secondsValue) {
+    const total = Number(secondsValue || 0);
+    if (!Number.isFinite(total) || total <= 0) return "0s";
+    const seconds = Math.floor(total);
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const remain = seconds % 60;
+    if (hours > 0) return `${hours}h ${minutes}m ${remain}s`;
+    if (minutes > 0) return `${minutes}m ${remain}s`;
+    return `${remain}s`;
   }
 
   return (
@@ -246,7 +299,7 @@ export default function ManageClientUsers({ initialItems = [] }) {
                     {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
-                <small className={styles.fieldHint}>Minimum 8 characters. Client can change later by admin reset.</small>
+                <small className={styles.fieldHint}>Minimum 8 characters. Password can be updated later from edit modal.</small>
               </label>
               {error ? <p className={styles.errorText}>{error}</p> : null}
               <AlertDialogFooter>
@@ -261,6 +314,26 @@ export default function ManageClientUsers({ initialItems = [] }) {
           </AlertDialogContent>
         </AlertDialog>
         {message ? <p className={styles.successText}>{message}</p> : null}
+      </div>
+
+      <div className={styles.formGrid}>
+        <label className={styles.field}>
+          <span>Search User</span>
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search by email, mobile, or full name"
+          />
+        </label>
+        <label className={styles.field}>
+          <span>Status Filter</span>
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            <option value="all">All</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+        </label>
       </div>
 
       <AlertDialog open={editOpen} onOpenChange={setEditOpen}>
@@ -301,6 +374,37 @@ export default function ManageClientUsers({ initialItems = [] }) {
                 placeholder="Optional"
               />
             </div>
+            <label className={styles.field}>
+              <span>New Password <em className={styles.optionalMark}>Optional</em></span>
+              <div className={styles.passwordWrap}>
+                <input
+                  type={showEditPassword ? "text" : "password"}
+                  value={editForm.new_password}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, new_password: e.target.value }))}
+                  minLength={8}
+                  placeholder="Leave blank to keep current password"
+                />
+                <button
+                  type="button"
+                  className={styles.passwordToggle}
+                  onClick={() => setShowEditPassword((prev) => !prev)}
+                  aria-label={showEditPassword ? "Hide password" : "Show password"}
+                >
+                  {showEditPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+              <small className={styles.fieldHint}>Minimum 8 characters if you want to change password.</small>
+            </label>
+            <div className={styles.field}>
+              <span>Confirm New Password <em className={styles.optionalMark}>Optional</em></span>
+              <input
+                type={showEditPassword ? "text" : "password"}
+                value={editForm.confirm_password}
+                onChange={(e) => setEditForm((prev) => ({ ...prev, confirm_password: e.target.value }))}
+                minLength={8}
+                placeholder="Repeat new password"
+              />
+            </div>
             <label className={styles.checkRow}>
               <input
                 type="checkbox"
@@ -322,6 +426,51 @@ export default function ManageClientUsers({ initialItems = [] }) {
         </AlertDialogContent>
       </AlertDialog>
 
+      <AlertDialog open={historyOpen} onOpenChange={setHistoryOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Watch History</AlertDialogTitle>
+            <AlertDialogDescription>
+              Latest 50 viewed channels for {historyUserLabel}.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {historyError ? <p className={styles.errorText}>{historyError}</p> : null}
+          {historyLoading ? <p className={styles.pending}>Loading history...</p> : null}
+          {!historyLoading ? (
+            <div className={styles.tableWrap}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Seen At</th>
+                    <th>Channel</th>
+                    <th>Watch Time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {historyRows.map((row) => (
+                    <tr key={row.id}>
+                      <td>{row.watched_at ? new Date(row.watched_at).toLocaleString() : "-"}</td>
+                      <td>{row.channel_name || row.channel_id || "-"}</td>
+                      <td>{formatWatchDuration(row.watch_seconds)}</td>
+                    </tr>
+                  ))}
+                  {!historyRows.length ? (
+                    <tr>
+                      <td colSpan={3} className={styles.pending}>No history yet.</td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+          <AlertDialogFooter>
+            <AlertDialogCancel asChild>
+              <button type="button" className={styles.secondaryBtn}>Close</button>
+            </AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <div className={styles.tableWrap}>
         <table>
           <thead>
@@ -335,7 +484,7 @@ export default function ManageClientUsers({ initialItems = [] }) {
             </tr>
           </thead>
           <tbody>
-            {items.map((row) => (
+            {filteredItems.map((row) => (
               <tr key={row.user_id}>
                 <td>{row.email}</td>
                 <td>{row.mobile_number || "-"}</td>
@@ -365,14 +514,20 @@ export default function ManageClientUsers({ initialItems = [] }) {
                       type="button"
                       className={styles.secondaryBtn}
                       disabled={busyId === row.user_id}
-                      onClick={() => resetPassword(row.user_id)}
+                      onClick={() => openHistory(row)}
                     >
-                      Reset Password
+                      <History size={14} />
+                      <span>History</span>
                     </button>
                   </div>
                 </td>
               </tr>
             ))}
+            {!filteredItems.length ? (
+              <tr>
+                <td colSpan={6} className={styles.pending}>No users found for this filter.</td>
+              </tr>
+            ) : null}
           </tbody>
         </table>
       </div>

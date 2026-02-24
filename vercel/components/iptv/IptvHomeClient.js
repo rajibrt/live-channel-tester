@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import LeftSidebar from "./LeftSidebar";
 import RightPanel from "./RightPanel";
 import TopNavbar from "./TopNavbar";
@@ -62,7 +62,8 @@ export default function IptvHomeClient({
     "favorites",
     Array.isArray(initialClientState?.favorites)
       ? initialClientState.favorites.map((id) => normalizeChannelId(id)).filter(Boolean)
-      : []
+      : [],
+    { persist: false }
   );
   const [recent, setRecent] = usePersistentArray(
     "recent",
@@ -74,6 +75,31 @@ export default function IptvHomeClient({
   const [isTvDevice, setIsTvDevice] = useState(false);
   const [forceTvMode, setForceTvMode] = useState(false);
   const [hasRestoredChannel, setHasRestoredChannel] = useState(false);
+  const watchSessionRef = useRef({ channelId: "", channelName: "", startedAt: 0 });
+
+  const flushWatchHistory = useCallback((minimumSeconds = 5) => {
+    const session = watchSessionRef.current;
+    if (!session.channelId || !session.startedAt) return;
+
+    const elapsedSeconds = Math.floor((Date.now() - session.startedAt) / 1000);
+    if (elapsedSeconds < minimumSeconds) return;
+
+    watchSessionRef.current = {
+      ...session,
+      startedAt: Date.now(),
+    };
+
+    fetch("/api/client/history", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        channel_id: session.channelId,
+        channel_name: session.channelName,
+        watch_seconds: elapsedSeconds,
+      }),
+      keepalive: true,
+    }).catch(() => {});
+  }, []);
 
   const trackActivity = (eventType, eventData) => {
     fetch("/api/client/activity", {
@@ -101,6 +127,63 @@ export default function IptvHomeClient({
   }, []);
 
   const isTvMode = isTvDevice || forceTvMode;
+
+  useEffect(() => {
+    const sendPing = () => {
+      trackActivity("presence_ping", {
+        route: "home",
+        channel_id: String(selectedChannel?.id || ""),
+        channel_name: String(selectedChannel?.name || ""),
+      });
+    };
+    sendPing();
+    const timer = setInterval(sendPing, 30000);
+    return () => clearInterval(timer);
+  }, [selectedChannel?.id, selectedChannel?.name]);
+
+  useEffect(() => {
+    const nextChannelId = String(selectedChannel?.id || "").trim();
+    const currentSession = watchSessionRef.current;
+
+    if (currentSession.channelId && currentSession.channelId !== nextChannelId) {
+      flushWatchHistory(1);
+    }
+
+    if (!nextChannelId) {
+      watchSessionRef.current = { channelId: "", channelName: "", startedAt: 0 };
+      return;
+    }
+
+    watchSessionRef.current = {
+      channelId: nextChannelId,
+      channelName: String(selectedChannel?.name || ""),
+      startedAt: Date.now(),
+    };
+  }, [selectedChannel?.id, selectedChannel?.name, flushWatchHistory]);
+
+  useEffect(() => {
+    const intervalId = setInterval(() => flushWatchHistory(20), 45000);
+    return () => clearInterval(intervalId);
+  }, [flushWatchHistory]);
+
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") flushWatchHistory(1);
+    };
+    const onPageHide = () => flushWatchHistory(1);
+    const onBeforeUnload = () => flushWatchHistory(1);
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("pagehide", onPageHide);
+    window.addEventListener("beforeunload", onBeforeUnload);
+
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("pagehide", onPageHide);
+      window.removeEventListener("beforeunload", onBeforeUnload);
+      flushWatchHistory(1);
+    };
+  }, [flushWatchHistory]);
 
   useEffect(() => {
     if (!isTvMode) return undefined;
@@ -183,6 +266,8 @@ export default function IptvHomeClient({
         const restored = allChannels.find((item) => String(item.id) === savedId);
         if (restored) {
           setSelectedChannel(restored);
+          setMode("all");
+          setSelectedCategory(String(restored.categoryId || "").trim() || null);
           setRecent((prev) => {
             const restoredId = normalizeChannelId(restored.id);
             const next = [restoredId, ...prev.filter((id) => normalizeChannelId(id) !== restoredId)];

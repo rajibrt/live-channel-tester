@@ -1,29 +1,34 @@
 import Link from "next/link";
 import { getSupabaseAdmin } from "../../lib/supabaseAdmin";
+import { getActiveViewerSnapshot } from "../../lib/activeViewers";
 import styles from "./page.module.css";
 import CopyUrlButton from "./CopyUrlButton";
+import ActiveViewersPanel from "./ActiveViewersPanel";
 
 async function getData() {
   const supabase = getSupabaseAdmin();
-  const { data: playlists } = await supabase
-    .from("playlists")
-    .select("slug,name,channel_count,updated_at")
-    .order("updated_at", { ascending: false });
-  const { data: tokens } = await supabase
-    .from("playlist_tokens")
-    .select("playlist_slug,token,is_active")
-    .eq("is_active", true);
-  const { data: jobRun } = await supabase
-    .from("job_runs")
-    .select("job_name,last_run_at,last_status,last_message,last_total,last_live,last_dead,is_enabled")
-    .eq("job_name", "playlist_health_hourly")
-    .maybeSingle();
+  const [{ data: playlists }, { data: tokens }, { data: jobRun }, activeViewers] = await Promise.all([
+    supabase
+      .from("playlists")
+      .select("slug,name,channel_count,updated_at")
+      .order("updated_at", { ascending: false }),
+    supabase
+      .from("playlist_tokens")
+      .select("playlist_slug,token,is_active")
+      .eq("is_active", true),
+    supabase
+      .from("job_runs")
+      .select("job_name,last_run_at,last_status,last_message,last_total,last_live,last_dead,is_enabled")
+      .eq("job_name", "playlist_health_hourly")
+      .maybeSingle(),
+    getActiveViewerSnapshot(),
+  ]);
   const tokenBySlug = Object.fromEntries((tokens || []).map((t) => [t.playlist_slug, t.token]));
-  return { playlists: playlists || [], tokenBySlug, jobRun: jobRun || null };
+  return { playlists: playlists || [], tokenBySlug, jobRun: jobRun || null, activeViewers };
 }
 
 export default async function DashboardPage() {
-  const { playlists, tokenBySlug, jobRun } = await getData();
+  const { playlists, tokenBySlug, jobRun, activeViewers } = await getData();
   const base = process.env.PUBLIC_PLAYLIST_BASE_URL || "";
   const activeTokenCount = Object.keys(tokenBySlug).length;
   const lastRunText = jobRun?.last_run_at
@@ -47,6 +52,7 @@ export default async function DashboardPage() {
           <p>Total Channels</p>
           <strong>{playlists.reduce((sum, p) => sum + (Number(p.channel_count) || 0), 0)}</strong>
         </article>
+        <ActiveViewersPanel title="Watching Now" viewers={activeViewers?.viewers || []} />
       </section>
 
       <section className={styles.grid}>
