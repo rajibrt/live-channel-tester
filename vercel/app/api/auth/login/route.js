@@ -11,7 +11,7 @@ export async function POST(request) {
   const email = String(form.get('email') || '').trim()
   const password = String(form.get('password') || '')
   if (!email || !password) {
-    return NextResponse.redirect(new URL('/login', request.url), {
+    return NextResponse.redirect(new URL('/login?error=invalid', request.url), {
       status: 302,
     })
   }
@@ -23,7 +23,7 @@ export async function POST(request) {
     password,
   })
   if (error || !data?.session?.access_token || !data?.user) {
-    return NextResponse.redirect(new URL('/login', request.url), {
+    return NextResponse.redirect(new URL('/login?error=invalid', request.url), {
       status: 302,
     })
   }
@@ -36,7 +36,7 @@ export async function POST(request) {
     .eq('is_active', true)
     .single()
   if (!row) {
-    return NextResponse.redirect(new URL('/login', request.url), {
+    return NextResponse.redirect(new URL('/login?error=invalid', request.url), {
       status: 302,
     })
   }

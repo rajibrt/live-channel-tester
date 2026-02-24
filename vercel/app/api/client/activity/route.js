@@ -7,6 +7,7 @@ const ALLOWED_EVENTS = new Set([
   "favorite_toggle",
   "theme_change",
   "sidebar_toggle",
+  "cookie_consent",
 ]);
 
 export async function POST(request) {

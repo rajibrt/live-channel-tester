@@ -1,14 +1,19 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import LeftSidebar from "./LeftSidebar";
 import RightPanel from "./RightPanel";
 import TopNavbar from "./TopNavbar";
 import VideoPlayer from "./VideoPlayer";
+import CookieConsentBanner from "./CookieConsentBanner";
 import styles from "./iptv.module.css";
 import { usePersistentArray } from "./usePersistentArray";
 
 const LAST_CHANNEL_KEY = "iptv:v1:last-channel-id";
+
+function normalizeChannelId(value) {
+  return String(value || "").trim();
+}
 
 function toCategoryId(value) {
   return String(value || "")
@@ -45,18 +50,30 @@ export default function IptvHomeClient({
   const [channelSearch, setChannelSearch] = useState("");
   const [categorySearch, setCategorySearch] = useState("");
   const [mode, setMode] = useState("all");
+  const [cookieConsent, setCookieConsent] = useState(() => {
+    const v = String(initialClientState?.cookiePrefs?.consent || "").toLowerCase();
+    return v === "accepted" || v === "declined" ? v : "unknown";
+  });
+  const [cookieLanguage, setCookieLanguage] = useState(() => {
+    const v = String(initialClientState?.cookiePrefs?.language || "").toLowerCase();
+    return v === "bn" ? "bn" : "en";
+  });
   const [favorites, setFavorites] = usePersistentArray(
     "favorites",
-    Array.isArray(initialClientState?.favorites) ? initialClientState.favorites : []
+    Array.isArray(initialClientState?.favorites)
+      ? initialClientState.favorites.map((id) => normalizeChannelId(id)).filter(Boolean)
+      : []
   );
   const [recent, setRecent] = usePersistentArray(
     "recent",
-    Array.isArray(initialClientState?.recent) ? initialClientState.recent : []
+    Array.isArray(initialClientState?.recent)
+      ? initialClientState.recent.map((id) => normalizeChannelId(id)).filter(Boolean)
+      : [],
+    { persist: cookieConsent === "accepted" }
   );
   const [isTvDevice, setIsTvDevice] = useState(false);
   const [forceTvMode, setForceTvMode] = useState(false);
   const [hasRestoredChannel, setHasRestoredChannel] = useState(false);
-  const didInitialSync = useRef(false);
 
   const trackActivity = (eventType, eventData) => {
     fetch("/api/client/activity", {
@@ -155,6 +172,7 @@ export default function IptvHomeClient({
   }, [allChannels, allCategories]);
 
   useEffect(() => {
+    if (cookieConsent !== "accepted") return;
     if (hasRestoredChannel) return;
     if (!allChannels.length) return;
 
@@ -166,7 +184,8 @@ export default function IptvHomeClient({
         if (restored) {
           setSelectedChannel(restored);
           setRecent((prev) => {
-            const next = [restored.id, ...prev.filter((id) => id !== restored.id)];
+            const restoredId = normalizeChannelId(restored.id);
+            const next = [restoredId, ...prev.filter((id) => normalizeChannelId(id) !== restoredId)];
             return next.slice(0, 30);
           });
         }
@@ -176,9 +195,10 @@ export default function IptvHomeClient({
     }
 
     setHasRestoredChannel(true);
-  }, [allChannels, hasRestoredChannel, setRecent, initialClientState?.lastChannelId]);
+  }, [allChannels, cookieConsent, hasRestoredChannel, setRecent, initialClientState?.lastChannelId]);
 
   useEffect(() => {
+    if (cookieConsent !== "accepted") return;
     const id = String(selectedChannel?.id || "").trim();
     if (!id) return;
     try {
@@ -186,20 +206,30 @@ export default function IptvHomeClient({
     } catch {
       // ignore localStorage write issues
     }
-  }, [selectedChannel]);
+  }, [selectedChannel, cookieConsent]);
 
   useEffect(() => {
-    if (!hasRestoredChannel) return;
+    if (cookieConsent === "accepted") return;
+    setRecent([]);
+    try {
+      window.localStorage.removeItem(LAST_CHANNEL_KEY);
+    } catch {
+      // ignore localStorage write issues
+    }
+  }, [cookieConsent, setRecent]);
+
+  useEffect(() => {
+    if (!hasRestoredChannel && cookieConsent === "accepted") return;
     const payload = {
       favorites,
-      recent,
-      last_channel_id: String(selectedChannel?.id || ""),
+      recent: cookieConsent === "accepted" ? recent : [],
+      last_channel_id: cookieConsent === "accepted" ? String(selectedChannel?.id || "") : "",
       theme: isDark ? "dark" : "light",
+      cookie_prefs: {
+        consent: cookieConsent,
+        language: cookieLanguage,
+      },
     };
-    if (!didInitialSync.current) {
-      didInitialSync.current = true;
-      return;
-    }
     const timer = setTimeout(() => {
       fetch("/api/client/state", {
         method: "POST",
@@ -208,7 +238,7 @@ export default function IptvHomeClient({
       }).catch(() => {});
     }, 550);
     return () => clearTimeout(timer);
-  }, [favorites, recent, selectedChannel?.id, isDark, hasRestoredChannel]);
+  }, [favorites, recent, selectedChannel?.id, isDark, hasRestoredChannel, cookieConsent, cookieLanguage]);
 
   const recentSet = useMemo(() => new Set(recent), [recent]);
   const liveCount = useMemo(() => allChannels.filter((item) => item.isLive).length, [allChannels]);
@@ -218,13 +248,19 @@ export default function IptvHomeClient({
 
     if (mode === "favorites") {
       const favoriteSet = new Set(favorites);
-      list = list.filter((channel) => favoriteSet.has(channel.id));
+      list = list.filter((channel) => favoriteSet.has(normalizeChannelId(channel.id)));
     }
 
     if (mode === "recent") {
-      list = list.filter((channel) => recentSet.has(channel.id));
+      list = list.filter((channel) => recentSet.has(normalizeChannelId(channel.id)));
       const recentOrder = new Map(recent.map((id, index) => [id, index]));
-      list = list.slice().sort((a, b) => (recentOrder.get(a.id) ?? 9999) - (recentOrder.get(b.id) ?? 9999));
+      list = list
+        .slice()
+        .sort(
+          (a, b) =>
+            (recentOrder.get(normalizeChannelId(a.id)) ?? 9999) -
+            (recentOrder.get(normalizeChannelId(b.id)) ?? 9999)
+        );
     }
 
     if (selectedCategory && mode === "all") {
@@ -245,21 +281,29 @@ export default function IptvHomeClient({
   }, [allChannels, mode, favorites, selectedCategory, channelSearch, recent, recentSet]);
 
   const toggleFavorite = (channelId) => {
-    setFavorites((prev) => (prev.includes(channelId) ? prev.filter((id) => id !== channelId) : [...prev, channelId]));
+    const key = normalizeChannelId(channelId);
+    setFavorites((prev) => {
+      const has = prev.some((id) => normalizeChannelId(id) === key);
+      return has ? prev.filter((id) => normalizeChannelId(id) !== key) : [...prev, key];
+    });
     trackActivity("favorite_toggle", { channel_id: channelId });
   };
 
   const selectedIndex = useMemo(() => {
     if (!selectedChannel?.id) return -1;
-    return visibleChannels.findIndex((item) => item.id === selectedChannel.id);
+    const selectedId = normalizeChannelId(selectedChannel.id);
+    return visibleChannels.findIndex((item) => normalizeChannelId(item.id) === selectedId);
   }, [visibleChannels, selectedChannel]);
 
   const handleSelectChannel = (channel) => {
     setSelectedChannel(channel);
-    setRecent((prev) => {
-      const next = [channel.id, ...prev.filter((id) => id !== channel.id)];
-      return next.slice(0, 30);
-    });
+    if (cookieConsent === "accepted") {
+      setRecent((prev) => {
+        const channelId = normalizeChannelId(channel.id);
+        const next = [channelId, ...prev.filter((id) => normalizeChannelId(id) !== channelId)];
+        return next.slice(0, 30);
+      });
+    }
     if (window.innerWidth < 1024) setShowRightPanel(false);
     trackActivity("channel_select", { channel_id: channel.id, channel_name: channel.name || "" });
   };
@@ -343,6 +387,7 @@ export default function IptvHomeClient({
         onToggleRightPanel={handleToggleRightPanel}
         debugStats={debugStats}
         clientLabel={currentClient?.fullName || currentClient?.email || "Client"}
+        clientProfile={currentClient}
       />
       <section className={styles.contentWrap}>
         <div className={`${styles.drawerLeft} ${showLeftSidebar ? styles.drawerLeftOpen : ""}`}>
@@ -375,7 +420,7 @@ export default function IptvHomeClient({
           <VideoPlayer
             channel={selectedChannel}
             isDark={isDark}
-            isFavorite={selectedChannel ? favorites.includes(selectedChannel.id) : false}
+            isFavorite={selectedChannel ? favorites.includes(normalizeChannelId(selectedChannel.id)) : false}
             onToggleFavorite={toggleFavorite}
             onPrevChannel={() => handleChannelStep(-1)}
             onNextChannel={() => handleChannelStep(1)}
@@ -410,6 +455,19 @@ export default function IptvHomeClient({
           />
         </div>
       </section>
+      <CookieConsentBanner
+        consent={cookieConsent}
+        language={cookieLanguage}
+        onToggleLanguage={() => setCookieLanguage((prev) => (prev === "en" ? "bn" : "en"))}
+        onAllow={() => {
+          setCookieConsent("accepted");
+          trackActivity("cookie_consent", { consent: "accepted" });
+        }}
+        onDecline={() => {
+          setCookieConsent("declined");
+          trackActivity("cookie_consent", { consent: "declined" });
+        }}
+      />
     </main>
   );
 }

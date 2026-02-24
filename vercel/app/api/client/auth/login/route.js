@@ -19,7 +19,7 @@ export async function POST(request) {
   const password = String(form.get("password") || "");
 
   if (!identifier || !password) {
-    return NextResponse.redirect(new URL("/client-login?error=missing", request.url), { status: 302 });
+    return NextResponse.redirect(new URL("/client-login?error=invalid", request.url), { status: 302 });
   }
 
   const isEmailLogin = identifier.includes("@");

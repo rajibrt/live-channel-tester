@@ -19,6 +19,16 @@ function normalizeTheme(value) {
   return v === "light" ? "light" : "dark";
 }
 
+function normalizeCookiePrefs(value) {
+  const raw = value && typeof value === "object" ? value : {};
+  const consent = String(raw?.consent || "").toLowerCase();
+  const language = String(raw?.language || "").toLowerCase();
+  return {
+    consent: consent === "accepted" || consent === "declined" ? consent : "unknown",
+    language: language === "bn" ? "bn" : "en",
+  };
+}
+
 export async function GET() {
   const auth = await requireClientApi();
   if (!auth.ok) return auth.response;
@@ -27,7 +37,7 @@ export async function GET() {
   const userId = auth.current.user.id;
   const { data } = await admin
     .from("client_state")
-    .select("favorites,recent,last_channel_id,theme")
+    .select("favorites,recent,last_channel_id,theme,cookie_prefs")
     .eq("user_id", userId)
     .maybeSingle();
 
@@ -36,6 +46,7 @@ export async function GET() {
     recent: toStringArray(data?.recent, 200),
     last_channel_id: String(data?.last_channel_id || ""),
     theme: normalizeTheme(data?.theme),
+    cookie_prefs: normalizeCookiePrefs(data?.cookie_prefs),
   });
 }
 
@@ -48,6 +59,10 @@ export async function POST(request) {
   const recent = toStringArray(payload?.recent, 200);
   const lastChannelId = String(payload?.last_channel_id || "").trim();
   const theme = normalizeTheme(payload?.theme);
+  const cookiePrefs = normalizeCookiePrefs(payload?.cookie_prefs);
+  const recentAllowed = cookiePrefs.consent === "accepted";
+  const safeRecent = recentAllowed ? recent : [];
+  const safeLastChannelId = recentAllowed ? lastChannelId : "";
   const userId = auth.current.user.id;
 
   const admin = getSupabaseAdmin();
@@ -57,9 +72,10 @@ export async function POST(request) {
     {
       user_id: userId,
       favorites,
-      recent,
-      last_channel_id: lastChannelId,
+      recent: safeRecent,
+      last_channel_id: safeLastChannelId,
       theme,
+      cookie_prefs: cookiePrefs,
       updated_at: now,
     },
     { onConflict: "user_id" }
@@ -77,9 +93,9 @@ export async function POST(request) {
   }
 
   await admin.from("client_recent_history").delete().eq("user_id", userId).eq("source", "sync");
-  if (recent.length) {
+  if (safeRecent.length) {
     await admin.from("client_recent_history").insert(
-      recent.slice(0, 30).map((channelId) => ({
+      safeRecent.slice(0, 30).map((channelId) => ({
         user_id: userId,
         channel_id: channelId,
         channel_name: "",

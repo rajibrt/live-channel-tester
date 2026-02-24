@@ -1,7 +1,10 @@
 import styles from "./page.module.css";
 import PasswordField from "../../components/auth/PasswordField";
 
-export default function LoginPage() {
+export default async function LoginPage({ searchParams }) {
+  const params = await searchParams;
+  const hasError = Boolean(params?.error);
+
   return (
     <main className={styles.page}>
       <section className={styles.visualPane}>
@@ -20,6 +23,12 @@ export default function LoginPage() {
           <p className={styles.formTag}>Sign In</p>
           <h2 className={styles.formTitle}>Access Dashboard</h2>
           <p className={styles.formText}>Use your admin credentials to continue.</p>
+
+          {hasError ? (
+            <p className={`${styles.note} ${styles.errorNote}`} role="alert">
+              Login failed. Please check your credentials and try again.
+            </p>
+          ) : null}
 
           <form method="post" action="/api/auth/login" className={styles.form}>
             <label className={styles.field}>

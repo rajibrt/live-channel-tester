@@ -18,7 +18,7 @@ export async function getCurrentClient() {
   const admin = getSupabaseAdmin();
   const { data: row } = await admin
     .from("client_users")
-    .select("user_id,email,full_name,is_active")
+    .select("user_id,email,full_name,mobile_number,is_active")
     .eq("user_id", data.user.id)
     .eq("is_active", true)
     .single();

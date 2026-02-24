@@ -173,6 +173,114 @@
   text-overflow: ellipsis;
 }
 
+.profileModal {
+  max-width: 520px;
+}
+
+.profileForm {
+  display: grid;
+  gap: 10px;
+}
+
+.profileField {
+  display: grid;
+  gap: 6px;
+}
+
+.profileField span {
+  font-size: 13px;
+  color: var(--muted-foreground);
+}
+
+.profileField input {
+  width: 100%;
+  border: 1px solid var(--input);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font: inherit;
+  color: var(--foreground);
+  background: var(--card);
+  outline: none;
+}
+
+.profileField input:focus {
+  border-color: var(--ring);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 24%, transparent);
+}
+
+.profileField input:disabled {
+  color: var(--muted-foreground);
+  background: color-mix(in oklab, var(--muted) 70%, transparent);
+}
+
+.passwordInputWrap {
+  position: relative;
+}
+
+.passwordInputWrap input {
+  padding-right: 42px;
+}
+
+.passwordToggle {
+  position: absolute;
+  top: 50%;
+  right: 7px;
+  transform: translateY(-50%);
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted-foreground);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.passwordToggle:hover {
+  color: var(--foreground);
+  background: color-mix(in oklab, var(--muted) 64%, transparent);
+}
+
+.profileError {
+  margin: 0;
+  color: var(--destructive);
+  font-size: 13px;
+}
+
+.profileSuccess {
+  margin: 0;
+  color: var(--chart-2);
+  font-size: 13px;
+}
+
+.profilePrimaryBtn,
+.profileSecondaryBtn {
+  border-radius: 10px;
+  padding: 9px 12px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.profilePrimaryBtn {
+  border: 0;
+  color: var(--primary-foreground);
+  background: linear-gradient(135deg, var(--primary), color-mix(in oklab, var(--primary) 50%, var(--accent)));
+}
+
+.profilePrimaryBtn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.profileSecondaryBtn {
+  border: 1px solid var(--border);
+  color: var(--foreground);
+  background: color-mix(in oklab, var(--card) 86%, transparent);
+}
+
 .mobileOnly {
   display: none;
 }
@@ -354,6 +462,11 @@
 .fullscreenSearchInput:focus-visible,
 .volumeMuteBtn:focus-visible,
 .volumeControl input:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.passwordToggle:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
@@ -1200,6 +1313,87 @@
   background: color-mix(in oklab, var(--background) 64%, transparent);
 }
 
+.cookieBanner {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  z-index: 80;
+  width: min(92vw, 720px);
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--card) 92%, transparent);
+  box-shadow: var(--shadow-2xl);
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.cookieBannerHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.cookieBannerHead h3 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.cookieBanner p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted-foreground);
+}
+
+.cookieBanner ul {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+  color: var(--foreground);
+  font-size: 13px;
+}
+
+.cookieActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cookieAllowBtn,
+.cookieDeclineBtn,
+.cookieLangBtn {
+  border-radius: 10px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cookieLangBtn {
+  border: 1px solid var(--border);
+  color: var(--foreground);
+  background: color-mix(in oklab, var(--card) 86%, transparent);
+  padding: 6px 10px;
+}
+
+.cookieDeclineBtn {
+  border: 1px solid var(--border);
+  color: var(--foreground);
+  background: color-mix(in oklab, var(--muted) 72%, transparent);
+  padding: 8px 12px;
+}
+
+.cookieAllowBtn {
+  border: 0;
+  color: var(--primary-foreground);
+  background: linear-gradient(135deg, var(--primary), color-mix(in oklab, var(--primary) 56%, var(--accent)));
+  padding: 8px 12px;
+}
+
 @keyframes spin {
   from {
     transform: rotate(0deg);
@@ -1379,6 +1573,22 @@
     margin-top: 12px;
     justify-content: flex-start;
     padding: 8px 10px;
+  }
+
+  .cookieBanner {
+    bottom: 10px;
+    width: calc(100vw - 16px);
+    border-radius: 14px;
+    padding: 12px;
+  }
+
+  .cookieActions {
+    justify-content: stretch;
+  }
+
+  .cookieDeclineBtn,
+  .cookieAllowBtn {
+    flex: 1 1 auto;
   }
 }
 

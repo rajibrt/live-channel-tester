@@ -260,6 +260,15 @@
   font-size: 14px;
 }
 
+.errorNote {
+  margin: 0 0 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #fca5a5;
+  background: #fef2f2;
+  color: #991b1b;
+}
+
 .note code {
   color: #0f172a;
   font-weight: 600;

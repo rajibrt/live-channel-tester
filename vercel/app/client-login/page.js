@@ -30,8 +30,8 @@ export default async function ClientLoginPage({ searchParams }) {
           <p className={styles.formText}>Use email or registered mobile last 11 digits with password.</p>
 
           {hasError ? (
-            <p className={styles.note} role="alert">
-              Invalid credentials or account is inactive.
+            <p className={`${styles.note} ${styles.errorNote}`} role="alert">
+              Login failed. Please check your credentials and try again.
             </p>
           ) : null}
 

@@ -2,11 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-export function usePersistentArray(key, initial = []) {
+export function usePersistentArray(key, initial = [], options = {}) {
+  const persist = options?.persist !== false;
   const storageKey = useMemo(() => `iptv:v1:${key}`, [key]);
   const [value, setValue] = useState(initial);
 
   useEffect(() => {
+    if (!persist) return;
     try {
       const raw = window.localStorage.getItem(storageKey);
       if (!raw) return;
@@ -15,15 +17,23 @@ export function usePersistentArray(key, initial = []) {
     } catch {
       // ignore invalid localStorage
     }
-  }, [storageKey]);
+  }, [storageKey, persist]);
 
   useEffect(() => {
+    if (!persist) {
+      try {
+        window.localStorage.removeItem(storageKey);
+      } catch {
+        // ignore storage quota errors
+      }
+      return;
+    }
     try {
       window.localStorage.setItem(storageKey, JSON.stringify(value));
     } catch {
       // ignore storage quota errors
     }
-  }, [storageKey, value]);
+  }, [storageKey, value, persist]);
 
   return [value, setValue];
 }

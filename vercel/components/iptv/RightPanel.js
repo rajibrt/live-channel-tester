@@ -75,7 +75,7 @@ export default function RightPanel({
                   channel={channel}
                   isDark={isDark}
                   isActive={selectedChannel?.id === channel.id}
-                  isFavorite={favorites.includes(channel.id)}
+                  isFavorite={favorites.includes(String(channel.id))}
                   onToggleFavorite={onToggleFavorite}
                   onClick={() => onChannelSelect(channel)}
                 />
