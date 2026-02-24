@@ -35,18 +35,30 @@ export async function GET() {
 
   const admin = getSupabaseAdmin();
   const userId = auth.current.user.id;
-  const { data } = await admin
-    .from("client_state")
-    .select("favorites,recent,last_channel_id,theme,cookie_prefs")
-    .eq("user_id", userId)
-    .maybeSingle();
+  const [{ data: stateData }, { data: favoriteRows }] = await Promise.all([
+    admin
+      .from("client_state")
+      .select("favorites,recent,last_channel_id,theme,cookie_prefs")
+      .eq("user_id", userId)
+      .maybeSingle(),
+    admin
+      .from("client_favorites")
+      .select("channel_id")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false }),
+  ]);
+
+  const favoriteIdsFromTable = Array.isArray(favoriteRows) ? favoriteRows.map((row) => String(row?.channel_id || "")) : [];
+  const effectiveFavorites = favoriteIdsFromTable.length
+    ? toStringArray(favoriteIdsFromTable, 200)
+    : toStringArray(stateData?.favorites, 200);
 
   return NextResponse.json({
-    favorites: toStringArray(data?.favorites, 200),
-    recent: toStringArray(data?.recent, 200),
-    last_channel_id: String(data?.last_channel_id || ""),
-    theme: normalizeTheme(data?.theme),
-    cookie_prefs: normalizeCookiePrefs(data?.cookie_prefs),
+    favorites: effectiveFavorites,
+    recent: toStringArray(stateData?.recent, 200),
+    last_channel_id: String(stateData?.last_channel_id || ""),
+    theme: normalizeTheme(stateData?.theme),
+    cookie_prefs: normalizeCookiePrefs(stateData?.cookie_prefs),
   });
 }
 
@@ -68,7 +80,7 @@ export async function POST(request) {
   const admin = getSupabaseAdmin();
 
   const now = new Date().toISOString();
-  await admin.from("client_state").upsert(
+  const { error: stateErr } = await admin.from("client_state").upsert(
     {
       user_id: userId,
       favorites,
@@ -80,21 +92,33 @@ export async function POST(request) {
     },
     { onConflict: "user_id" }
   );
+  if (stateErr) {
+    return NextResponse.json({ error: stateErr.message || "Failed to save client state" }, { status: 500 });
+  }
 
-  await admin.from("client_favorites").delete().eq("user_id", userId);
+  const { error: deleteFavErr } = await admin.from("client_favorites").delete().eq("user_id", userId);
+  if (deleteFavErr) {
+    return NextResponse.json({ error: deleteFavErr.message || "Failed to update favorites" }, { status: 500 });
+  }
   if (favorites.length) {
-    await admin.from("client_favorites").insert(
+    const { error: favInsertErr } = await admin.from("client_favorites").insert(
       favorites.map((channelId) => ({
         user_id: userId,
         channel_id: channelId,
         channel_name: "",
       }))
     );
+    if (favInsertErr) {
+      return NextResponse.json({ error: favInsertErr.message || "Failed to store favorites" }, { status: 500 });
+    }
   }
 
-  await admin.from("client_recent_history").delete().eq("user_id", userId).eq("source", "sync");
+  const { error: deleteRecentErr } = await admin.from("client_recent_history").delete().eq("user_id", userId).eq("source", "sync");
+  if (deleteRecentErr) {
+    return NextResponse.json({ error: deleteRecentErr.message || "Failed to update recent history" }, { status: 500 });
+  }
   if (safeRecent.length) {
-    await admin.from("client_recent_history").insert(
+    const { error: recentInsertErr } = await admin.from("client_recent_history").insert(
       safeRecent.slice(0, 30).map((channelId) => ({
         user_id: userId,
         channel_id: channelId,
@@ -102,6 +126,9 @@ export async function POST(request) {
         source: "sync",
       }))
     );
+    if (recentInsertErr) {
+      return NextResponse.json({ error: recentInsertErr.message || "Failed to store recent history" }, { status: 500 });
+    }
   }
 
   return NextResponse.json({ ok: true });
