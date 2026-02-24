@@ -118,6 +118,18 @@ export default function IptvHomeClient({ initialChannels = [], initialCategories
 
   const allChannels = Array.isArray(initialChannels) ? initialChannels : [];
   const allCategories = Array.isArray(initialCategories) ? initialCategories : [];
+  const categoriesWithCount = useMemo(() => {
+    const countByCategoryId = new Map();
+    for (const channel of allChannels) {
+      const key = String(channel?.categoryId || toCategoryId(channel?.category)).trim();
+      if (!key) continue;
+      countByCategoryId.set(key, (countByCategoryId.get(key) || 0) + 1);
+    }
+    return allCategories.map((category) => ({
+      ...category,
+      count: Number(countByCategoryId.get(String(category.id || "")) || 0),
+    }));
+  }, [allChannels, allCategories]);
 
   useEffect(() => {
     if (hasRestoredChannel) return;
@@ -170,7 +182,12 @@ export default function IptvHomeClient({ initialChannels = [], initialCategories
     }
 
     if (selectedCategory && mode === "all") {
-      list = list.filter((channel) => toCategoryId(channel.category) === String(selectedCategory || ""));
+      const selected = String(selectedCategory || "");
+      list = list.filter((channel) => {
+        const channelCategoryId = String(channel?.categoryId || "").trim();
+        if (channelCategoryId) return channelCategoryId === selected;
+        return toCategoryId(channel.category) === selected;
+      });
     }
 
     const query = channelSearch.trim().toLowerCase();
@@ -254,7 +271,7 @@ export default function IptvHomeClient({ initialChannels = [], initialCategories
       <section className={styles.contentWrap}>
         <div className={`${styles.drawerLeft} ${showLeftSidebar ? styles.drawerLeftOpen : ""}`}>
           <LeftSidebar
-            categories={allCategories}
+            categories={categoriesWithCount}
             selectedCategory={selectedCategory}
             mode={mode}
             onSelectCategory={handleSidebarCategorySelect}

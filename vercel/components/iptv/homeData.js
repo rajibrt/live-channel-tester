@@ -82,8 +82,7 @@ export async function getHomeIptvData() {
     .from("channels")
     .select("id,name,category,logo_url,stream_url,status,include_on_home")
     .in("id", ids)
-    .eq("status", "LIVE")
-    .eq("include_on_home", true));
+    .eq("status", "LIVE"));
 
   if (rowsErr && String(rowsErr.message || "").toLowerCase().includes("include_on_home")) {
     ({ data: rows, error: rowsErr } = await supabase
@@ -114,6 +113,7 @@ export async function getHomeIptvData() {
   for (const link of links) {
     const row = byId.get(Number(link.channel_id));
     if (!row) continue;
+    if (row.include_on_home === false) continue;
 
     const streamUrl = normalizeUrl(row.stream_url);
     if (!streamUrl) continue;
@@ -125,11 +125,13 @@ export async function getHomeIptvData() {
     const category = normalizeCategory(row.category);
     const name = norm(row.name) || "Stream";
     const logoText = name.slice(0, 1).toUpperCase() || "TV";
+    const categoryKey = normKey(category);
 
     channels.push({
       id: String(row.id),
       name,
       category,
+      categoryKey,
       logo: logoText,
       logoUrl: norm(row.logo_url),
       streamUrl,
@@ -154,7 +156,7 @@ export async function getHomeIptvData() {
     return next;
   };
   for (const channel of channels) {
-    const key = normKey(channel.category);
+    const key = channel.categoryKey || normKey(channel.category);
     if (!key) continue;
     if (!categoryMap.has(key)) {
       const baseId = key.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "uncategorized";
@@ -164,6 +166,12 @@ export async function getHomeIptvData() {
         icon: pickIcon(channel.category),
       });
     }
+  }
+
+  // Attach the exact category id used by sidebar so filtering never drifts on slug collisions.
+  for (const channel of channels) {
+    const key = channel.categoryKey || normKey(channel.category);
+    channel.categoryId = categoryMap.get(key)?.id || "";
   }
 
   const categories = Array.from(categoryMap.values()).sort((a, b) => a.name.localeCompare(b.name));

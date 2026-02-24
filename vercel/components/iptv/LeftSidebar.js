@@ -90,7 +90,10 @@ export default function LeftSidebar({
             className={`justify-start ${styles.linkBtn} ${selectedCategory === category.id && mode === "all" ? styles.linkBtnActive : ""}`}
           >
             <Icon name={category.icon} size={16} />
-            <span>{category.name}</span>
+            <span className={styles.linkText}>{category.name}</span>
+            <span className={styles.linkCount} aria-label={`${category.name} channels`}>
+              {Number(category.count || 0)}
+            </span>
           </Button>
         ))}
       </div>
