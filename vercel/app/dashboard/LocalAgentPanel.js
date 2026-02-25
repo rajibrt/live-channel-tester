@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import styles from "./page.module.css";
 
 function slugify(value) {
@@ -37,8 +37,8 @@ export default function LocalAgentPanel({ defaultAgentBaseUrl }) {
     currentTitle: "",
     currentUrl: "",
   });
-  const [liveItems, setLiveItems] = useState([]);
   const [checkedItems, setCheckedItems] = useState([]);
+  const [resultTab, setResultTab] = useState("live");
   const [preview, setPreview] = useState(null);
   const [playlistSlug, setPlaylistSlug] = useState("");
   const [playlistName, setPlaylistName] = useState("");
@@ -78,7 +78,6 @@ export default function LocalAgentPanel({ defaultAgentBaseUrl }) {
     setPaused(false);
     setError("");
     setResult(null);
-    setLiveItems([]);
     setCheckedItems([]);
     setSaveMessage("");
     setSaveError("");
@@ -163,21 +162,6 @@ export default function LocalAgentPanel({ defaultAgentBaseUrl }) {
               currentTitle: String(evt.title || prev.currentTitle || ""),
               currentUrl: String(evt.url || prev.currentUrl || ""),
             }));
-            if (String(evt.status || "").toUpperCase() === "LIVE" && evt.url) {
-              setLiveItems((prev) => {
-                if (prev.some((x) => x.url === evt.url)) return prev;
-                return [
-                  ...prev,
-                  {
-                    title: String(evt.title || "Stream"),
-                    url: String(evt.url),
-                    category: String(evt.category || ""),
-                    logo_url: String(evt.logo_url || ""),
-                    reason: String(evt.reason || ""),
-                  },
-                ];
-              });
-            }
             if (evt.url) {
               setCheckedItems((prev) => {
                 const next = prev.filter((x) => x.url !== String(evt.url));
@@ -271,6 +255,15 @@ export default function LocalAgentPanel({ defaultAgentBaseUrl }) {
 
   const canSave = checkedItems.length > 0;
   const disableSaveControls = loading || !!saveLoading;
+  const liveCheckedItems = useMemo(
+    () => checkedItems.filter((x) => String(x.status || "").toUpperCase() === "LIVE"),
+    [checkedItems]
+  );
+  const deadCheckedItems = useMemo(
+    () => checkedItems.filter((x) => String(x.status || "").toUpperCase() !== "LIVE"),
+    [checkedItems]
+  );
+  const activeItems = resultTab === "dead" ? deadCheckedItems : liveCheckedItems;
 
   return (
     <form onSubmit={onSubmit} className={styles.form}>
@@ -521,9 +514,24 @@ export default function LocalAgentPanel({ defaultAgentBaseUrl }) {
         ) : null}
       </div>
 
-      {liveItems.length ? (
+      {checkedItems.length ? (
         <div className={styles.liveList}>
-          <h3>LIVE Links ({liveItems.length})</h3>
+          <div className={styles.resultTabs}>
+            <button
+              type="button"
+              className={`${styles.resultTabBtn} ${resultTab === "live" ? styles.resultTabBtnActive : ""}`}
+              onClick={() => setResultTab("live")}
+            >
+              LIVE Links ({liveCheckedItems.length})
+            </button>
+            <button
+              type="button"
+              className={`${styles.resultTabBtn} ${resultTab === "dead" ? styles.resultTabBtnActive : ""}`}
+              onClick={() => setResultTab("dead")}
+            >
+              DEAD Links ({deadCheckedItems.length})
+            </button>
+          </div>
           <div className={styles.tableWrap}>
             <table>
               <thead>
@@ -535,7 +543,7 @@ export default function LocalAgentPanel({ defaultAgentBaseUrl }) {
                 </tr>
               </thead>
               <tbody>
-                {liveItems.map((item, idx) => (
+                {activeItems.map((item, idx) => (
                   <tr key={`${item.url}-${idx}`}>
                     <td>{item.title}</td>
                     <td>{item.category || "-"}</td>
@@ -555,6 +563,15 @@ export default function LocalAgentPanel({ defaultAgentBaseUrl }) {
                     </td>
                   </tr>
                 ))}
+                {!activeItems.length ? (
+                  <tr>
+                    <td colSpan={4}>
+                      <p className={styles.pending}>
+                        {resultTab === "dead" ? "No DEAD links found." : "No LIVE links found."}
+                      </p>
+                    </td>
+                  </tr>
+                ) : null}
               </tbody>
             </table>
           </div>

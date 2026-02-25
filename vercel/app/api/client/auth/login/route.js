@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { CLIENT_SESSION_COOKIE } from "../../../../../lib/clientAuth";
 import { getSupabaseAdmin, getSupabaseAnonConfig } from "../../../../../lib/supabaseAdmin";
+import { createSessionToken, SESSION_MAX_AGE } from "../../../../../lib/sessionToken";
 
 function normalizeEmail(value) {
   return String(value || "").trim().toLowerCase();
@@ -62,12 +63,13 @@ export async function POST(request) {
   });
 
   const res = NextResponse.redirect(new URL("/", request.url), { status: 302 });
-  res.cookies.set(CLIENT_SESSION_COOKIE, data.session.access_token, {
+  const sessionToken = createSessionToken({ sub: data.user.id, typ: "client" }, SESSION_MAX_AGE);
+  res.cookies.set(CLIENT_SESSION_COOKIE, sessionToken, {
     path: "/",
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
-    maxAge: 60 * 60 * 24 * 14,
+    maxAge: SESSION_MAX_AGE,
   });
   return res;
 }

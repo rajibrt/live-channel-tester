@@ -7,7 +7,7 @@ import styles from "./page.module.css";
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Overview" },
   { href: "/dashboard/playlists", label: "Playlists" },
-  { href: "/dashboard/channels", label: "Channels" },
+  { href: "/dashboard/channels", label: "Add New Channel" },
   { href: "/dashboard/clients", label: "Clients" },
   { href: "/dashboard/local-check", label: "Local Check" },
 ];

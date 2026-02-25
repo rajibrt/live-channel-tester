@@ -15,7 +15,7 @@ const NAV_GROUPS = [
     label: "Content",
     items: [
       { href: "/dashboard/playlists", label: "Playlists", icon: ListVideo },
-      { href: "/dashboard/channels", label: "Channels", icon: Tv },
+      { href: "/dashboard/channels", label: "Add New Channel", icon: Tv },
     ],
   },
   {
@@ -39,7 +39,7 @@ function sectionMeta(pathname) {
     return { title: "Playlists", subtitle: "Manage playlists and public token links" };
   }
   if (pathname.startsWith("/dashboard/channels")) {
-    return { title: "Channels", subtitle: "Manage channel metadata and assignments" };
+    return { title: "Add New Channel", subtitle: "Manage channel metadata and assignments" };
   }
   if (pathname.startsWith("/dashboard/local-check")) {
     return { title: "Local Check", subtitle: "Run route-aware stream health verification" };

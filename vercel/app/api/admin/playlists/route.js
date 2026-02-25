@@ -27,7 +27,7 @@ export async function POST(request) {
   const slug = String(form.get("slug") || "").trim().toLowerCase();
   const name = String(form.get("name") || "").trim();
   if (!slug || !name) {
-    return NextResponse.redirect(new URL("/dashboard", request.url), { status: 302 });
+    return NextResponse.redirect(new URL("/dashboard/playlists", request.url), { status: 302 });
   }
 
   const supabase = getSupabaseAdmin();
@@ -35,5 +35,5 @@ export async function POST(request) {
     [{ slug, name, updated_at: new Date().toISOString() }],
     { onConflict: "slug" }
   );
-  return NextResponse.redirect(new URL("/dashboard", request.url), { status: 302 });
+  return NextResponse.redirect(new URL("/dashboard/playlists", request.url), { status: 302 });
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { ADMIN_SESSION_COOKIE } from '../../../../lib/auth'
+import { createSessionToken, SESSION_MAX_AGE } from "../../../../lib/sessionToken";
 import {
   getSupabaseAdmin,
   getSupabaseAnonConfig,
@@ -44,12 +45,13 @@ export async function POST(request) {
   const res = NextResponse.redirect(new URL('/dashboard', request.url), {
     status: 302,
   })
-  res.cookies.set(ADMIN_SESSION_COOKIE, data.session.access_token, {
+  const sessionToken = createSessionToken({ sub: data.user.id, typ: "admin" }, SESSION_MAX_AGE);
+  res.cookies.set(ADMIN_SESSION_COOKIE, sessionToken, {
     path: '/',
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
-    maxAge: 60 * 60 * 24 * 7,
+    maxAge: SESSION_MAX_AGE,
   })
   return res
 }

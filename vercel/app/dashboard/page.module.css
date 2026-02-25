@@ -525,6 +525,35 @@
   font-size: 16px;
 }
 
+.resultTabs {
+  display: inline-flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.resultTabBtn {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 7px 12px;
+  background: var(--card);
+  color: var(--muted-foreground);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.resultTabBtn:hover {
+  background: color-mix(in oklab, var(--background) 90%, var(--card));
+  color: var(--foreground);
+}
+
+.resultTabBtnActive {
+  background: linear-gradient(135deg, var(--primary) 0%, color-mix(in oklab, var(--primary) 58%, var(--accent)) 100%);
+  border-color: transparent;
+  color: var(--primary-foreground);
+}
+
 .previewBtn {
   border: 0;
   border-radius: 10px;
@@ -807,6 +836,47 @@
   z-index: 40;
 }
 
+.streamPreviewRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.streamPreviewRow input {
+  min-width: 0;
+}
+
+.inlineRenameInput {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: inherit;
+  color: var(--foreground);
+  background: var(--card);
+}
+
+.inlineRenameInput:focus {
+  outline: none;
+  border-color: var(--ring);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 24%, transparent);
+}
+
+.renameCell {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.nameActions {
+  display: inline-flex;
+  gap: 6px;
+}
+
 .editorTable {
   min-width: 0 !important;
   table-layout: fixed;
@@ -867,6 +937,13 @@
   object-fit: cover;
   background: color-mix(in oklab, var(--background) 92%, var(--card));
   display: block;
+}
+
+.logoInputPreviewRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
 }
 
 .logoWithStatus {
@@ -1071,6 +1148,15 @@
   .primaryBtnCompact {
     justify-content: center;
     width: 100%;
+  }
+
+  .streamPreviewRow {
+    grid-template-columns: 1fr;
+  }
+
+  .streamPreviewRow .secondaryBtn {
+    width: 100%;
+    justify-content: center;
   }
 }
 
