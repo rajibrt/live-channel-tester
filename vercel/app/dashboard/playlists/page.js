@@ -77,7 +77,7 @@ export default async function PlaylistsPage({ searchParams }) {
   const playlists = await getPlaylists();
   const query = (await searchParams) || {};
   const requestedSlug = String(query?.selected || "").trim().toLowerCase();
-  const selectedSlug = requestedSlug || String(playlists[0]?.slug || "").trim().toLowerCase();
+  const selectedSlug = requestedSlug;
   const selectedData = selectedSlug ? await getPlaylistEditorData(selectedSlug) : null;
   const base = process.env.PUBLIC_PLAYLIST_BASE_URL || "";
   const playlistUrl =
@@ -113,6 +113,9 @@ export default async function PlaylistsPage({ searchParams }) {
       <article className={styles.card}>
         <h2>Existing Playlists</h2>
         <PlaylistsTable items={playlists} selectedSlug={selectedSlug} />
+        {!selectedSlug ? (
+          <p className={styles.hint}>Select a playlist from "View Details" to load editor data.</p>
+        ) : null}
       </article>
 
       {selectedData ? (

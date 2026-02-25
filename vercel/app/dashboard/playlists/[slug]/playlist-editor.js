@@ -69,6 +69,7 @@ function cloneChannels(channels) {
           status: String(c.status || "LIVE").toUpperCase(),
           include_on_home: c.include_on_home !== false,
           order: idx + 1,
+          originalOrder: idx + 1,
           originalCategory: key,
           originalName: c.name || "Stream",
           originalLogo: c.logo_url || "",
@@ -252,6 +253,10 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
     confirmText: "Confirm",
     onConfirm: null,
   });
+  const [editingGroupOrder, setEditingGroupOrder] = useState("");
+  const [groupOrderDraft, setGroupOrderDraft] = useState("");
+  const [editingChannelOrderId, setEditingChannelOrderId] = useState(null);
+  const [channelOrderDraft, setChannelOrderDraft] = useState("");
 
   const openConfirm = ({ title, description, confirmText = "Confirm", onConfirm }) => {
     setConfirmDialog({
@@ -285,10 +290,16 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
     });
   }, [channels, groupOrder]);
 
+  const allChannelsInSelected = useMemo(
+    () =>
+      channels
+        .filter((c) => c.category === selectedGroup)
+        .sort((a, b) => Number(a.order || 0) - Number(b.order || 0)),
+    [channels, selectedGroup]
+  );
+
   const channelsInSelected = useMemo(() => {
-    const base = channels
-      .filter((c) => c.category === selectedGroup)
-      .sort((a, b) => Number(a.order || 0) - Number(b.order || 0));
+    const base = allChannelsInSelected;
     if (channelStatusFilter === "LIVE") {
       return base.filter((c) => String(c.status || "LIVE").toUpperCase() === "LIVE");
     }
@@ -296,7 +307,7 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
       return base.filter((c) => String(c.status || "LIVE").toUpperCase() !== "LIVE");
     }
     return base;
-  }, [channels, selectedGroup, channelStatusFilter]);
+  }, [allChannelsInSelected, channelStatusFilter]);
 
   const changeChannel = (id, patch) => {
     setChannels((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
@@ -326,8 +337,26 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
     });
   };
 
+  const moveGroupToPosition = (groupName, rawPosition) => {
+    const idx = groupOrder.indexOf(groupName);
+    if (idx < 0) return;
+    const safeMax = groupOrder.length;
+    const requested = Number(rawPosition);
+    if (!Number.isFinite(requested)) return;
+    const to = Math.min(safeMax - 1, Math.max(0, Math.floor(requested) - 1));
+    if (to === idx) return;
+    setGroupOrder((prev) => {
+      const from = prev.indexOf(groupName);
+      if (from < 0) return prev;
+      const next = [...prev];
+      const [item] = next.splice(from, 1);
+      next.splice(to, 0, item);
+      return next;
+    });
+  };
+
   const moveChannel = (id, dir) => {
-    const list = channelsInSelected;
+    const list = allChannelsInSelected;
     const idx = list.findIndex((x) => x.id === id);
     if (idx < 0) return;
     const to = dir === "up" ? idx - 1 : idx + 1;
@@ -339,6 +368,28 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
         if (c.id === current.id) return { ...c, order: target.order };
         if (c.id === target.id) return { ...c, order: current.order };
         return c;
+      })
+    );
+  };
+
+  const moveChannelToPosition = (id, rawPosition) => {
+    const list = allChannelsInSelected;
+    const idx = list.findIndex((x) => x.id === id);
+    if (idx < 0) return;
+    const requested = Number(rawPosition);
+    if (!Number.isFinite(requested)) return;
+    const to = Math.min(list.length - 1, Math.max(0, Math.floor(requested) - 1));
+    if (to === idx) return;
+    const reordered = [...list];
+    const [item] = reordered.splice(idx, 1);
+    reordered.splice(to, 0, item);
+    const nextOrderById = new Map(reordered.map((x, orderIdx) => [x.id, orderIdx + 1]));
+    setChannels((prev) =>
+      prev.map((c) => {
+        if (c.category !== selectedGroup) return c;
+        const nextOrder = nextOrderById.get(c.id);
+        if (!nextOrder) return c;
+        return { ...c, order: nextOrder };
       })
     );
   };
@@ -518,7 +569,23 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
           .sort((a, b) => Number(a.order || 0) - Number(b.order || 0))
           .forEach((c) => final.push(c));
       });
-      const payload = final.map((c, idx) => ({
+      // Rebuild positions deterministically per group, then flatten by group order.
+      const groupBuckets = new Map();
+      final.forEach((c) => {
+        const key = c.category || "Uncategorized";
+        if (!groupBuckets.has(key)) groupBuckets.set(key, []);
+        groupBuckets.get(key).push(c);
+      });
+      const normalizedFinal = [];
+      normalizedOrder.forEach((groupName) => {
+        const list = groupBuckets.get(groupName) || [];
+        list
+          .slice()
+          .sort((a, b) => Number(a.order || 0) - Number(b.order || 0))
+          .forEach((c, idx) => normalizedFinal.push({ ...c, order: idx + 1 }));
+      });
+
+      const payload = normalizedFinal.map((c, idx) => ({
         id: c.id,
         name: c.name,
         category: c.category,
@@ -547,6 +614,7 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
     const changedMeta =
       c.name !== c.originalName ||
       c.category !== c.originalCategory ||
+      Number(c.order || 0) !== Number(c.originalOrder || 0) ||
       (c.logo_url || "") !== (c.originalLogo || "") ||
       (c.stream_url || "") !== (c.originalStreamUrl || "") ||
       (c.include_on_home !== false) !== (c.originalIncludeOnHome !== false);
@@ -732,6 +800,7 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
           <table className={styles.editorTable}>
             <thead>
               <tr>
+                <th>#</th>
                 <th>Group</th>
                 <th>Total</th>
                 <th>LIVE</th>
@@ -740,8 +809,72 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
               </tr>
             </thead>
             <tbody>
-              {groupsWithCount.map((g) => (
+              {groupsWithCount.map((g, idx) => (
                 <tr key={g.name} className={selectedGroup === g.name ? styles.selectedRow : ""}>
+                  <td>
+                    {editingGroupOrder === g.name ? (
+                      <div className={styles.serialEditRow}>
+                        <input
+                          className={styles.serialInput}
+                          type="number"
+                          min="1"
+                          max={groupsWithCount.length}
+                          value={groupOrderDraft}
+                          onChange={(e) => setGroupOrderDraft(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              moveGroupToPosition(g.name, groupOrderDraft);
+                              setEditingGroupOrder("");
+                              setGroupOrderDraft("");
+                            }
+                          }}
+                          autoFocus
+                        />
+                        <button
+                          type="button"
+                          className={styles.iconBtn}
+                          title="Confirm serial"
+                          aria-label="Confirm serial"
+                          onClick={() => {
+                            moveGroupToPosition(g.name, groupOrderDraft);
+                            setEditingGroupOrder("");
+                            setGroupOrderDraft("");
+                          }}
+                        >
+                          <CheckIcon />
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.iconBtn}
+                          title="Cancel serial edit"
+                          aria-label="Cancel serial edit"
+                          onClick={() => {
+                            setEditingGroupOrder("");
+                            setGroupOrderDraft("");
+                          }}
+                        >
+                          <XIcon />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className={styles.serialCell}>
+                        <span className={styles.serialNum}>{idx + 1}</span>
+                        <button
+                          type="button"
+                          className={styles.iconBtn}
+                          title="Edit serial"
+                          aria-label="Edit serial"
+                          onClick={() => {
+                            setEditingGroupOrder(g.name);
+                            setGroupOrderDraft(String(idx + 1));
+                          }}
+                        >
+                          <PencilIcon />
+                        </button>
+                      </div>
+                    )}
+                  </td>
                   <td>
                     {editingGroup === g.name ? (
                       <div className={styles.groupEditRow}>
@@ -870,6 +1003,7 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
           <table className={styles.editorTable}>
             <thead>
               <tr>
+                <th className={styles.colSerial}>#</th>
                 <th className={styles.colLogoThumb}>Channel Logo</th>
                 <th className={styles.colName}>Name</th>
                 <th className={styles.colGroup}>Group</th>
@@ -880,9 +1014,73 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
                 <th className={styles.colPreview}>Preview</th>
               </tr>
             </thead>
-            <tbody>
-              {channelsInSelected.map((c) => (
+              <tbody>
+              {channelsInSelected.map((c, idx) => (
                 <tr key={c.id}>
+                  <td className={styles.colSerial}>
+                    {editingChannelOrderId === c.id ? (
+                      <div className={styles.serialEditRow}>
+                        <input
+                          className={styles.serialInput}
+                          type="number"
+                          min="1"
+                          max={allChannelsInSelected.length}
+                          value={channelOrderDraft}
+                          onChange={(e) => setChannelOrderDraft(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              moveChannelToPosition(c.id, channelOrderDraft);
+                              setEditingChannelOrderId(null);
+                              setChannelOrderDraft("");
+                            }
+                          }}
+                          autoFocus
+                        />
+                        <button
+                          type="button"
+                          className={styles.iconBtn}
+                          title="Confirm serial"
+                          aria-label="Confirm serial"
+                          onClick={() => {
+                            moveChannelToPosition(c.id, channelOrderDraft);
+                            setEditingChannelOrderId(null);
+                            setChannelOrderDraft("");
+                          }}
+                        >
+                          <CheckIcon />
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.iconBtn}
+                          title="Cancel serial edit"
+                          aria-label="Cancel serial edit"
+                          onClick={() => {
+                            setEditingChannelOrderId(null);
+                            setChannelOrderDraft("");
+                          }}
+                        >
+                          <XIcon />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className={styles.serialCell}>
+                        <span className={styles.serialNum}>{Number(c.order || idx + 1)}</span>
+                        <button
+                          type="button"
+                          className={styles.iconBtn}
+                          title="Edit serial"
+                          aria-label="Edit serial"
+                          onClick={() => {
+                            setEditingChannelOrderId(c.id);
+                            setChannelOrderDraft(String(Number(c.order || idx + 1)));
+                          }}
+                        >
+                          <PencilIcon />
+                        </button>
+                      </div>
+                    )}
+                  </td>
                   <td className={styles.colLogoThumb}>
                     <div className={styles.logoWithStatus}>
                       <img

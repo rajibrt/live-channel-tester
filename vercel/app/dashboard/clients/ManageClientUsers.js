@@ -427,7 +427,7 @@ export default function ManageClientUsers({ initialItems = [] }) {
       </AlertDialog>
 
       <AlertDialog open={historyOpen} onOpenChange={setHistoryOpen}>
-        <AlertDialogContent>
+        <AlertDialogContent className={styles.historyModal}>
           <AlertDialogHeader>
             <AlertDialogTitle>Watch History</AlertDialogTitle>
             <AlertDialogDescription>
@@ -437,7 +437,7 @@ export default function ManageClientUsers({ initialItems = [] }) {
           {historyError ? <p className={styles.errorText}>{historyError}</p> : null}
           {historyLoading ? <p className={styles.pending}>Loading history...</p> : null}
           {!historyLoading ? (
-            <div className={styles.tableWrap}>
+            <div className={`${styles.tableWrap} ${styles.historyTableWrap}`}>
               <table>
                 <thead>
                   <tr>
