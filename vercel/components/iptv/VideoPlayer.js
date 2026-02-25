@@ -218,7 +218,11 @@ export default function VideoPlayer({
     video.addEventListener("error", onError);
 
     const source = normalizeStreamUrl(channel.streamUrl);
-    const sourceForPlayback = toStreamProxyUrl(source) || source;
+    const isHttpsPage = typeof window !== "undefined" && window.location?.protocol === "https:";
+    const isHttpSource = /^http:\/\//i.test(String(source || ""));
+    const forceProxy = process.env.NEXT_PUBLIC_FORCE_STREAM_PROXY === "1";
+    const shouldUseProxy = forceProxy || (isHttpsPage && isHttpSource);
+    const sourceForPlayback = shouldUseProxy ? (toStreamProxyUrl(source) || source) : source;
 
     const startNativePlayback = () => {
       video.src = sourceForPlayback;
