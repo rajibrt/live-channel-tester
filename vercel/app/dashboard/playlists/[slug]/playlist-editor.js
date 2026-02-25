@@ -12,9 +12,36 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "../../../../components/ui/alert-dialog";
+import { resolveBrowserPlaybackUrl } from "../../../../lib/streamUrl";
 
 const PLACEHOLDER_LOGO =
   "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 64 64'><rect width='64' height='64' rx='10' fill='%23e2e8f0'/><circle cx='32' cy='24' r='9' fill='%2394a3b8'/><rect x='16' y='38' width='32' height='10' rx='5' fill='%2394a3b8'/></svg>";
+
+function isHlsUrl(url) {
+  return /\.m3u8(\?|$)/i.test(String(url || ""));
+}
+
+function loadHlsScript() {
+  if (typeof window === "undefined") return Promise.resolve(null);
+  if (window.Hls) return Promise.resolve(window.Hls);
+
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector('script[data-hls-script="1"]');
+    if (existing) {
+      existing.addEventListener("load", () => resolve(window.Hls || null), { once: true });
+      existing.addEventListener("error", () => reject(new Error("Failed to load HLS script.")), { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js";
+    script.async = true;
+    script.dataset.hlsScript = "1";
+    script.onload = () => resolve(window.Hls || null);
+    script.onerror = () => reject(new Error("Failed to load HLS script."));
+    document.head.appendChild(script);
+  });
+}
 
 function PencilIcon() {
   return (
@@ -238,6 +265,10 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
   const [groupEditValue, setGroupEditValue] = useState("");
   const [channelToolsOpen, setChannelToolsOpen] = useState(false);
   const [preview, setPreview] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState("");
+  const [previewVideoEl, setPreviewVideoEl] = useState(null);
+  const previewHlsRef = useRef(null);
   const [uploadingLogoId, setUploadingLogoId] = useState(null);
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [channelStatusFilter, setChannelStatusFilter] = useState("ALL");
@@ -267,6 +298,111 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
       onConfirm: typeof onConfirm === "function" ? onConfirm : null,
     });
   };
+
+  useEffect(() => {
+    if (!preview) return undefined;
+
+    const video = previewVideoEl;
+    const rawSource = String(preview.url || "").trim();
+    const source = resolveBrowserPlaybackUrl(
+      rawSource,
+      typeof window === "undefined" ? "" : window.location.protocol
+    );
+    if (!video) return undefined;
+
+    if (previewHlsRef.current) {
+      previewHlsRef.current.destroy();
+      previewHlsRef.current = null;
+    }
+    video.pause();
+    video.removeAttribute("src");
+    video.load();
+
+    if (!rawSource) {
+      setPreviewError("Stream URL is empty.");
+      setPreviewLoading(false);
+      return undefined;
+    }
+
+    setPreviewError("");
+    setPreviewLoading(true);
+    let cancelled = false;
+    let nativeFallbackTried = false;
+
+    const onCanPlay = () => {
+      if (cancelled) return;
+      setPreviewLoading(false);
+      setPreviewError("");
+    };
+    const onError = () => {
+      if (cancelled) return;
+      setPreviewLoading(false);
+      setPreviewError("Unable to play this stream URL.");
+    };
+    video.addEventListener("loadedmetadata", onCanPlay);
+    video.addEventListener("canplay", onCanPlay);
+    video.addEventListener("playing", onCanPlay);
+    video.addEventListener("error", onError);
+
+    const startNativePlayback = () => {
+      video.src = source;
+      video.play().catch(() => {});
+    };
+
+    (async () => {
+      try {
+        if (isHlsUrl(source)) {
+          const Hls = await loadHlsScript();
+          if (cancelled) return;
+          if (Hls?.isSupported?.()) {
+            const hls = new Hls({ lowLatencyMode: true, maxBufferLength: 30 });
+            previewHlsRef.current = hls;
+            hls.loadSource(source);
+            hls.attachMedia(video);
+            hls.on(Hls.Events.MANIFEST_PARSED, () => {
+              if (cancelled) return;
+              setPreviewLoading(false);
+              video.play().catch(() => {});
+            });
+            hls.on(Hls.Events.ERROR, (_event, data) => {
+              if (!data?.fatal || cancelled) return;
+              hls.destroy();
+              previewHlsRef.current = null;
+              if (!nativeFallbackTried) {
+                nativeFallbackTried = true;
+                startNativePlayback();
+                return;
+              }
+              setPreviewLoading(false);
+              setPreviewError("Unable to play this stream URL.");
+            });
+            return;
+          }
+        }
+        startNativePlayback();
+      } catch {
+        if (cancelled) return;
+        setPreviewLoading(false);
+        setPreviewError("Unable to load stream preview.");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      video.removeEventListener("loadedmetadata", onCanPlay);
+      video.removeEventListener("canplay", onCanPlay);
+      video.removeEventListener("playing", onCanPlay);
+      video.removeEventListener("error", onError);
+      if (previewHlsRef.current) {
+        previewHlsRef.current.destroy();
+        previewHlsRef.current = null;
+      }
+      video.pause();
+      video.removeAttribute("src");
+      video.load();
+      setPreviewLoading(false);
+    };
+  }, [preview, previewVideoEl]);
 
   const groupsWithCount = useMemo(() => {
     const counts = new Map();
@@ -1164,7 +1300,11 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
                     <button
                       type="button"
                       className={styles.previewCellBtn}
-                      onClick={() => setPreview({ title: c.name || "Stream", url: c.stream_url || "" })}
+                      onClick={() => {
+                        setPreviewError("");
+                        setPreviewLoading(false);
+                        setPreview({ title: c.name || "Stream", url: c.stream_url || "" });
+                      }}
                     >
                       Preview
                     </button>
@@ -1280,12 +1420,22 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
           <div className={styles.modalCard}>
             <div className={styles.modalHeader}>
               <h4>{preview.title || "Channel Preview"}</h4>
-              <button type="button" className={styles.closeBtn} onClick={() => setPreview(null)}>
+              <button
+                type="button"
+                className={styles.closeBtn}
+                onClick={() => {
+                  setPreview(null);
+                  setPreviewError("");
+                  setPreviewLoading(false);
+                }}
+              >
                 Close
               </button>
             </div>
+            {previewLoading ? <p className={styles.pending}>Loading preview...</p> : null}
+            {previewError ? <p className={styles.errorText}>{previewError}</p> : null}
             {preview.url ? (
-              <video controls autoPlay className={styles.video} src={preview.url}>
+              <video ref={setPreviewVideoEl} controls autoPlay playsInline className={styles.video}>
                 Your browser could not play this stream.
               </video>
             ) : (

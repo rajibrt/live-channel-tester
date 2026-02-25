@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { requireClientApi } from "../../../lib/clientApi";
+import { getCurrentAdmin } from "../../../lib/auth";
+import { getCurrentClient } from "../../../lib/clientAuth";
 import { normalizeStreamUrl, toStreamProxyUrl } from "../../../lib/streamUrl";
 
 export const dynamic = "force-dynamic";
@@ -58,8 +59,10 @@ function rewriteManifest(manifestText, finalUrl) {
 }
 
 export async function GET(request) {
-  const auth = await requireClientApi();
-  if (!auth.ok) return auth.response;
+  const [clientSession, adminSession] = await Promise.all([getCurrentClient(), getCurrentAdmin()]);
+  if (!clientSession && !adminSession) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   const urlValue = request.nextUrl.searchParams.get("url") || "";
   const target = normalizeStreamUrl(urlValue);

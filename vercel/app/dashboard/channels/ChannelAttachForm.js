@@ -11,6 +11,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "../../../components/ui/alert-dialog";
+import { resolveBrowserPlaybackUrl } from "../../../lib/streamUrl";
 
 const PLACEHOLDER_LOGO =
   "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 64 64'><rect width='64' height='64' rx='10' fill='%23e2e8f0'/><circle cx='32' cy='24' r='9' fill='%2394a3b8'/><rect x='16' y='38' width='32' height='10' rx='5' fill='%2394a3b8'/></svg>";
@@ -234,7 +235,11 @@ export default function ChannelAttachForm({
     if (!previewOpen) return undefined;
 
     const video = previewVideoEl;
-    const source = String(form.stream_url || "").trim();
+    const rawSource = String(form.stream_url || "").trim();
+    const source = resolveBrowserPlaybackUrl(
+      rawSource,
+      typeof window === "undefined" ? "" : window.location.protocol
+    );
     if (!video) return undefined;
 
     if (previewHlsRef.current) {
@@ -245,7 +250,7 @@ export default function ChannelAttachForm({
     video.removeAttribute("src");
     video.load();
 
-    if (!source) {
+    if (!rawSource) {
       setPreviewError("Stream URL is empty.");
       setPreviewLoading(false);
       return undefined;

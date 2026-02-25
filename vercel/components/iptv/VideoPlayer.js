@@ -3,24 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "./icons";
 import styles from "./iptv.module.css";
-import { normalizeStreamUrl, toStreamProxyUrl } from "../../lib/streamUrl";
+import { resolveBrowserPlaybackUrl } from "../../lib/streamUrl";
 
 function isHlsUrl(url) {
   return /\.m3u8(\?|$)/i.test(String(url || ""));
-}
-
-function isPrivateNetworkUrl(url) {
-  try {
-    const host = new URL(String(url || "")).hostname;
-    if (!host) return false;
-    if (host === "localhost" || host === "127.0.0.1") return true;
-    if (/^10\.\d+\.\d+\.\d+$/.test(host)) return true;
-    if (/^192\.168\.\d+\.\d+$/.test(host)) return true;
-    if (/^172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+$/.test(host)) return true;
-    return false;
-  } catch {
-    return false;
-  }
 }
 
 function loadHlsScript() {
@@ -231,13 +217,12 @@ export default function VideoPlayer({
     video.addEventListener("stalled", markLoading);
     video.addEventListener("error", onError);
 
-    const source = normalizeStreamUrl(channel.streamUrl);
-    const isHttpsPage = typeof window !== "undefined" && window.location?.protocol === "https:";
-    const isHttpSource = /^http:\/\//i.test(String(source || ""));
-    const isPrivateSource = isPrivateNetworkUrl(source);
+    const source = resolveBrowserPlaybackUrl(
+      channel.streamUrl,
+      typeof window !== "undefined" ? window.location?.protocol : ""
+    );
     const forceProxy = process.env.NEXT_PUBLIC_FORCE_STREAM_PROXY === "1";
-    const shouldUseProxy = forceProxy || (isHttpsPage && isHttpSource && !isPrivateSource);
-    const sourceForPlayback = shouldUseProxy ? (toStreamProxyUrl(source) || source) : source;
+    const sourceForPlayback = forceProxy ? resolveBrowserPlaybackUrl(source, "https:") : source;
 
     const startNativePlayback = () => {
       video.src = sourceForPlayback;
