@@ -174,7 +174,8 @@ export async function getHomeIptvData() {
     channel.categoryId = categoryMap.get(key)?.id || "";
   }
 
-  const categories = Array.from(categoryMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+  // Keep playlist traversal order so dashboard group sorting is reflected on homepage.
+  const categories = Array.from(categoryMap.values());
   return {
     channels,
     categories,

@@ -23,8 +23,8 @@
   z-index: 50;
   height: 64px;
   border-bottom: 1px solid var(--border);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -308,8 +308,8 @@
   color: var(--foreground);
   background: color-mix(in oklab, var(--card) 88%, transparent);
   border: 1px solid var(--border);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .debugBadge strong {
@@ -343,8 +343,8 @@
 .leftSidebar {
   height: calc(100vh - 64px);
   border-right: 1px solid var(--border);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .rightPanel {
@@ -1172,7 +1172,7 @@
 }
 
 .channelCardActive .liveDot {
-  animation: pulse 1.6s infinite;
+  animation: none;
 }
 
 .playOverlay {
