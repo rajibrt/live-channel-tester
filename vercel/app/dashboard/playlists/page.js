@@ -120,6 +120,7 @@ export default async function PlaylistsPage({ searchParams }) {
           <h2>{selectedData.playlist.name}</h2>
           <p className={styles.hint}>Slug: {selectedData.playlist.slug}</p>
           <PlaylistEditor
+            key={selectedData.playlist.slug}
             playlistSlug={selectedData.playlist.slug}
             playlistName={selectedData.playlist.name}
             playlistUrl={playlistUrl}

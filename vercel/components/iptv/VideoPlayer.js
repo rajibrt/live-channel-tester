@@ -716,7 +716,13 @@ export default function VideoPlayer({
           lastShellTapTsRef.current = Date.now();
           togglePanelsByShellTap();
         }}
-        onClick={() => {
+        onDoubleClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          togglePlayerFullscreen();
+        }}
+        onClick={(event) => {
+          if (event.detail > 1) return;
           if (Date.now() - lastShellTapTsRef.current < 350) return;
           togglePanelsByShellTap();
         }}

@@ -85,6 +85,7 @@ export default async function PlaylistEditorPage({ params }) {
         <p className={styles.hint}>Slug: {slug}</p>
       </section>
       <PlaylistEditor
+        key={data.playlist.slug}
         playlistSlug={data.playlist.slug}
         playlistName={data.playlist.name}
         playlistUrl={playlistUrl}
