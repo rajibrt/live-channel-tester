@@ -205,6 +205,20 @@ alter table public.channels add column if not exists include_on_home boolean not
 1. Create project and run schema:
 - `vercel/supabase/schema.sql`
 
+### Fix Security Advisor RLS Alerts (existing/older DB)
+
+If Supabase Security Advisor reports `RLS Disabled in Public` for tables like
+`playlists`, `channels`, `playlist_channels`, `playlist_tokens`, `admin_users`,
+`client_users`, `client_state`, `client_recent_history`, `client_favorites`,
+`client_activity_events`:
+
+1. Open Supabase SQL Editor.
+2. Run:
+   - `vercel/supabase/security_advisor_rls_fix.sql`
+3. In Security Advisor, click **Refresh** (or rerun linter).
+
+This patch is idempotent (safe to run multiple times).
+
 2. Ensure storage bucket exists:
 - `playlists` (public)
 

@@ -1,3 +1,4 @@
+import Image from "next/image";
 import styles from "../login/page.module.css";
 import { getCurrentClient } from "../../lib/clientAuth";
 import { redirect } from "next/navigation";
@@ -14,6 +15,17 @@ export default async function ClientLoginPage({ searchParams }) {
     <main className={styles.page}>
       <section className={styles.visualPane}>
         <div className={styles.visualGlow} />
+        <div className={styles.visualBrand}>
+          <Image
+            src="/logo.png"
+            alt="WEBTV BD logo"
+            width={416}
+            height={130}
+            className={styles.visualBrandLogoFull}
+            priority
+          />
+          <p className={styles.visualBrandSlogan}>TV Beyond Borders</p>
+        </div>
         <div className={styles.visualCopy}>
           <p className={styles.visualTag}>Client Access</p>
           <h1 className={styles.visualTitle}>StreamTV Viewer Portal</h1>

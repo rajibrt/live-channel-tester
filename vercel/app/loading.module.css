@@ -1,0 +1,181 @@
+.loadingRoot {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: clamp(12px, 2.6vw, 24px);
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--background) 97%, var(--card)) 0%,
+    color-mix(in oklab, var(--background) 92%, var(--card)) 100%
+  );
+}
+
+.loadingFrame {
+  width: min(1560px, 100%);
+  height: min(820px, calc(100vh - 2 * clamp(12px, 2.6vw, 24px)));
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  overflow: hidden;
+  background: color-mix(in oklab, var(--card) 80%, transparent);
+  box-shadow: var(--shadow-xl);
+  display: flex;
+  flex-direction: column;
+}
+
+.topBar {
+  height: 64px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 14px;
+}
+
+.brandRow,
+.topActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.contentArea {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 280px 1fr 300px;
+  min-height: 0;
+}
+
+.leftCol,
+.rightCol {
+  padding: 14px;
+  min-height: 0;
+}
+
+.leftCol {
+  border-right: 1px solid var(--border);
+}
+
+.rightCol {
+  border-left: 1px solid var(--border);
+}
+
+.centerCol {
+  padding: 14px;
+  display: grid;
+  grid-template-rows: minmax(220px, 1fr) auto auto;
+  gap: 12px;
+  min-height: 0;
+}
+
+.listStack {
+  margin-top: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: color-mix(in oklab, var(--card) 70%, var(--background));
+  border: 1px solid color-mix(in oklab, var(--border) 82%, transparent);
+  border-radius: 12px;
+}
+
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in oklab, var(--foreground) 10%, transparent) 50%,
+    transparent 100%
+  );
+  animation: shimmer 1.2s ease-in-out infinite;
+}
+
+.brandLogo {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+}
+
+.brandText {
+  width: 160px;
+  height: 22px;
+  border-radius: 10px;
+}
+
+.actionPill {
+  width: min(320px, 30vw);
+  height: 34px;
+  border-radius: 10px;
+}
+
+.actionIcon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+}
+
+.searchBar {
+  height: 42px;
+}
+
+.listRow {
+  height: 46px;
+}
+
+.videoShell {
+  border-radius: 20px;
+}
+
+.controlBar {
+  height: 66px;
+  border-radius: 16px;
+}
+
+.infoCard {
+  height: 108px;
+  border-radius: 18px;
+}
+
+.rightTitle {
+  width: 170px;
+  height: 30px;
+}
+
+.channelCard {
+  height: 82px;
+  border-radius: 16px;
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@media (max-width: 1279px) {
+  .contentArea {
+    grid-template-columns: 240px 1fr 270px;
+  }
+}
+
+@media (max-width: 1023px) {
+  .loadingFrame {
+    height: auto;
+    min-height: calc(100vh - 2 * clamp(12px, 2.6vw, 24px));
+  }
+
+  .contentArea {
+    grid-template-columns: 1fr;
+  }
+
+  .leftCol,
+  .rightCol {
+    display: none;
+  }
+}

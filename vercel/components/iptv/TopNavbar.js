@@ -90,8 +90,10 @@ export default function TopNavbar({
           <Icon name="Menu" size={18} />
         </Button>
         <div className={styles.brandWrap}>
-          <div className={styles.brandLogo}>IP</div>
-          <h1 className={styles.brandText}>StreamTV</h1>
+          <div className={styles.brandLogo}>
+            <img src="/favicon-32x32.png" alt="WEBTV BD" className={styles.brandLogoImg} />
+          </div>
+          <h1 className={styles.brandText}>WEBTV BD</h1>
         </div>
       </div>
 

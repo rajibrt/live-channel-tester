@@ -1,19 +1,33 @@
 .page {
-  margin: -24px;
-  min-height: 100vh;
+  margin: 0;
+  min-height: 100dvh;
+  width: 100%;
   display: grid;
   grid-template-columns: minmax(320px, 1.02fr) minmax(420px, 1fr);
   background: #f6f7fb;
   color: #0f172a;
+  overflow: hidden;
 }
 
 .visualPane {
   position: relative;
   overflow: hidden;
   background:
-    radial-gradient(circle at 24% 74%, rgba(246, 171, 72, 0.44), transparent 36%),
-    radial-gradient(circle at 70% 26%, rgba(64, 134, 255, 0.24), transparent 38%),
-    radial-gradient(circle at 84% 78%, rgba(247, 150, 45, 0.3), transparent 28%),
+    radial-gradient(
+      circle at 24% 74%,
+      rgba(246, 171, 72, 0.44),
+      transparent 36%
+    ),
+    radial-gradient(
+      circle at 70% 26%,
+      rgba(64, 134, 255, 0.24),
+      transparent 38%
+    ),
+    radial-gradient(
+      circle at 84% 78%,
+      rgba(247, 150, 45, 0.3),
+      transparent 28%
+    ),
     linear-gradient(145deg, #050607 4%, #0d0f15 58%, #14171d 100%);
 }
 
@@ -21,9 +35,55 @@
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(circle at 45% 18%, rgba(255, 215, 121, 0.2), transparent 28%),
+    radial-gradient(
+      circle at 45% 18%,
+      rgba(255, 215, 121, 0.2),
+      transparent 28%
+    ),
     radial-gradient(circle at 38% 62%, rgba(14, 71, 157, 0.4), transparent 36%),
     linear-gradient(to top, rgba(2, 4, 8, 0.7), rgba(2, 4, 8, 0.1));
+}
+
+.visualBrand {
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  right: auto;
+  top: 32%;
+  bottom: auto;
+  transform: translate(-50%, -50%);
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  width: fit-content;
+  max-width: min(340px, calc(100% - 40px));
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  animation: brandFadeIn 0.55s ease-out both;
+}
+
+.visualBrandLogoFull {
+  width: clamp(150px, 20vw, 250px);
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 12px 28px rgba(0, 0, 0, 0.42));
+  animation:
+    logoPulse 3s ease-in-out infinite,
+    logoFloat 4.6s ease-in-out infinite;
+}
+
+.visualBrandSlogan {
+  margin: 0;
+  color: rgba(241, 245, 249, 0.85);
+  font-size: 11px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  padding-left: 0;
+  width: 100%;
+  text-align: center;
 }
 
 .visualCopy {
@@ -122,7 +182,9 @@
   color: #0f172a;
   background: #ffffff;
   outline: none;
-  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+  transition:
+    border-color 0.16s ease,
+    box-shadow 0.16s ease;
 }
 
 .passwordInputWrap {
@@ -200,7 +262,9 @@
   font-size: 16px;
   font-weight: 600;
   cursor: pointer;
-  transition: transform 0.16s ease, box-shadow 0.16s ease;
+  transition:
+    transform 0.16s ease,
+    box-shadow 0.16s ease;
 }
 
 .submit:hover {
@@ -218,7 +282,7 @@
 
 .divider::before,
 .divider::after {
-  content: "";
+  content: '';
   position: absolute;
   top: 50%;
   width: 34%;
@@ -277,33 +341,189 @@
 @media (max-width: 1020px) {
   .page {
     grid-template-columns: 1fr;
+    min-height: 100dvh;
+    background: #f3f5fa;
   }
 
   .visualPane {
-    min-height: 300px;
+    min-height: clamp(240px, 40vh, 340px);
+  }
+
+  .visualBrand {
+    top: 38%;
+    bottom: auto;
+    transform: translate(-50%, -50%);
+  }
+
+  .visualCopy {
+    left: 20px;
+    right: 20px;
+    bottom: 18px;
+    max-width: none;
+  }
+
+  .visualTitle {
+    font-size: clamp(30px, 7.5vw, 44px);
+  }
+
+  .visualText {
+    font-size: clamp(14px, 2.4vw, 18px);
   }
 
   .formPane {
-    padding-top: 18px;
-    padding-bottom: 36px;
+    padding: 18px 16px 28px;
   }
 }
 
 @media (max-width: 640px) {
   .page {
-    margin: -24px -24px -24px;
+    background: #f3f5fa;
   }
 
   .visualPane {
-    min-height: 260px;
+    min-height: 214px;
+  }
+
+  .visualBrand {
+    left: 50%;
+    right: auto;
+    top: 30%;
+    bottom: auto;
+    transform: translate(-50%, -50%);
+    padding: 4px 8px 4px;
+    max-width: min(270px, calc(100% - 20px));
+    justify-items: center;
+  }
+
+  .visualBrandLogoFull {
+    width: min(150px, 55vw);
+  }
+
+  .visualBrandSlogan {
+    font-size: 8px;
+    letter-spacing: 0.1em;
+  }
+
+  .visualCopy {
+    left: 16px;
+    right: 16px;
+    bottom: 10px;
+  }
+
+  .visualTag {
+    margin-bottom: 6px;
+    font-size: 11px;
+    padding: 4px 9px;
+  }
+
+  .visualTitle {
+    margin-bottom: 6px;
+    font-size: clamp(18px, 7vw, 26px);
+    line-height: 1.05;
+  }
+
+  .visualText {
+    display: block;
+    font-size: 11px;
+    line-height: 1.35;
+    margin-top: 2px;
   }
 
   .formPane {
-    padding: 14px;
+    padding: 10px;
   }
 
   .formShell {
-    border-radius: 20px;
+    width: 100%;
+    border-radius: 14px;
+    padding: 14px 12px;
+    box-shadow: 0 14px 30px rgba(16, 24, 40, 0.08);
+  }
+
+  .formTitle {
+    font-size: clamp(18px, 8vw, 26px);
+    line-height: 1.1;
+  }
+
+  .formTag {
+    margin: 0 0 4px;
+    font-size: 11px;
+  }
+
+  .formText {
+    margin: 6px 0 12px;
+    font-size: 11px;
+    line-height: 1.35;
+  }
+
+  .form {
+    gap: 10px;
+  }
+
+  .field {
+    gap: 6px;
+    font-size: 12px;
+  }
+
+  .field input {
+    border-radius: 10px;
+    padding: 9px 11px;
+  }
+
+  .submit {
+    border-radius: 10px;
+    padding: 10px 11px;
+    font-size: 15px;
+  }
+}
+
+@media (max-width: 420px) {
+  .visualPane {
+    min-height: 198px;
+  }
+
+  .visualBrandLogoFull {
+    width: min(132px, 50vw);
+  }
+
+  .visualBrand {
+    top: 35%;
+  }
+
+  .visualCopy {
+    left: 14px;
+    right: 14px;
+    bottom: 6px;
+  }
+
+  .visualTag {
+    margin-bottom: 5px;
+    font-size: 10px;
+  }
+
+  .visualTitle {
+    font-size: clamp(17px, 6.8vw, 22px);
+  }
+
+  .visualText {
+    font-size: 10px;
+    line-height: 1.32;
+  }
+
+  .formPane {
+    padding: 6px;
+  }
+
+  .formShell {
+    padding: 12px 10px;
+  }
+
+  .field input {
+    padding: 8px 10px;
+  }
+
+  .submit {
+    padding: 9px 10px;
   }
 }
 
@@ -315,5 +535,43 @@
   to {
     transform: translateY(0);
     opacity: 1;
+  }
+}
+
+@keyframes logoFloat {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes logoPulse {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 0 rgba(255, 46, 81, 0));
+  }
+  50% {
+    filter: drop-shadow(0 0 16px rgba(255, 46, 81, 0.44));
+  }
+}
+
+@keyframes brandFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .visualBrandLogoFull,
+  .visualBrand,
+  .visualCopy,
+  .formShell {
+    animation: none !important;
   }
 }
