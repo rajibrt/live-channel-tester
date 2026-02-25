@@ -248,6 +248,13 @@ export default function VideoPlayer({
 
     (async () => {
       try {
+        // Some private-network .m3u8 sources work with native video tag faster/more reliably.
+        // Prefer native path first to match dashboard quick-preview behavior.
+        if (isPrivateSource && isHlsUrl(sourceForPlayback)) {
+          startNativePlayback();
+          return;
+        }
+
         if (isHlsUrl(sourceForPlayback)) {
           const Hls = await loadHlsScript();
           if (cancelled) return;
