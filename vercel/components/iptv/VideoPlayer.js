@@ -9,6 +9,20 @@ function isHlsUrl(url) {
   return /\.m3u8(\?|$)/i.test(String(url || ""));
 }
 
+function isPrivateNetworkUrl(url) {
+  try {
+    const host = new URL(String(url || "")).hostname;
+    if (!host) return false;
+    if (host === "localhost" || host === "127.0.0.1") return true;
+    if (/^10\.\d+\.\d+\.\d+$/.test(host)) return true;
+    if (/^192\.168\.\d+\.\d+$/.test(host)) return true;
+    if (/^172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+$/.test(host)) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 function loadHlsScript() {
   if (typeof window === "undefined") return Promise.resolve(null);
   if (window.Hls) return Promise.resolve(window.Hls);
@@ -220,8 +234,9 @@ export default function VideoPlayer({
     const source = normalizeStreamUrl(channel.streamUrl);
     const isHttpsPage = typeof window !== "undefined" && window.location?.protocol === "https:";
     const isHttpSource = /^http:\/\//i.test(String(source || ""));
+    const isPrivateSource = isPrivateNetworkUrl(source);
     const forceProxy = process.env.NEXT_PUBLIC_FORCE_STREAM_PROXY === "1";
-    const shouldUseProxy = forceProxy || (isHttpsPage && isHttpSource);
+    const shouldUseProxy = forceProxy || (isHttpsPage && isHttpSource && !isPrivateSource);
     const sourceForPlayback = shouldUseProxy ? (toStreamProxyUrl(source) || source) : source;
 
     const startNativePlayback = () => {
