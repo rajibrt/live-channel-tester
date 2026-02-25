@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "../../../../lib/supabaseAdmin";
 import { requireAdminApi } from "../../../../lib/adminApi";
+import { normalizeStreamUrl } from "../../../../lib/streamUrl";
 
 function isUnknownColumn(error) {
   const msg = String(error?.message || "").toLowerCase();
@@ -15,7 +16,7 @@ function isMissingPlaylistSlug(error) {
 function parseBody(payload) {
   return {
     playlistSlug: String(payload?.playlist_slug || "").trim().toLowerCase(),
-    streamUrl: String(payload?.stream_url || "").trim(),
+    streamUrl: normalizeStreamUrl(payload?.stream_url),
     name: String(payload?.name || "").trim(),
     category: String(payload?.category || "").trim(),
     logoUrl: String(payload?.logo_url || "").trim(),

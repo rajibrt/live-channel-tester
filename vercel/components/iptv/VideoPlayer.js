@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "./icons";
 import styles from "./iptv.module.css";
+import { normalizeStreamUrl } from "../../lib/streamUrl";
 
 function isHlsUrl(url) {
   return /\.m3u8(\?|$)/i.test(String(url || ""));
@@ -216,7 +217,7 @@ export default function VideoPlayer({
     video.addEventListener("stalled", markLoading);
     video.addEventListener("error", onError);
 
-    const source = channel.streamUrl;
+    const source = normalizeStreamUrl(channel.streamUrl);
     const isHttpOnHttpsPage =
       typeof window !== "undefined" &&
       window.location?.protocol === "https:" &&

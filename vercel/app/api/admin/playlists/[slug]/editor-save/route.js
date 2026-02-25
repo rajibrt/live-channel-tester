@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "../../../../../../lib/adminApi";
 import { getSupabaseAdmin } from "../../../../../../lib/supabaseAdmin";
+import { normalizeStreamUrl } from "../../../../../../lib/streamUrl";
 
 function chunk(arr, size) {
   const out = [];
@@ -27,7 +28,7 @@ function toChannelUpdatePayload(channel, now, includeOnHome) {
     name: String(channel.name || "Stream").trim() || "Stream",
     category: String(channel.category || "").trim(),
     logo_url: String(channel.logo_url || "").trim(),
-    stream_url: String(channel.stream_url || "").trim(),
+    stream_url: normalizeStreamUrl(channel.stream_url),
     updated_at: now,
   };
   if (includeOnHome) payload.include_on_home = channel.include_on_home !== false;

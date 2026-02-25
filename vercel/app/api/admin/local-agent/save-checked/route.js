@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "../../../../../lib/adminApi";
 import { getSupabaseAdmin } from "../../../../../lib/supabaseAdmin";
+import { normalizeStreamUrl } from "../../../../../lib/streamUrl";
 
 function chunk(arr, size) {
   const out = [];
@@ -9,7 +10,7 @@ function chunk(arr, size) {
 }
 
 function normalizeItem(item) {
-  const url = String(item?.url || item?.stream_url || "").trim();
+  const url = normalizeStreamUrl(item?.url || item?.stream_url || "");
   const name = String(item?.title || item?.name || "Stream").trim() || "Stream";
   const category = String(item?.category || "").trim();
   const logoUrl = String(item?.logo_url || "").trim();

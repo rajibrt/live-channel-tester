@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from "../../lib/supabaseAdmin";
+import { normalizeStreamUrl } from "../../lib/streamUrl";
 
 function norm(value) {
   return String(value || "").trim();
@@ -14,7 +15,7 @@ function normalizeCategory(value) {
 }
 
 function normalizeUrl(value) {
-  return norm(value);
+  return normalizeStreamUrl(value);
 }
 
 function hashGradient(seed) {
