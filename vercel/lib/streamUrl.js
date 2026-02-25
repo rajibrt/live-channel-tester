@@ -20,3 +20,9 @@ export function normalizeStreamUrl(value) {
     return raw.replace(/\?(https?:\/\/|www\.).*$/i, "").replace(/[?&]+$/g, "");
   }
 }
+
+export function toStreamProxyUrl(value) {
+  const normalized = normalizeStreamUrl(value);
+  if (!normalized) return "";
+  return `/api/stream-proxy?url=${encodeURIComponent(normalized)}`;
+}

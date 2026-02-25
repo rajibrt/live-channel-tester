@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "./icons";
 import styles from "./iptv.module.css";
-import { normalizeStreamUrl } from "../../lib/streamUrl";
+import { normalizeStreamUrl, toStreamProxyUrl } from "../../lib/streamUrl";
 
 function isHlsUrl(url) {
   return /\.m3u8(\?|$)/i.test(String(url || ""));
@@ -218,18 +218,10 @@ export default function VideoPlayer({
     video.addEventListener("error", onError);
 
     const source = normalizeStreamUrl(channel.streamUrl);
-    const isHttpOnHttpsPage =
-      typeof window !== "undefined" &&
-      window.location?.protocol === "https:" &&
-      /^http:\/\//i.test(String(source || ""));
-    if (isHttpOnHttpsPage) {
-      setStatus("error");
-      setErrorMessage("HTTP stream blocked on HTTPS site, use HTTPS/proxy URL");
-      return undefined;
-    }
+    const sourceForPlayback = toStreamProxyUrl(source) || source;
 
     const startNativePlayback = () => {
-      video.src = source;
+      video.src = sourceForPlayback;
       video.play().catch(() => {
         // autoplay can be blocked
       });
@@ -237,14 +229,14 @@ export default function VideoPlayer({
 
     (async () => {
       try {
-        if (isHlsUrl(source)) {
+        if (isHlsUrl(sourceForPlayback)) {
           const Hls = await loadHlsScript();
           if (cancelled) return;
 
           if (Hls?.isSupported?.()) {
             const hls = new Hls({ lowLatencyMode: true, maxBufferLength: 30 });
             hlsRef.current = hls;
-            hls.loadSource(source);
+            hls.loadSource(sourceForPlayback);
             hls.attachMedia(video);
             hls.on(Hls.Events.MANIFEST_PARSED, () => {
               if (!cancelled) setStatus("playing");
