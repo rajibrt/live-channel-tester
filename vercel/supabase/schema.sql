@@ -118,6 +118,52 @@ create table if not exists public.client_activity_events (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.admin_announcements (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  content_html text not null,
+  is_published boolean not null default false,
+  is_pinned boolean not null default false,
+  position integer not null default 0,
+  show_title_in_ticker boolean not null default false,
+  ticker_speed_seconds integer not null default 34,
+  published_at timestamptz null,
+  created_by_admin uuid null references auth.users(id) on delete set null,
+  updated_by_admin uuid null references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.admin_announcements
+add column if not exists ticker_speed_seconds integer not null default 34;
+
+alter table public.admin_announcements
+add column if not exists show_title_in_ticker boolean not null default false;
+
+alter table public.admin_announcements
+add column if not exists position integer not null default 0;
+
+with ordered as (
+  select id, row_number() over (order by created_at asc, id asc) as rn
+  from public.admin_announcements
+)
+update public.admin_announcements a
+set position = ordered.rn
+from ordered
+where a.id = ordered.id
+  and coalesce(a.position, 0) <= 0;
+
+create table if not exists public.admin_settings (
+  key text primary key,
+  value_json jsonb not null default '{}'::jsonb,
+  updated_by_admin uuid null references auth.users(id) on delete set null,
+  updated_at timestamptz not null default now()
+);
+
+insert into public.admin_settings (key, value_json)
+values ('announcement_ticker', '{"speed_seconds":34,"icon_text":"•"}'::jsonb)
+on conflict (key) do nothing;
+
 create index if not exists channels_category_name_idx on public.channels(category, name);
 create index if not exists playlist_channels_slug_idx on public.playlist_channels(playlist_slug);
 create index if not exists playlist_tokens_slug_idx on public.playlist_tokens(playlist_slug);
@@ -128,6 +174,9 @@ on public.client_users(mobile_login_key)
 where mobile_login_key is not null;
 create index if not exists client_recent_history_user_time_idx on public.client_recent_history(user_id, watched_at desc);
 create index if not exists client_activity_events_user_time_idx on public.client_activity_events(user_id, created_at desc);
+create index if not exists admin_announcements_created_idx on public.admin_announcements(created_at desc);
+create index if not exists admin_announcements_published_idx on public.admin_announcements(is_published, created_at desc);
+create index if not exists admin_announcements_pinned_idx on public.admin_announcements(is_pinned, created_at desc);
 
 alter table public.playlists enable row level security;
 alter table public.channels enable row level security;
@@ -141,6 +190,8 @@ alter table public.client_state enable row level security;
 alter table public.client_recent_history enable row level security;
 alter table public.client_favorites enable row level security;
 alter table public.client_activity_events enable row level security;
+alter table public.admin_announcements enable row level security;
+alter table public.admin_settings enable row level security;
 
 drop policy if exists deny_all_playlists on public.playlists;
 create policy deny_all_playlists on public.playlists for all using (false) with check (false);
@@ -166,3 +217,7 @@ drop policy if exists deny_all_client_favorites on public.client_favorites;
 create policy deny_all_client_favorites on public.client_favorites for all using (false) with check (false);
 drop policy if exists deny_all_client_activity_events on public.client_activity_events;
 create policy deny_all_client_activity_events on public.client_activity_events for all using (false) with check (false);
+drop policy if exists deny_all_admin_announcements on public.admin_announcements;
+create policy deny_all_admin_announcements on public.admin_announcements for all using (false) with check (false);
+drop policy if exists deny_all_admin_settings on public.admin_settings;
+create policy deny_all_admin_settings on public.admin_settings for all using (false) with check (false);

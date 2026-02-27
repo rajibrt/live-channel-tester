@@ -17,6 +17,7 @@ export async function GET(_request, { params }) {
     .eq("user_id", userId)
     .neq("source", "sync")
     .order("watched_at", { ascending: false })
+    .order("id", { ascending: false })
     .limit(50);
 
   if (error) {

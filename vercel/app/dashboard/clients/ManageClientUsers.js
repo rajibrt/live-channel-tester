@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Eye, EyeOff, History, Pencil, Plus } from "lucide-react";
 import styles from "../page.module.css";
 import {
@@ -13,6 +13,9 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "../../../components/ui/alert-dialog";
+import { Button } from "../../../components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../../components/ui/table";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../../../components/ui/tooltip";
 
 const EMPTY_FORM = {
   email: "",
@@ -31,10 +34,60 @@ const EMPTY_EDIT_FORM = {
   confirm_password: "",
 };
 
+function TruncatedTooltipCell({ text = "-", className = "", asButton = false, onClick }) {
+  const value = String(text || "-");
+  const textRef = useRef(null);
+  const [overflowed, setOverflowed] = useState(false);
+
+  useEffect(() => {
+    const el = textRef.current;
+    if (!el) return undefined;
+    const checkOverflow = () => {
+      setOverflowed(el.scrollWidth > el.clientWidth || el.scrollHeight > el.clientHeight);
+    };
+    checkOverflow();
+    let ro = null;
+    if (typeof ResizeObserver !== "undefined") {
+      ro = new ResizeObserver(checkOverflow);
+      ro.observe(el);
+    } else {
+      window.addEventListener("resize", checkOverflow);
+    }
+    return () => {
+      if (ro) ro.disconnect();
+      else window.removeEventListener("resize", checkOverflow);
+    };
+  }, [value]);
+
+  const baseNode = asButton ? (
+    <button type="button" ref={textRef} className={`${className} ${styles.cellEllipsis} ${styles.rowLinkBtn}`} onClick={onClick}>
+      {value}
+    </button>
+  ) : (
+    <span ref={textRef} className={`${className} ${styles.cellEllipsis}`} tabIndex={0}>
+      {value}
+    </span>
+  );
+
+  if (!overflowed) return baseNode;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        {baseNode}
+      </TooltipTrigger>
+      <TooltipContent>{value}</TooltipContent>
+    </Tooltip>
+  );
+}
+
 export default function ManageClientUsers({ initialItems = [] }) {
   const [items, setItems] = useState(Array.isArray(initialItems) ? initialItems : []);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [activityFilter, setActivityFilter] = useState("all");
+  const [watchTierFilter, setWatchTierFilter] = useState("all");
+  const [sortMode, setSortMode] = useState("created_desc");
   const [form, setForm] = useState(EMPTY_FORM);
   const [editForm, setEditForm] = useState(EMPTY_EDIT_FORM);
   const [showPassword, setShowPassword] = useState(false);
@@ -50,28 +103,79 @@ export default function ManageClientUsers({ initialItems = [] }) {
   const [historyError, setHistoryError] = useState("");
   const [historyRows, setHistoryRows] = useState([]);
   const [historyUserLabel, setHistoryUserLabel] = useState("");
+  const [viewOpen, setViewOpen] = useState(false);
+  const [viewUser, setViewUser] = useState(null);
+
+  function cycleStatusFilter() {
+    setStatusFilter((prev) => (prev === "all" ? "active" : prev === "active" ? "inactive" : "all"));
+  }
+
+  function toggleHeaderSort(modeA, modeB) {
+    setSortMode((prev) => (prev === modeA ? modeB : modeA));
+  }
+
+  function sortMarker(modeA, modeB) {
+    if (sortMode === modeA) return "↑";
+    if (sortMode === modeB) return "↓";
+    return "";
+  }
 
   const activeCount = useMemo(() => items.filter((x) => x.is_active).length, [items]);
+  const noActivityCount = useMemo(() => items.filter((x) => Number(x.watch_count || 0) <= 0).length, [items]);
   const filteredItems = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
-    return items.filter((row) => {
+    const base = items.filter((row) => {
       const statusMatch =
         statusFilter === "all" ||
         (statusFilter === "active" && row.is_active) ||
         (statusFilter === "inactive" && !row.is_active);
       if (!statusMatch) return false;
 
+      const watchCount = Number(row.watch_count || 0);
+      const totalWatch = Number(row.total_watch_seconds || 0);
+      const hasActivity = watchCount > 0 || totalWatch > 0;
+
+      if (activityFilter === "no_activity" && hasActivity) return false;
+      if (activityFilter === "has_activity" && !hasActivity) return false;
+
+      if (watchTierFilter === "heavy" && totalWatch < 1800) return false;
+      if (watchTierFilter === "medium" && (totalWatch < 300 || totalWatch >= 1800)) return false;
+      if (watchTierFilter === "light" && (totalWatch <= 0 || totalWatch >= 300)) return false;
+      if (watchTierFilter === "zero" && totalWatch > 0) return false;
+
       if (!q) return true;
       const haystack = [
         String(row.email || ""),
         String(row.mobile_number || ""),
         String(row.full_name || ""),
+        String(row.user_id || ""),
       ]
         .join(" ")
         .toLowerCase();
       return haystack.includes(q);
     });
-  }, [items, searchTerm, statusFilter]);
+
+    const sorted = base.slice();
+    const timeValue = (value) => {
+      const t = value ? new Date(value).getTime() : 0;
+      return Number.isFinite(t) ? t : 0;
+    };
+    sorted.sort((a, b) => {
+      if (sortMode === "name_asc") return String(a.full_name || "").localeCompare(String(b.full_name || ""));
+      if (sortMode === "name_desc") return String(b.full_name || "").localeCompare(String(a.full_name || ""));
+      if (sortMode === "mobile_asc") return String(a.mobile_number || "").localeCompare(String(b.mobile_number || ""));
+      if (sortMode === "mobile_desc") return String(b.mobile_number || "").localeCompare(String(a.mobile_number || ""));
+      if (sortMode === "most_watched") return Number(b.total_watch_seconds || 0) - Number(a.total_watch_seconds || 0);
+      if (sortMode === "least_watched") return Number(a.total_watch_seconds || 0) - Number(b.total_watch_seconds || 0);
+      if (sortMode === "most_views") return Number(b.watch_count || 0) - Number(a.watch_count || 0);
+      if (sortMode === "least_views") return Number(a.watch_count || 0) - Number(b.watch_count || 0);
+      if (sortMode === "recent_activity") return timeValue(b.last_watched_at) - timeValue(a.last_watched_at);
+      if (sortMode === "long_inactive") return timeValue(a.last_watched_at) - timeValue(b.last_watched_at);
+      if (sortMode === "created_asc") return timeValue(a.created_at) - timeValue(b.created_at);
+      return timeValue(b.created_at) - timeValue(a.created_at);
+    });
+    return sorted;
+  }, [items, searchTerm, statusFilter, activityFilter, watchTierFilter, sortMode]);
 
   function openEdit(row) {
     setError("");
@@ -87,6 +191,11 @@ export default function ManageClientUsers({ initialItems = [] }) {
     });
     setShowEditPassword(false);
     setEditOpen(true);
+  }
+
+  function openView(row) {
+    setViewUser(row);
+    setViewOpen(true);
   }
 
   async function openHistory(row) {
@@ -122,7 +231,16 @@ export default function ManageClientUsers({ initialItems = [] }) {
       });
       const payload = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(payload?.error || "Failed to create user.");
-      setItems((prev) => [payload.item, ...prev]);
+      const created = payload?.item || {};
+      setItems((prev) => [
+        {
+          ...created,
+          watch_count: Number(created.watch_count || 0),
+          total_watch_seconds: Number(created.total_watch_seconds || 0),
+          last_watched_at: String(created.last_watched_at || ""),
+        },
+        ...prev,
+      ]);
       setForm(EMPTY_FORM);
       setShowPassword(false);
       setMessage("Client user created.");
@@ -230,15 +348,19 @@ export default function ManageClientUsers({ initialItems = [] }) {
           <p>Active Clients</p>
           <strong>{activeCount}</strong>
         </article>
+        <article className={styles.statCard}>
+          <p>No Activity</p>
+          <strong>{noActivityCount}</strong>
+        </article>
       </div>
 
       <div className={styles.controlRowEnd}>
         <AlertDialog open={createOpen} onOpenChange={setCreateOpen}>
           <AlertDialogTrigger asChild>
-            <button type="button" className={styles.primaryBtnCompact}>
+            <Button type="button" className={styles.primaryBtnCompact}>
               <Plus size={16} />
               <span>New Client</span>
-            </button>
+            </Button>
           </AlertDialogTrigger>
           <AlertDialogContent>
             <AlertDialogHeader>
@@ -290,25 +412,25 @@ export default function ManageClientUsers({ initialItems = [] }) {
                     minLength={8}
                     required
                   />
-                  <button
+                  <Button
                     type="button"
                     className={styles.passwordToggle}
                     onClick={() => setShowPassword((prev) => !prev)}
                     aria-label={showPassword ? "Hide password" : "Show password"}
                   >
                     {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                  </button>
+                  </Button>
                 </div>
                 <small className={styles.fieldHint}>Minimum 8 characters. Password can be updated later from edit modal.</small>
               </label>
               {error ? <p className={styles.errorText}>{error}</p> : null}
               <AlertDialogFooter>
                 <AlertDialogCancel asChild>
-                  <button type="button" className={styles.secondaryBtn}>Cancel</button>
+                  <Button type="button" variant="outline" className={styles.secondaryBtn}>Cancel</Button>
                 </AlertDialogCancel>
-                <button type="submit" className={styles.primaryBtn} disabled={saving}>
+                <Button type="submit" className={styles.primaryBtn} disabled={saving}>
                   {saving ? "Creating..." : "Create Client"}
-                </button>
+                </Button>
               </AlertDialogFooter>
             </form>
           </AlertDialogContent>
@@ -332,6 +454,41 @@ export default function ManageClientUsers({ initialItems = [] }) {
             <option value="all">All</option>
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
+          </select>
+        </label>
+        <label className={styles.field}>
+          <span>Activity Filter</span>
+          <select value={activityFilter} onChange={(e) => setActivityFilter(e.target.value)}>
+            <option value="all">All Activity States</option>
+            <option value="has_activity">Has Activity</option>
+            <option value="no_activity">No Activity</option>
+          </select>
+        </label>
+        <label className={styles.field}>
+          <span>Watch Tier</span>
+          <select value={watchTierFilter} onChange={(e) => setWatchTierFilter(e.target.value)}>
+            <option value="all">All Tiers</option>
+            <option value="heavy">Heavy (30m+)</option>
+            <option value="medium">Medium (5m-30m)</option>
+            <option value="light">Light (&lt;5m)</option>
+            <option value="zero">Zero Watch</option>
+          </select>
+        </label>
+        <label className={styles.field}>
+          <span>Sort By</span>
+          <select value={sortMode} onChange={(e) => setSortMode(e.target.value)}>
+            <option value="created_desc">Newest Created</option>
+            <option value="created_asc">Oldest Created</option>
+            <option value="name_asc">Name A-Z</option>
+            <option value="name_desc">Name Z-A</option>
+            <option value="mobile_asc">Mobile A-Z</option>
+            <option value="mobile_desc">Mobile Z-A</option>
+            <option value="most_watched">Most Watched Time</option>
+            <option value="least_watched">Least Watched Time</option>
+            <option value="most_views">Most Views</option>
+            <option value="least_views">Least Views</option>
+            <option value="recent_activity">Recently Active</option>
+            <option value="long_inactive">Longest Inactive</option>
           </select>
         </label>
       </div>
@@ -384,14 +541,14 @@ export default function ManageClientUsers({ initialItems = [] }) {
                   minLength={8}
                   placeholder="Leave blank to keep current password"
                 />
-                <button
+                <Button
                   type="button"
                   className={styles.passwordToggle}
                   onClick={() => setShowEditPassword((prev) => !prev)}
                   aria-label={showEditPassword ? "Hide password" : "Show password"}
                 >
                   {showEditPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
+                </Button>
               </div>
               <small className={styles.fieldHint}>Minimum 8 characters if you want to change password.</small>
             </label>
@@ -416,13 +573,76 @@ export default function ManageClientUsers({ initialItems = [] }) {
             {error ? <p className={styles.errorText}>{error}</p> : null}
             <AlertDialogFooter>
               <AlertDialogCancel asChild>
-                <button type="button" className={styles.secondaryBtn}>Cancel</button>
+                <Button type="button" variant="outline" className={`${styles.secondaryBtn} ${styles.modalActionBtn}`}>Cancel</Button>
               </AlertDialogCancel>
-              <button type="submit" className={styles.primaryBtn} disabled={saving}>
+              <Button type="submit" className={`${styles.primaryBtn} ${styles.modalActionBtn}`} disabled={saving}>
                 {saving ? "Saving..." : "Save Changes"}
-              </button>
+              </Button>
             </AlertDialogFooter>
           </form>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={viewOpen} onOpenChange={setViewOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Client Details</AlertDialogTitle>
+            <AlertDialogDescription>
+              Review this user info, then click Edit to update.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className={styles.formGrid}>
+            <div className={styles.field}>
+              <span>Full Name</span>
+              <p className={styles.metaLine}>{viewUser?.full_name || "-"}</p>
+            </div>
+            <div className={styles.field}>
+              <span>Mobile</span>
+              <p className={styles.metaLine}>{viewUser?.mobile_number || "-"}</p>
+            </div>
+            <div className={styles.field}>
+              <span>Email</span>
+              <p className={styles.metaLine}>{viewUser?.email || "-"}</p>
+            </div>
+            <div className={styles.field}>
+              <span>Status</span>
+              <p className={styles.metaLine}>{viewUser?.is_active ? "Active" : "Inactive"}</p>
+            </div>
+            <div className={styles.field}>
+              <span>Views</span>
+              <p className={styles.metaLine}>{Number(viewUser?.watch_count || 0)}</p>
+            </div>
+            <div className={styles.field}>
+              <span>Watch Time</span>
+              <p className={styles.metaLine}>{formatWatchDuration(viewUser?.total_watch_seconds)}</p>
+            </div>
+            <div className={styles.field}>
+              <span>Last Activity</span>
+              <p className={styles.metaLine}>
+                {viewUser?.last_watched_at ? new Date(viewUser.last_watched_at).toLocaleString() : "No activity"}
+              </p>
+            </div>
+            <div className={styles.field}>
+              <span>Created</span>
+              <p className={styles.metaLine}>{viewUser?.created_at ? new Date(viewUser.created_at).toLocaleString() : "-"}</p>
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel asChild>
+              <Button type="button" variant="outline" className={`${styles.secondaryBtn} ${styles.modalActionBtn}`}>Close</Button>
+            </AlertDialogCancel>
+            <Button
+              type="button"
+              className={`${styles.primaryBtn} ${styles.modalActionBtn} ${styles.modalEditBtn}`}
+              onClick={() => {
+                if (viewUser) openEdit(viewUser);
+                setViewOpen(false);
+              }}
+            >
+              <Pencil size={14} />
+              <span>Edit</span>
+            </Button>
+          </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
@@ -465,72 +685,125 @@ export default function ManageClientUsers({ initialItems = [] }) {
           ) : null}
           <AlertDialogFooter>
             <AlertDialogCancel asChild>
-              <button type="button" className={styles.secondaryBtn}>Close</button>
+              <Button type="button" variant="outline" className={styles.secondaryBtn}>Close</Button>
             </AlertDialogCancel>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      <div className={styles.tableWrap}>
-        <table>
-          <thead>
-            <tr>
-              <th>Email</th>
-              <th>Mobile</th>
-              <th>Full Name</th>
-              <th>Status</th>
-              <th>Created</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredItems.map((row) => (
-              <tr key={row.user_id}>
-                <td>{row.email}</td>
-                <td>{row.mobile_number || "-"}</td>
-                <td>{row.full_name || "-"}</td>
-                <td>{row.is_active ? "Active" : "Inactive"}</td>
-                <td>{row.created_at ? new Date(row.created_at).toLocaleString() : "-"}</td>
-                <td>
-                  <div className={styles.controlRow}>
-                    <button
-                      type="button"
-                      className={styles.secondaryBtn}
-                      disabled={busyId === row.user_id}
-                      onClick={() => openEdit(row)}
-                    >
-                      <Pencil size={14} />
-                      <span>Edit</span>
-                    </button>
-                    <button
-                      type="button"
-                      className={styles.secondaryBtn}
-                      disabled={busyId === row.user_id}
-                      onClick={() => toggleActive(row.user_id, !row.is_active)}
-                    >
-                      {row.is_active ? "Deactivate" : "Activate"}
-                    </button>
-                    <button
-                      type="button"
-                      className={styles.secondaryBtn}
-                      disabled={busyId === row.user_id}
-                      onClick={() => openHistory(row)}
-                    >
-                      <History size={14} />
-                      <span>History</span>
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
+      <TooltipProvider delayDuration={120}>
+        <div className={styles.tableWrap}>
+          <Table className={styles.clientUsersTable}>
+            <TableHeader>
+              <TableRow>
+                <TableHead className={styles.colClientName}>
+                  <button type="button" className={styles.rowLinkBtn} onClick={() => toggleHeaderSort("name_asc", "name_desc")}>
+                    Full Name {sortMarker("name_asc", "name_desc")}
+                  </button>
+                </TableHead>
+                <TableHead className={styles.colClientMobile}>
+                  <button type="button" className={styles.rowLinkBtn} onClick={() => toggleHeaderSort("mobile_asc", "mobile_desc")}>
+                    Mobile {sortMarker("mobile_asc", "mobile_desc")}
+                  </button>
+                </TableHead>
+                <TableHead className={styles.colClientStatus}>
+                  <button type="button" className={styles.rowLinkBtn} onClick={cycleStatusFilter}>
+                    Status {statusFilter === "active" ? "(A)" : statusFilter === "inactive" ? "(I)" : "(All)"}
+                  </button>
+                </TableHead>
+                <TableHead className={styles.colClientViews}>
+                  <button type="button" className={styles.rowLinkBtn} onClick={() => toggleHeaderSort("most_views", "least_views")}>
+                    Views {sortMarker("most_views", "least_views")}
+                  </button>
+                </TableHead>
+                <TableHead className={styles.colClientWatch}>
+                  <button type="button" className={styles.rowLinkBtn} onClick={() => toggleHeaderSort("most_watched", "least_watched")}>
+                    Watch Time {sortMarker("most_watched", "least_watched")}
+                  </button>
+                </TableHead>
+                <TableHead className={styles.colClientLast}>
+                  <button type="button" className={styles.rowLinkBtn} onClick={() => toggleHeaderSort("recent_activity", "long_inactive")}>
+                    Last Activity {sortMarker("recent_activity", "long_inactive")}
+                  </button>
+                </TableHead>
+                <TableHead className={styles.colClientCreated}>
+                  <button type="button" className={styles.rowLinkBtn} onClick={() => toggleHeaderSort("created_desc", "created_asc")}>
+                    Created {sortMarker("created_desc", "created_asc")}
+                  </button>
+                </TableHead>
+                <TableHead className={styles.colClientActions}>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredItems.map((row) => (
+                <TableRow key={row.user_id}>
+                  <TableCell className={styles.colClientName}>
+                    <TruncatedTooltipCell text={row.full_name || "-"} asButton onClick={() => openView(row)} />
+                  </TableCell>
+                  <TableCell className={styles.colClientMobile}>
+                    <TruncatedTooltipCell text={row.mobile_number || "-"} />
+                  </TableCell>
+                  <TableCell className={styles.colClientStatus}>
+                    <TruncatedTooltipCell text={row.is_active ? "Active" : "Inactive"} />
+                  </TableCell>
+                  <TableCell className={styles.colClientViews}>
+                    <TruncatedTooltipCell text={Number(row.watch_count || 0)} />
+                  </TableCell>
+                  <TableCell className={styles.colClientWatch}>
+                    <TruncatedTooltipCell text={formatWatchDuration(row.total_watch_seconds)} />
+                  </TableCell>
+                  <TableCell className={styles.colClientLast}>
+                    <TruncatedTooltipCell text={row.last_watched_at ? new Date(row.last_watched_at).toLocaleString() : "No activity"} />
+                  </TableCell>
+                  <TableCell className={styles.colClientCreated}>
+                    <TruncatedTooltipCell text={row.created_at ? new Date(row.created_at).toLocaleString() : "-"} />
+                  </TableCell>
+                  <TableCell className={styles.colClientActions}>
+                    <div className={styles.clientActionsRow}>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className={`${styles.secondaryBtn} ${styles.clientActionBtn}`}
+                        disabled={busyId === row.user_id}
+                        onClick={() => toggleActive(row.user_id, !row.is_active)}
+                        title={row.is_active ? "Deactivate user" : "Activate user"}
+                        aria-label={row.is_active ? "Deactivate user" : "Activate user"}
+                      >
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span>{row.is_active ? <EyeOff size={14} /> : <Eye size={14} />}</span>
+                          </TooltipTrigger>
+                          <TooltipContent>{row.is_active ? "Deactivate user" : "Activate user"}</TooltipContent>
+                        </Tooltip>
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className={`${styles.secondaryBtn} ${styles.clientActionBtn}`}
+                        disabled={busyId === row.user_id}
+                        onClick={() => openHistory(row)}
+                        aria-label="View history"
+                      >
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span><History size={14} /></span>
+                          </TooltipTrigger>
+                          <TooltipContent>View history</TooltipContent>
+                        </Tooltip>
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
             {!filteredItems.length ? (
-              <tr>
-                <td colSpan={6} className={styles.pending}>No users found for this filter.</td>
-              </tr>
+              <TableRow>
+                <TableCell colSpan={8} className={styles.pending}>No users found for this filter.</TableCell>
+              </TableRow>
             ) : null}
-          </tbody>
-        </table>
-      </div>
+            </TableBody>
+          </Table>
+        </div>
+      </TooltipProvider>
     </section>
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import { cva } from "class-variance-authority";
 import { cn } from "../../lib/utils";
 
@@ -28,6 +29,9 @@ const buttonVariants = cva(
   }
 );
 
-export function Button({ className, variant, size, ...props }) {
-  return <button className={cn(buttonVariants({ variant, size }), className)} {...props} />;
-}
+const Button = React.forwardRef(function Button({ className, variant, size, ...props }, ref) {
+  return <button ref={ref} className={cn(buttonVariants({ variant, size }), className)} {...props} />;
+});
+Button.displayName = "Button";
+
+export { Button };

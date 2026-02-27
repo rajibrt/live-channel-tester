@@ -12,7 +12,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "../../../../components/ui/alert-dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../../../components/ui/table";
 import { resolveBrowserPlaybackUrl } from "../../../../lib/streamUrl";
+import {
+  flexRender,
+  getCoreRowModel,
+  getFilteredRowModel,
+  getSortedRowModel,
+  useReactTable,
+} from "@tanstack/react-table";
 
 const PLACEHOLDER_LOGO =
   "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 64 64'><rect width='64' height='64' rx='10' fill='%23e2e8f0'/><circle cx='32' cy='24' r='9' fill='%2394a3b8'/><rect x='16' y='38' width='32' height='10' rx='5' fill='%2394a3b8'/></svg>";
@@ -272,6 +280,11 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
   const [uploadingLogoId, setUploadingLogoId] = useState(null);
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [channelStatusFilter, setChannelStatusFilter] = useState("ALL");
+  const [channelHomeFilter, setChannelHomeFilter] = useState("ALL");
+  const [channelUrlTypeFilter, setChannelUrlTypeFilter] = useState("ALL");
+  const [channelChangedFilter, setChannelChangedFilter] = useState("ALL");
+  const [groupSearch, setGroupSearch] = useState("");
+  const [groupFilter, setGroupFilter] = useState("ALL");
   const [healthLoading, setHealthLoading] = useState(false);
   const [healthError, setHealthError] = useState("");
   const [healthSummary, setHealthSummary] = useState("");
@@ -284,6 +297,8 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
     confirmText: "Confirm",
     onConfirm: null,
   });
+  const [channelSearch, setChannelSearch] = useState("");
+  const [channelSorting, setChannelSorting] = useState([]);
   const [editingGroupOrder, setEditingGroupOrder] = useState("");
   const [groupOrderDraft, setGroupOrderDraft] = useState("");
   const [editingChannelOrderId, setEditingChannelOrderId] = useState(null);
@@ -436,14 +451,41 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
 
   const channelsInSelected = useMemo(() => {
     const base = allChannelsInSelected;
-    if (channelStatusFilter === "LIVE") {
-      return base.filter((c) => String(c.status || "LIVE").toUpperCase() === "LIVE");
-    }
-    if (channelStatusFilter === "DEAD") {
-      return base.filter((c) => String(c.status || "LIVE").toUpperCase() !== "LIVE");
-    }
-    return base;
-  }, [allChannelsInSelected, channelStatusFilter]);
+    return base.filter((c) => {
+      const status = String(c.status || "LIVE").toUpperCase();
+      const streamUrl = String(c.stream_url || "").trim().toLowerCase();
+      const changed =
+        c.name !== c.originalName ||
+        c.category !== c.originalCategory ||
+        Number(c.order || 0) !== Number(c.originalOrder || 0) ||
+        (c.logo_url || "") !== (c.originalLogo || "") ||
+        (c.stream_url || "") !== (c.originalStreamUrl || "") ||
+        (c.include_on_home !== false) !== (c.originalIncludeOnHome !== false);
+
+      if (channelStatusFilter === "LIVE" && status !== "LIVE") return false;
+      if (channelStatusFilter === "DEAD" && status === "LIVE") return false;
+      if (channelHomeFilter === "SHOW" && c.include_on_home === false) return false;
+      if (channelHomeFilter === "HIDE" && c.include_on_home !== false) return false;
+      if (channelUrlTypeFilter === "M3U8" && !streamUrl.includes(".m3u8")) return false;
+      if (channelUrlTypeFilter === "OTHER" && streamUrl.includes(".m3u8")) return false;
+      if (channelChangedFilter === "CHANGED" && !changed) return false;
+      if (channelChangedFilter === "UNCHANGED" && changed) return false;
+      return true;
+    });
+  }, [allChannelsInSelected, channelStatusFilter, channelHomeFilter, channelUrlTypeFilter, channelChangedFilter]);
+
+  const filteredGroupsWithCount = useMemo(() => {
+    const query = String(groupSearch || "").trim().toLowerCase();
+    return groupsWithCount.filter((g) => {
+      if (query && !String(g.name || "").toLowerCase().includes(query)) return false;
+      if (groupFilter === "NON_EMPTY" && Number(g.total || 0) <= 0) return false;
+      if (groupFilter === "EMPTY" && Number(g.total || 0) > 0) return false;
+      if (groupFilter === "HAS_DEAD" && Number(g.dead || 0) <= 0) return false;
+      if (groupFilter === "ALL_LIVE" && Number(g.total || 0) > 0 && Number(g.dead || 0) > 0) return false;
+      if (groupFilter === "HIGH_COUNT" && Number(g.total || 0) < 50) return false;
+      return true;
+    });
+  }, [groupsWithCount, groupSearch, groupFilter]);
 
   const changeChannel = (id, patch) => {
     setChannels((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
@@ -860,6 +902,275 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
     }
   };
 
+  const channelColumns = useMemo(
+    () => [
+      {
+        id: "serial",
+        header: "#",
+        cell: ({ row }) => {
+          const c = row.original;
+          const idx = row.index;
+          return editingChannelOrderId === c.id ? (
+            <div className={styles.serialEditRow}>
+              <input
+                className={styles.serialInput}
+                type="number"
+                min="1"
+                max={allChannelsInSelected.length}
+                value={channelOrderDraft}
+                onChange={(e) => setChannelOrderDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    moveChannelToPosition(c.id, channelOrderDraft);
+                    setEditingChannelOrderId(null);
+                    setChannelOrderDraft("");
+                  }
+                }}
+                autoFocus
+              />
+              <button
+                type="button"
+                className={styles.iconBtn}
+                title="Confirm serial"
+                aria-label="Confirm serial"
+                onClick={() => {
+                  moveChannelToPosition(c.id, channelOrderDraft);
+                  setEditingChannelOrderId(null);
+                  setChannelOrderDraft("");
+                }}
+              >
+                <CheckIcon />
+              </button>
+              <button
+                type="button"
+                className={styles.iconBtn}
+                title="Cancel serial edit"
+                aria-label="Cancel serial edit"
+                onClick={() => {
+                  setEditingChannelOrderId(null);
+                  setChannelOrderDraft("");
+                }}
+              >
+                <XIcon />
+              </button>
+            </div>
+          ) : (
+            <div className={styles.serialCell}>
+              <span className={styles.serialNum}>{Number(c.order || idx + 1)}</span>
+              <button
+                type="button"
+                className={styles.iconBtn}
+                title="Edit serial"
+                aria-label="Edit serial"
+                onClick={() => {
+                  setEditingChannelOrderId(c.id);
+                  setChannelOrderDraft(String(Number(c.order || idx + 1)));
+                }}
+              >
+                <PencilIcon />
+              </button>
+            </div>
+          );
+        },
+      },
+      {
+        id: "logo",
+        header: "Channel Logo",
+        enableSorting: false,
+        cell: ({ row }) => {
+          const c = row.original;
+          return (
+            <div className={styles.logoWithStatus}>
+              <img src={c.logo_url || PLACEHOLDER_LOGO} alt={c.name || "Channel logo"} className={styles.channelLogoThumb} />
+              <span
+                className={`${styles.statusDot} ${String(c.status || "LIVE").toUpperCase() === "LIVE" ? styles.statusLive : styles.statusDead}`}
+                title={String(c.status || "LIVE").toUpperCase() === "LIVE" ? "LIVE" : "DEAD"}
+                aria-label={String(c.status || "LIVE").toUpperCase() === "LIVE" ? "LIVE" : "DEAD"}
+              />
+            </div>
+          );
+        },
+      },
+      {
+        accessorKey: "name",
+        header: ({ column }) => (
+          <button type="button" className={styles.rowLinkBtn} onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
+            Name {column.getIsSorted() === "asc" ? "↑" : column.getIsSorted() === "desc" ? "↓" : ""}
+          </button>
+        ),
+        cell: ({ row }) => {
+          const c = row.original;
+          return <input className={styles.inlineInput} value={c.name} onChange={(e) => changeChannel(c.id, { name: e.target.value })} />;
+        },
+      },
+      {
+        accessorKey: "category",
+        header: ({ column }) => (
+          <button type="button" className={styles.rowLinkBtn} onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
+            Group {column.getIsSorted() === "asc" ? "↑" : column.getIsSorted() === "desc" ? "↓" : ""}
+          </button>
+        ),
+        cell: ({ row }) => {
+          const c = row.original;
+          return (
+            <GroupCombobox
+              value={c.category}
+              options={groupsWithCount.map((g) => g.name)}
+              onCommit={(nextCategory) => applyChannelGroupChange(c.id, nextCategory)}
+            />
+          );
+        },
+      },
+      {
+        accessorKey: "logo_url",
+        header: ({ column }) => (
+          <button type="button" className={styles.rowLinkBtn} onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
+            Logo URL {column.getIsSorted() === "asc" ? "↑" : column.getIsSorted() === "desc" ? "↓" : ""}
+          </button>
+        ),
+        cell: ({ row }) => {
+          const c = row.original;
+          return (
+            <div className={styles.logoFieldRow}>
+              <input
+                className={styles.inlineInput}
+                value={c.logo_url}
+                onChange={(e) => changeChannel(c.id, { logo_url: e.target.value })}
+              />
+              <label className={styles.uploadLogoBtn}>
+                {uploadingLogoId === c.id ? "Uploading..." : "Upload logo"}
+                <input
+                  type="file"
+                  accept="image/*"
+                  disabled={uploadingLogoId === c.id}
+                  onChange={(e) => uploadLogo(c.id, e.target.files?.[0])}
+                  style={{ display: "none" }}
+                />
+              </label>
+            </div>
+          );
+        },
+      },
+      {
+        accessorKey: "stream_url",
+        header: ({ column }) => (
+          <button type="button" className={styles.rowLinkBtn} onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
+            Stream URL {column.getIsSorted() === "asc" ? "↑" : column.getIsSorted() === "desc" ? "↓" : ""}
+          </button>
+        ),
+        cell: ({ row }) => {
+          const c = row.original;
+          return (
+            <input
+              className={styles.inlineInput}
+              value={c.stream_url || ""}
+              onChange={(e) => changeChannel(c.id, { stream_url: e.target.value })}
+            />
+          );
+        },
+      },
+      {
+        id: "home",
+        header: "Home",
+        enableSorting: false,
+        cell: ({ row }) => {
+          const c = row.original;
+          return (
+            <label className={styles.checkRow}>
+              <input
+                type="checkbox"
+                checked={c.include_on_home !== false}
+                onChange={(e) => changeChannel(c.id, { include_on_home: e.target.checked })}
+              />
+              <span>Show</span>
+            </label>
+          );
+        },
+      },
+      {
+        id: "actions",
+        header: "Actions",
+        enableSorting: false,
+        cell: ({ row }) => {
+          const c = row.original;
+          return (
+            <div className={styles.miniActions}>
+              <button type="button" className={styles.iconBtn} onClick={() => moveChannel(c.id, "up")}>↑</button>
+              <button type="button" className={styles.iconBtn} onClick={() => moveChannel(c.id, "down")}>↓</button>
+              <button
+                type="button"
+                className={styles.iconBtn}
+                title="Delete channel from playlist"
+                aria-label="Delete channel from playlist"
+                onClick={() => deleteChannel(c.id)}
+              >
+                <TrashIcon />
+              </button>
+            </div>
+          );
+        },
+      },
+      {
+        id: "preview",
+        header: "Preview",
+        enableSorting: false,
+        cell: ({ row }) => {
+          const c = row.original;
+          return (
+            <button
+              type="button"
+              className={styles.previewCellBtn}
+              onClick={() => {
+                setPreviewError("");
+                setPreviewLoading(false);
+                setPreview({ title: c.name || "Stream", url: c.stream_url || "" });
+              }}
+            >
+              Preview
+            </button>
+          );
+        },
+      },
+    ],
+    [
+      allChannelsInSelected.length,
+      applyChannelGroupChange,
+      channelOrderDraft,
+      changeChannel,
+      deleteChannel,
+      editingChannelOrderId,
+      groupsWithCount,
+      moveChannel,
+      moveChannelToPosition,
+      uploadingLogoId,
+      uploadLogo,
+    ]
+  );
+
+  const channelsTable = useReactTable({
+    data: channelsInSelected,
+    columns: channelColumns,
+    state: {
+      sorting: channelSorting,
+      globalFilter: channelSearch,
+    },
+    onSortingChange: setChannelSorting,
+    onGlobalFilterChange: setChannelSearch,
+    globalFilterFn: (row, _columnId, filterValue) => {
+      const query = String(filterValue || "").trim().toLowerCase();
+      if (!query) return true;
+      const c = row.original || {};
+      const haystack = [c.name, c.category, c.logo_url, c.stream_url, c.status]
+        .map((v) => String(v || "").toLowerCase())
+        .join(" ");
+      return haystack.includes(query);
+    },
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+  });
+
   return (
     <section className={styles.editorLayout}>
       <article className={styles.card}>
@@ -931,23 +1242,44 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
             Create group
           </button>
           <button type="button" className={styles.secondaryBtn} onClick={sortGroupsAZ}>Sort groups A-Z</button>
+          <label className={styles.field}>
+            <span>Search Groups</span>
+            <input
+              className={styles.inlineInput}
+              placeholder="Type group name..."
+              value={groupSearch}
+              onChange={(e) => setGroupSearch(e.target.value)}
+            />
+          </label>
+          <label className={styles.field}>
+            <span>Filter Type</span>
+            <select className={styles.inlineInput} value={groupFilter} onChange={(e) => setGroupFilter(e.target.value)}>
+              <option value="ALL">All</option>
+              <option value="NON_EMPTY">Non-empty</option>
+              <option value="EMPTY">Empty only</option>
+              <option value="HAS_DEAD">Has DEAD</option>
+              <option value="ALL_LIVE">All LIVE</option>
+              <option value="HIGH_COUNT">High count (50+)</option>
+            </select>
+          </label>
         </div>
+        <p className={styles.hint}>Showing {filteredGroupsWithCount.length} of {groupsWithCount.length} groups.</p>
         <div className={styles.tableWrap}>
-          <table className={styles.editorTable}>
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Group</th>
-                <th>Total</th>
-                <th>LIVE</th>
-                <th>DEAD</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {groupsWithCount.map((g, idx) => (
-                <tr key={g.name} className={selectedGroup === g.name ? styles.selectedRow : ""}>
-                  <td>
+          <Table className={styles.editorTable}>
+            <TableHeader>
+              <TableRow>
+                <TableHead>#</TableHead>
+                <TableHead>Group</TableHead>
+                <TableHead>Total</TableHead>
+                <TableHead>LIVE</TableHead>
+                <TableHead>DEAD</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredGroupsWithCount.map((g, idx) => (
+                <TableRow key={g.name} className={selectedGroup === g.name ? styles.selectedRow : ""}>
+                  <TableCell>
                     {editingGroupOrder === g.name ? (
                       <div className={styles.serialEditRow}>
                         <input
@@ -1010,8 +1342,8 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
                         </button>
                       </div>
                     )}
-                  </td>
-                  <td>
+                  </TableCell>
+                  <TableCell>
                     {editingGroup === g.name ? (
                       <div className={styles.groupEditRow}>
                         <input
@@ -1053,11 +1385,11 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
                         {g.name}
                       </button>
                     )}
-                  </td>
-                  <td>{g.total}</td>
-                  <td>{g.live}</td>
-                  <td>{g.dead}</td>
-                  <td>
+                  </TableCell>
+                  <TableCell>{g.total}</TableCell>
+                  <TableCell>{g.live}</TableCell>
+                  <TableCell>{g.dead}</TableCell>
+                  <TableCell>
                     <div className={styles.miniActions}>
                       <button type="button" className={styles.iconBtn} aria-label="Move group up" title="Move up" onClick={() => moveGroup(g.name, "up")}>↑</button>
                       <button type="button" className={styles.iconBtn} aria-label="Move group down" title="Move down" onClick={() => moveGroup(g.name, "down")}>↓</button>
@@ -1075,11 +1407,11 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
                         <TrashIcon />
                       </button>
                     </div>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       </article>
 
@@ -1100,6 +1432,39 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
               <option value="LIVE">LIVE</option>
               <option value="DEAD">DEAD</option>
             </select>
+          </label>
+          <label className={styles.field}>
+            <span>Home Filter</span>
+            <select className={styles.inlineInput} value={channelHomeFilter} onChange={(e) => setChannelHomeFilter(e.target.value)}>
+              <option value="ALL">All</option>
+              <option value="SHOW">Show on Home</option>
+              <option value="HIDE">Hidden from Home</option>
+            </select>
+          </label>
+          <label className={styles.field}>
+            <span>URL Type</span>
+            <select className={styles.inlineInput} value={channelUrlTypeFilter} onChange={(e) => setChannelUrlTypeFilter(e.target.value)}>
+              <option value="ALL">All</option>
+              <option value="M3U8">M3U8</option>
+              <option value="OTHER">Other URL</option>
+            </select>
+          </label>
+          <label className={styles.field}>
+            <span>Change Filter</span>
+            <select className={styles.inlineInput} value={channelChangedFilter} onChange={(e) => setChannelChangedFilter(e.target.value)}>
+              <option value="ALL">All</option>
+              <option value="CHANGED">Changed only</option>
+              <option value="UNCHANGED">Unchanged only</option>
+            </select>
+          </label>
+          <label className={styles.field}>
+            <span>Search</span>
+            <input
+              className={styles.inlineInput}
+              placeholder="Search name, group, URL..."
+              value={channelSearch}
+              onChange={(e) => setChannelSearch(e.target.value)}
+            />
           </label>
           <div className={styles.menuWrap}>
             <button
@@ -1135,180 +1500,68 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
             ) : null}
           </div>
         </div>
+        <p className={styles.hint}>
+          Showing {channelsTable.getFilteredRowModel().rows.length} of {channelsInSelected.length} in selected group.
+        </p>
         <div className={styles.tableWrap}>
-          <table className={styles.editorTable}>
+          <table className={`${styles.editorTable} ${styles.channelDenseTable}`}>
             <thead>
-              <tr>
-                <th className={styles.colSerial}>#</th>
-                <th className={styles.colLogoThumb}>Channel Logo</th>
-                <th className={styles.colName}>Name</th>
-                <th className={styles.colGroup}>Group</th>
-                <th className={styles.colLogo}>Logo URL</th>
-                <th className={styles.colStream}>Stream URL</th>
-                <th>Home</th>
-                <th className={styles.colActions}>Actions</th>
-                <th className={styles.colPreview}>Preview</th>
-              </tr>
+              {channelsTable.getHeaderGroups().map((headerGroup) => (
+                <tr key={headerGroup.id}>
+                  {headerGroup.headers.map((header) => {
+                    const headerClass = header.column.id === "serial"
+                      ? styles.colSerial
+                      : header.column.id === "logo"
+                      ? styles.colLogoThumb
+                      : header.column.id === "name"
+                      ? styles.colName
+                      : header.column.id === "category"
+                      ? styles.colGroup
+                      : header.column.id === "logo_url"
+                      ? styles.colLogo
+                      : header.column.id === "stream_url"
+                      ? styles.colStream
+                      : header.column.id === "actions"
+                      ? styles.colActions
+                      : header.column.id === "preview"
+                      ? styles.colPreview
+                      : undefined;
+                    return (
+                      <th key={header.id} className={headerClass}>
+                        {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                      </th>
+                    );
+                  })}
+                </tr>
+              ))}
             </thead>
-              <tbody>
-              {channelsInSelected.map((c, idx) => (
-                <tr key={c.id}>
-                  <td className={styles.colSerial}>
-                    {editingChannelOrderId === c.id ? (
-                      <div className={styles.serialEditRow}>
-                        <input
-                          className={styles.serialInput}
-                          type="number"
-                          min="1"
-                          max={allChannelsInSelected.length}
-                          value={channelOrderDraft}
-                          onChange={(e) => setChannelOrderDraft(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              moveChannelToPosition(c.id, channelOrderDraft);
-                              setEditingChannelOrderId(null);
-                              setChannelOrderDraft("");
-                            }
-                          }}
-                          autoFocus
-                        />
-                        <button
-                          type="button"
-                          className={styles.iconBtn}
-                          title="Confirm serial"
-                          aria-label="Confirm serial"
-                          onClick={() => {
-                            moveChannelToPosition(c.id, channelOrderDraft);
-                            setEditingChannelOrderId(null);
-                            setChannelOrderDraft("");
-                          }}
-                        >
-                          <CheckIcon />
-                        </button>
-                        <button
-                          type="button"
-                          className={styles.iconBtn}
-                          title="Cancel serial edit"
-                          aria-label="Cancel serial edit"
-                          onClick={() => {
-                            setEditingChannelOrderId(null);
-                            setChannelOrderDraft("");
-                          }}
-                        >
-                          <XIcon />
-                        </button>
-                      </div>
-                    ) : (
-                      <div className={styles.serialCell}>
-                        <span className={styles.serialNum}>{Number(c.order || idx + 1)}</span>
-                        <button
-                          type="button"
-                          className={styles.iconBtn}
-                          title="Edit serial"
-                          aria-label="Edit serial"
-                          onClick={() => {
-                            setEditingChannelOrderId(c.id);
-                            setChannelOrderDraft(String(Number(c.order || idx + 1)));
-                          }}
-                        >
-                          <PencilIcon />
-                        </button>
-                      </div>
-                    )}
-                  </td>
-                  <td className={styles.colLogoThumb}>
-                    <div className={styles.logoWithStatus}>
-                      <img
-                        src={c.logo_url || PLACEHOLDER_LOGO}
-                        alt={c.name || "Channel logo"}
-                        className={styles.channelLogoThumb}
-                      />
-                      <span
-                        className={`${styles.statusDot} ${String(c.status || "LIVE").toUpperCase() === "LIVE" ? styles.statusLive : styles.statusDead}`}
-                        title={String(c.status || "LIVE").toUpperCase() === "LIVE" ? "LIVE" : "DEAD"}
-                        aria-label={String(c.status || "LIVE").toUpperCase() === "LIVE" ? "LIVE" : "DEAD"}
-                      />
-                    </div>
-                  </td>
-                  <td className={styles.colName}>
-                    <input
-                      className={styles.inlineInput}
-                      value={c.name}
-                      onChange={(e) => changeChannel(c.id, { name: e.target.value })}
-                    />
-                  </td>
-                  <td className={styles.colGroup}>
-                    <GroupCombobox
-                      value={c.category}
-                      options={groupsWithCount.map((g) => g.name)}
-                      onCommit={(nextCategory) => applyChannelGroupChange(c.id, nextCategory)}
-                    />
-                  </td>
-                  <td className={styles.colLogo}>
-                    <div className={styles.logoFieldRow}>
-                      <input
-                        className={styles.inlineInput}
-                        value={c.logo_url}
-                        onChange={(e) => changeChannel(c.id, { logo_url: e.target.value })}
-                      />
-                      <label className={styles.uploadLogoBtn}>
-                        {uploadingLogoId === c.id ? "Uploading..." : "Upload logo"}
-                        <input
-                          type="file"
-                          accept="image/*"
-                          disabled={uploadingLogoId === c.id}
-                          onChange={(e) => uploadLogo(c.id, e.target.files?.[0])}
-                          style={{ display: "none" }}
-                        />
-                      </label>
-                    </div>
-                  </td>
-                  <td className={styles.colStream}>
-                    <input
-                      className={styles.inlineInput}
-                      value={c.stream_url || ""}
-                      onChange={(e) => changeChannel(c.id, { stream_url: e.target.value })}
-                    />
-                  </td>
-                  <td>
-                    <label className={styles.checkRow}>
-                      <input
-                        type="checkbox"
-                        checked={c.include_on_home !== false}
-                        onChange={(e) => changeChannel(c.id, { include_on_home: e.target.checked })}
-                      />
-                      <span>Show</span>
-                    </label>
-                  </td>
-                  <td className={styles.colActions}>
-                    <div className={styles.miniActions}>
-                      <button type="button" className={styles.iconBtn} onClick={() => moveChannel(c.id, "up")}>↑</button>
-                      <button type="button" className={styles.iconBtn} onClick={() => moveChannel(c.id, "down")}>↓</button>
-                      <button
-                        type="button"
-                        className={styles.iconBtn}
-                        title="Delete channel from playlist"
-                        aria-label="Delete channel from playlist"
-                        onClick={() => deleteChannel(c.id)}
-                      >
-                        <TrashIcon />
-                      </button>
-                    </div>
-                  </td>
-                  <td className={styles.colPreview}>
-                    <button
-                      type="button"
-                      className={styles.previewCellBtn}
-                      onClick={() => {
-                        setPreviewError("");
-                        setPreviewLoading(false);
-                        setPreview({ title: c.name || "Stream", url: c.stream_url || "" });
-                      }}
-                    >
-                      Preview
-                    </button>
-                  </td>
+            <tbody>
+              {channelsTable.getRowModel().rows.map((row) => (
+                <tr key={row.id}>
+                  {row.getVisibleCells().map((cell) => {
+                    const cellClass = cell.column.id === "serial"
+                      ? styles.colSerial
+                      : cell.column.id === "logo"
+                      ? styles.colLogoThumb
+                      : cell.column.id === "name"
+                      ? styles.colName
+                      : cell.column.id === "category"
+                      ? styles.colGroup
+                      : cell.column.id === "logo_url"
+                      ? styles.colLogo
+                      : cell.column.id === "stream_url"
+                      ? styles.colStream
+                      : cell.column.id === "actions"
+                      ? styles.colActions
+                      : cell.column.id === "preview"
+                      ? styles.colPreview
+                      : undefined;
+                    return (
+                      <td key={cell.id} className={cellClass}>
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </td>
+                    );
+                  })}
                 </tr>
               ))}
             </tbody>

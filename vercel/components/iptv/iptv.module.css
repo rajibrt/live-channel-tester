@@ -52,8 +52,11 @@
 .topMiddle {
   flex: 1;
   display: flex;
+  align-items: center;
   justify-content: flex-end;
+  gap: 10px;
   padding: 0 12px;
+  min-width: 0;
 }
 
 .brandWrap {
@@ -331,6 +334,103 @@
 .debugBadgeDesktop {
   max-width: min(56vw, 520px);
   white-space: nowrap;
+}
+
+.announcementTickerDesktop {
+  flex: 1;
+  min-width: 240px;
+  max-width: 100%;
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--card) 90%, transparent);
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  position: relative;
+}
+
+.announcementTickerTrack {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  width: max-content;
+  transform: translateY(-50%);
+  animation: ticker-loop-seamless var(--ticker-duration, 34s) linear infinite;
+  will-change: transform;
+}
+
+.announcementTickerDesktop:hover .announcementTickerTrack {
+  animation-play-state: paused;
+}
+
+.announcementTickerChunk {
+  display: inline-block;
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.announcementTickerItemWrap {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 16px;
+}
+
+.announcementTickerItemIcon {
+  margin-right: 6px;
+  color: var(--primary);
+}
+
+.announcementTickerText {
+  color: var(--foreground);
+}
+
+.announcementTickerTitleBtn {
+  border: 0;
+  background: transparent;
+  color: var(--foreground);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+}
+
+.announcementTickerTitleBtn:hover {
+  color: var(--primary);
+  text-decoration: underline;
+}
+
+.announcementArticleModal {
+  max-width: min(820px, 94vw);
+}
+
+.announcementArticleBody {
+  max-height: min(58vh, 560px);
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  background: color-mix(in oklab, var(--card) 94%, transparent);
+  color: var(--foreground);
+  line-height: 1.55;
+}
+
+.announcementArticleBody :is(h1, h2, h3, h4, h5, h6, p, ul, ol) {
+  margin: 0 0 10px;
+}
+
+@keyframes ticker-loop-seamless {
+  from {
+    transform: translate(0, -50%);
+  }
+  to {
+    transform: translate(-50%, -50%);
+  }
 }
 
 .debugBadgeMobile {

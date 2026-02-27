@@ -39,26 +39,26 @@ export async function POST(request) {
     return NextResponse.json({ error: insertErr.message || "Failed to store history" }, { status: 500 });
   }
 
-  const { data: keepRows, error: keepErr } = await admin
+  const { data: staleRows, error: staleErr } = await admin
     .from("client_recent_history")
     .select("id")
     .eq("user_id", userId)
     .neq("source", "sync")
     .order("watched_at", { ascending: false })
-    .limit(50);
-  if (keepErr) {
-    return NextResponse.json({ error: keepErr.message || "Failed to trim history" }, { status: 500 });
+    .order("id", { ascending: false })
+    .range(50, 5000);
+  if (staleErr) {
+    return NextResponse.json({ error: staleErr.message || "Failed to trim history" }, { status: 500 });
   }
 
-  const keepIds = (keepRows || []).map((row) => Number(row?.id)).filter((id) => Number.isFinite(id));
-  if (keepIds.length) {
-    const inClause = `(${keepIds.join(",")})`;
+  const staleIds = (staleRows || []).map((row) => Number(row?.id)).filter((id) => Number.isFinite(id));
+  if (staleIds.length) {
     const { error: trimErr } = await admin
       .from("client_recent_history")
       .delete()
       .eq("user_id", userId)
       .neq("source", "sync")
-      .not("id", "in", inClause);
+      .in("id", staleIds);
     if (trimErr) {
       return NextResponse.json({ error: trimErr.message || "Failed to trim history" }, { status: 500 });
     }

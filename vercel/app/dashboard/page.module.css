@@ -739,8 +739,9 @@
 
 .miniActions {
   display: inline-flex;
-  gap: 6px;
-  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: nowrap;
 }
 
 .groupEditRow {
@@ -758,9 +759,9 @@
 .iconBtn {
   border: 1px solid var(--border);
   border-radius: 8px;
-  min-width: 32px;
-  height: 32px;
-  padding: 0 8px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -982,6 +983,16 @@
   min-width: 0;
 }
 
+.editorTable th {
+  padding-top: 9px;
+  padding-bottom: 9px;
+}
+
+.editorTable td {
+  padding-top: 7px;
+  padding-bottom: 7px;
+}
+
 .editorTable .colName {
   width: 18%;
   min-width: 0;
@@ -1018,9 +1029,9 @@
 }
 
 .editorTable .colActions {
-  width: 80px;
+  width: 116px;
   white-space: nowrap;
-  min-width: 80px;
+  min-width: 116px;
 }
 
 .editorTable .colPreview {
@@ -1030,9 +1041,9 @@
 }
 
 .channelLogoThumb {
-  width: 44px;
-  height: 44px;
-  border-radius: 8px;
+  width: 36px;
+  height: 36px;
+  border-radius: 7px;
   border: 1px solid var(--border);
   object-fit: cover;
   background: color-mix(in oklab, var(--background) 92%, var(--card));
@@ -1053,11 +1064,24 @@
 }
 
 .statusDot {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
   border-radius: 999px;
   display: inline-block;
   border: 1px solid color-mix(in oklab, var(--foreground) 18%, transparent);
+}
+
+.editorTable .inlineInput {
+  padding: 6px 8px;
+}
+
+.editorTable .uploadLogoBtn {
+  padding: 6px 8px;
+  font-size: 11px;
+}
+
+.editorTable .previewCellBtn {
+  padding: 5px 8px;
 }
 
 .statusLive {
@@ -1102,6 +1126,12 @@
   min-width: 100%;
 }
 
+.tableWrap > div {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
 .tableWrap th,
 .tableWrap td {
   text-align: left;
@@ -1119,6 +1149,213 @@
 
 .tableWrap tr:last-child td {
   border-bottom: 0;
+}
+
+/* Keep playlist editor channel rows compact without affecting other tables. */
+.tableWrap .editorTable th {
+  padding-top: 6px !important;
+  padding-bottom: 6px !important;
+}
+
+.tableWrap .editorTable td {
+  padding-top: 2px !important;
+  padding-bottom: 2px !important;
+  vertical-align: middle;
+}
+
+.tableWrap .editorTable .checkRow {
+  min-height: 0;
+  gap: 6px;
+}
+
+.tableWrap .editorTable tbody tr {
+  height: 48px;
+}
+
+.tableWrap .editorTable .inlineInput {
+  height: 30px;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.tableWrap .editorTable .uploadLogoBtn,
+.tableWrap .editorTable .previewCellBtn,
+.tableWrap .editorTable .iconBtn {
+  height: 28px;
+}
+
+.tableWrap .editorTable .iconBtn {
+  min-width: 28px;
+}
+
+/* Ultra-dense mode only for Total Channels table */
+.tableWrap .channelDenseTable th,
+.tableWrap .channelDenseTable td {
+  padding-top: 1px !important;
+  padding-bottom: 1px !important;
+  line-height: 1.1;
+}
+
+.tableWrap .channelDenseTable tbody tr {
+  height: 38px !important;
+}
+
+.tableWrap .channelDenseTable .inlineInput {
+  height: 26px !important;
+  padding: 0 7px !important;
+  font-size: 13px;
+}
+
+.tableWrap .channelDenseTable .uploadLogoBtn,
+.tableWrap .channelDenseTable .previewCellBtn,
+.tableWrap .channelDenseTable .iconBtn {
+  height: 24px !important;
+  min-height: 24px;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+.tableWrap .channelDenseTable .iconBtn {
+  min-width: 24px;
+  padding-left: 5px !important;
+  padding-right: 5px !important;
+}
+
+.tableWrap .channelDenseTable .channelLogoThumb {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+}
+
+.tableWrap .channelDenseTable .logoWithStatus {
+  gap: 4px;
+}
+
+.tableWrap .channelDenseTable .statusDot {
+  width: 6px;
+  height: 6px;
+}
+
+.tableWrap .channelDenseTable .checkRow {
+  min-height: 0 !important;
+  font-size: 12px;
+  gap: 4px;
+}
+
+/* Client Users table compact mode */
+.clientUsersTable {
+  table-layout: fixed;
+  width: 100%;
+  min-width: 0;
+}
+
+.clientUsersTable th,
+.clientUsersTable td {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 8px;
+  padding-right: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+
+.clientUsersTable .colClientName {
+  width: 18%;
+  min-width: 120px;
+}
+
+.clientUsersTable .colClientMobile {
+  width: 14%;
+  min-width: 110px;
+}
+
+.clientUsersTable .colClientEmail {
+  width: 18%;
+  min-width: 140px;
+}
+
+.clientUsersTable .colClientStatus {
+  width: 8%;
+  min-width: 70px;
+}
+
+.clientUsersTable .colClientViews {
+  width: 7%;
+  min-width: 52px;
+}
+
+.clientUsersTable .colClientWatch {
+  width: 8%;
+  min-width: 68px;
+}
+
+.clientUsersTable .colClientLast {
+  width: 18%;
+  min-width: 110px;
+}
+
+.clientUsersTable .colClientCreated {
+  width: 14%;
+  min-width: 100px;
+}
+
+.clientUsersTable .colClientActions {
+  width: 96px !important;
+  min-width: 96px;
+  max-width: 96px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.clientActionsRow {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  flex-wrap: nowrap;
+}
+
+.clientActionBtn {
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 8px;
+  font-size: 0;
+  justify-content: center;
+}
+
+.cellEllipsis {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cellEllipsis:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.modalActionBtn {
+  min-width: 148px;
+  height: 46px;
+  padding: 0 16px;
+  justify-content: center;
+}
+
+.modalEditBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
 }
 
 .url {
@@ -1229,6 +1466,150 @@
   padding: 0 6px;
 }
 
+.announceModal {
+  width: min(960px, 96vw);
+  max-width: 960px;
+}
+
+.richEditor {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+  overflow: hidden;
+}
+
+.richToolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--border);
+  padding: 8px;
+  background: color-mix(in oklab, var(--card) 92%, var(--muted));
+}
+
+.richToolBtn {
+  height: 30px;
+  min-width: 30px;
+  padding: 0 8px;
+}
+
+.richEditable {
+  min-height: 220px;
+  padding: 12px;
+  outline: none;
+  line-height: 1.5;
+  color: var(--foreground);
+}
+
+.richEditable a {
+  color: var(--ring) !important;
+  text-decoration: underline;
+}
+
+.richColorInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.richEditable:empty::before {
+  content: attr(data-placeholder);
+  color: var(--muted-foreground);
+}
+
+.announceTable {
+  table-layout: auto;
+  width: 100%;
+  min-width: 1120px;
+}
+
+.announceTable th,
+.announceTable td {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 8px;
+  padding-right: 8px;
+  vertical-align: middle;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.colAnnounceOrder {
+  width: 8%;
+  min-width: 96px;
+}
+
+.colAnnounceTitle {
+  width: 24%;
+  min-width: 150px;
+}
+
+.colAnnounceStatus {
+  width: 11%;
+  min-width: 92px;
+}
+
+.colAnnouncePin {
+  width: 11%;
+  min-width: 80px;
+}
+
+.colAnnounceMode {
+  width: 15%;
+  min-width: 120px;
+}
+
+.colAnnounceUpdated {
+  width: 16%;
+  min-width: 170px;
+}
+
+.colAnnounceActions {
+  width: 228px;
+  min-width: 228px;
+  max-width: 228px;
+}
+
+.announceActionsRow {
+  justify-content: flex-start;
+  gap: 6px;
+}
+
+.badgeLive,
+.badgeMuted,
+.badgeInfo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 72px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  padding: 3px 9px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.badgeLive {
+  color: var(--primary-foreground);
+  border-color: color-mix(in oklab, var(--primary) 42%, var(--border));
+  background: color-mix(in oklab, var(--primary) 72%, var(--card));
+}
+
+.badgeMuted {
+  color: var(--muted-foreground);
+  background: color-mix(in oklab, var(--card) 80%, var(--background));
+}
+
+.badgeInfo {
+  color: var(--secondary-foreground);
+  border-color: color-mix(in oklab, var(--secondary) 52%, var(--border));
+  background: color-mix(in oklab, var(--secondary) 74%, var(--card));
+}
+
 @media (max-width: 980px) {
   .editorLayout {
     grid-template-columns: 1fr;
@@ -1287,6 +1668,10 @@
 
   .tableWrap table {
     min-width: 760px;
+  }
+
+  .tableWrap .announceTable {
+    min-width: 1120px;
   }
 
   .tableWrap th,
