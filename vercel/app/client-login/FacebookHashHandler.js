@@ -14,6 +14,9 @@ export default function FacebookHashHandler() {
     const params = new URLSearchParams(hash.replace(/^#/, ""));
     const accessToken = String(params.get("access_token") || "").trim();
     if (!accessToken) return;
+    if (window.location.search) {
+      window.history.replaceState({}, "", window.location.pathname);
+    }
 
     let active = true;
     setWorking(true);

@@ -521,14 +521,14 @@ export default function ManageClientUsers({ initialItems = [] }) {
               />
             </div>
             <div className={styles.field}>
-              <span>Mobile Number <em className={styles.requiredMark}>*</em></span>
+              <span>Mobile Number <em className={styles.optionalMark}>Optional</em></span>
               <input
                 type="tel"
                 value={editForm.mobile_number}
                 onChange={(e) => setEditForm((prev) => ({ ...prev, mobile_number: e.target.value }))}
                 placeholder="e.g. +8801XXXXXXXXX"
-                required
               />
+              <small className={styles.fieldHint}>Keep empty if Facebook profile does not provide a phone number.</small>
             </div>
             <div className={styles.field}>
               <span>Full Name</span>

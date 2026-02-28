@@ -66,7 +66,7 @@ export default async function ClientLoginPage({ searchParams }) {
             </p>
           ) : null}
 
-          <form method="post" action="/api/client/auth/login" className={styles.form}>
+          <form method="post" action="/api/client/auth/login" className={styles.form} autoComplete="off">
             <label className={styles.field}>
               <span>Email or Mobile (last 11 digits)</span>
               <input
@@ -74,18 +74,26 @@ export default async function ClientLoginPage({ searchParams }) {
                 type="text"
                 required
                 placeholder="client@example.com or 01XXXXXXXXX"
-                autoComplete="username"
+                autoComplete="off"
+                autoCapitalize="off"
+                autoCorrect="off"
+                spellCheck={false}
               />
             </label>
 
-            <PasswordField styles={styles} />
+            <PasswordField styles={styles} autoComplete="off" />
 
             <button type="submit" className={styles.submit}>Sign In</button>
           </form>
 
           <p className={styles.divider}>or continue with</p>
-          <a href="/api/client/auth/facebook/start" className={styles.socialBtn} style={{ display: "inline-flex", justifyContent: "center", textDecoration: "none" }}>
-            Continue with Facebook
+          <a href="/api/client/auth/facebook/start" className={`${styles.socialBtn} ${styles.facebookBtn}`}>
+            <span className={styles.socialIcon} aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <path d="M14 8h3V4h-3c-2.8 0-5 2.2-5 5v3H6v4h3v4h4v-4h3.1l.9-4H13V9c0-.6.4-1 1-1z" />
+              </svg>
+            </span>
+            <span>Continue with Facebook</span>
           </a>
         </div>
       </section>

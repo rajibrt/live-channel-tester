@@ -50,12 +50,18 @@ export async function PATCH(request, { params }) {
     if (prepared) nextEmail = prepared;
   }
   if (typeof body?.mobile_number === "string") {
-    const mobile = normalizeMobile(body.mobile_number);
-    if (!mobile.key) {
-      return NextResponse.json({ error: "mobile_number must include at least 11 digits" }, { status: 400 });
+    const rawMobile = String(body.mobile_number || "").trim();
+    if (!rawMobile) {
+      patches.mobile_number = "";
+      patches.mobile_login_key = null;
+    } else {
+      const mobile = normalizeMobile(rawMobile);
+      if (!mobile.key) {
+        return NextResponse.json({ error: "mobile_number must include at least 11 digits" }, { status: 400 });
+      }
+      patches.mobile_number = mobile.raw;
+      patches.mobile_login_key = mobile.key;
     }
-    patches.mobile_number = mobile.raw;
-    patches.mobile_login_key = mobile.key;
   }
   if (!Object.keys(patches).length && !body?.new_password && !nextEmail) {
     return NextResponse.json({ error: "No changes provided" }, { status: 400 });

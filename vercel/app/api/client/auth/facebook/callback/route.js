@@ -49,7 +49,7 @@ export async function GET(request) {
   const reqUrl = new URL(request.url);
   const code = String(reqUrl.searchParams.get("code") || "").trim();
   if (!code) {
-    return NextResponse.redirect(new URL("/client-login?error=facebook_callback", request.url), { status: 302 });
+    return NextResponse.redirect(new URL("/client-login", request.url), { status: 302 });
   }
 
   try {

@@ -304,6 +304,11 @@
 }
 
 .socialBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
   border: 1px solid #d8deeb;
   border-radius: 12px;
   background: #fff;
@@ -311,11 +316,61 @@
   color: #0f172a;
   font: inherit;
   font-weight: 600;
+  text-decoration: none;
   cursor: pointer;
+  transition:
+    transform 0.16s ease,
+    box-shadow 0.16s ease,
+    background 0.16s ease,
+    border-color 0.16s ease;
 }
 
 .socialBtn:hover {
   background: #f8fafc;
+}
+
+.socialBtn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(29, 78, 216, 0.18);
+}
+
+.socialBtn:active {
+  transform: translateY(1px);
+}
+
+.socialIcon {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.socialIcon svg {
+  width: 15px;
+  height: 15px;
+  fill: currentColor;
+}
+
+.facebookBtn {
+  border-color: #d0dbff;
+  background: linear-gradient(180deg, #f4f7ff 0%, #edf3ff 100%);
+  color: #1877f2;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+}
+
+.facebookBtn .socialIcon {
+  background: #1877f2;
+  color: #fff;
+  box-shadow: 0 6px 14px rgba(24, 119, 242, 0.24);
+}
+
+.facebookBtn:hover {
+  background: linear-gradient(180deg, #edf3ff 0%, #e4ecff 100%);
+  border-color: #b9cbff;
+  box-shadow: 0 12px 24px rgba(24, 119, 242, 0.16);
 }
 
 .note {
