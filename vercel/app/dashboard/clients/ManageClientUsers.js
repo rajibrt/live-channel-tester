@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Eye, EyeOff, History, Pencil, Plus, Trash2 } from "lucide-react";
 import styles from "../page.module.css";
 import {
@@ -69,6 +70,13 @@ function getFacebookProfileUrl(row) {
   return "";
 }
 
+function getFacebookSearchUrl(row) {
+  if (String(row?.auth_provider || "").toLowerCase() !== "facebook") return "";
+  const query = String(row?.full_name || row?.email || "").trim();
+  if (!query) return "https://www.facebook.com/search/top";
+  return `https://www.facebook.com/search/top?q=${encodeURIComponent(query)}`;
+}
+
 function TruncatedTooltipCell({ text = "-", className = "", asButton = false, onClick }) {
   const value = String(text || "-");
   const textRef = useRef(null);
@@ -117,6 +125,9 @@ function TruncatedTooltipCell({ text = "-", className = "", asButton = false, on
 }
 
 export default function ManageClientUsers({ initialItems = [] }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [items, setItems] = useState(Array.isArray(initialItems) ? initialItems : []);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -140,6 +151,7 @@ export default function ManageClientUsers({ initialItems = [] }) {
   const [historyUserLabel, setHistoryUserLabel] = useState("");
   const [viewOpen, setViewOpen] = useState(false);
   const [viewUser, setViewUser] = useState(null);
+  const lastOpenedUserRef = useRef("");
 
   function cycleStatusFilter() {
     setStatusFilter((prev) => (prev === "all" ? "active" : prev === "active" ? "inactive" : "all"));
@@ -234,9 +246,47 @@ export default function ManageClientUsers({ initialItems = [] }) {
     setViewUser({
       ...row,
       facebook_profile_url: getFacebookProfileUrl(row),
+      facebook_search_url: getFacebookSearchUrl(row),
     });
     setViewOpen(true);
   }
+
+  function openUserFromId(userId) {
+    const id = String(userId || "").trim();
+    if (!id) return false;
+    const target = items.find((row) => String(row?.user_id || "") === id);
+    if (!target) return false;
+    openView(target);
+    return true;
+  }
+
+  useEffect(() => {
+    const notificationUserId = String(searchParams?.get("openUser") || "").trim();
+    if (!notificationUserId) return;
+    if (lastOpenedUserRef.current === notificationUserId) return;
+    if (!openUserFromId(notificationUserId)) return;
+
+    lastOpenedUserRef.current = notificationUserId;
+    const next = new URLSearchParams(searchParams?.toString() || "");
+    next.delete("openUser");
+    next.delete("openSource");
+    next.delete("notif");
+    const nextQuery = next.toString();
+    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+  }, [items, pathname, router, searchParams]);
+
+  useEffect(() => {
+    const onOpenFromNotification = (event) => {
+      const userId = String(event?.detail?.userId || "").trim();
+      if (!userId) return;
+      openUserFromId(userId);
+    };
+
+    window.addEventListener("admin-open-client-user", onOpenFromNotification);
+    return () => {
+      window.removeEventListener("admin-open-client-user", onOpenFromNotification);
+    };
+  }, [items]);
 
   async function openHistory(row) {
     setError("");
@@ -723,6 +773,15 @@ export default function ManageClientUsers({ initialItems = [] }) {
                   className={styles.link}
                 >
                   Visit Facebook Profile
+                </a>
+              ) : viewUser?.facebook_search_url ? (
+                <a
+                  href={viewUser.facebook_search_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={styles.link}
+                >
+                  Search on Facebook
                 </a>
               ) : (
                 <p className={styles.metaLine}>-</p>

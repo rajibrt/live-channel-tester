@@ -2,6 +2,7 @@ import IptvHomeClient from "../components/iptv/IptvHomeClient";
 import { getHomeIptvData } from "../components/iptv/homeData";
 import { requireClient } from "../lib/clientAuth";
 import { getSupabaseAdmin } from "../lib/supabaseAdmin";
+import PendingApprovalCard from "../components/client/PendingApprovalCard";
 
 export const dynamic = "force-dynamic";
 
@@ -32,33 +33,10 @@ export default async function HomePage() {
             background: "color-mix(in oklab, var(--card) 92%, transparent)",
           }}
         >
-          <h1 style={{ margin: "0 0 10px", fontSize: "26px" }}>
-            {isRejected ? "Profile Not Approved" : "Profile Under Review"}
-          </h1>
-          <p style={{ margin: "0 0 8px", color: "var(--muted-foreground)" }}>
-            {isRejected
-              ? "Your profile was not approved yet. Please contact support or try again later."
-              : "Your account was created successfully, but admin approval is still pending."}
-          </p>
-          <p style={{ margin: "0 0 18px", color: "var(--muted-foreground)" }}>
-            Until approval is complete, channel playback remains disabled.
-          </p>
-          <form action="/api/client/auth/logout" method="post">
-            <button
-              type="submit"
-              style={{
-                border: "1px solid var(--border)",
-                borderRadius: "10px",
-                padding: "10px 14px",
-                fontWeight: 600,
-                background: "var(--card)",
-                color: "var(--foreground)",
-                cursor: "pointer",
-              }}
-            >
-              Logout
-            </button>
-          </form>
+          <PendingApprovalCard
+            isRejected={isRejected}
+            initialMobile={String(current?.client?.mobile_number || "")}
+          />
         </section>
       </main>
     );

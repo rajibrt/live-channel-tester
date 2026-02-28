@@ -36,6 +36,7 @@ export default function VideoPlayer({
   isDark,
   isFavorite,
   onToggleFavorite,
+  favorites = [],
   onPrevChannel,
   onNextChannel,
   hasChannelNav,
@@ -638,6 +639,11 @@ export default function VideoPlayer({
     return channels.filter((item) => String(item?.name || "").toLowerCase().includes(query));
   }, [channels, fsChannelSearch]);
 
+  const favoriteSet = useMemo(
+    () => new Set((Array.isArray(favorites) ? favorites : []).map((id) => String(id || "").trim()).filter(Boolean)),
+    [favorites]
+  );
+
   const ensureSelectedVisible = (behavior = "smooth") => {
     requestAnimationFrame(() => {
       const categoryBtn = selectedCategory
@@ -880,6 +886,31 @@ export default function VideoPlayer({
                     onClick={() => onSelectChannel?.(item)}
                   >
                     <span className={styles.fullscreenChannelName}>{item.name}</span>
+                    <span className={styles.fullscreenChannelActions}>
+                      <button
+                        type="button"
+                        className={`${styles.fullscreenFavoriteBtn} ${
+                          favoriteSet.has(String(item?.id || "").trim()) ? styles.fullscreenFavoriteBtnActive : ""
+                        }`}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          onToggleFavorite?.(item?.id);
+                        }}
+                        aria-label={
+                          favoriteSet.has(String(item?.id || "").trim())
+                            ? `Remove ${item?.name || "channel"} from favorites`
+                            : `Add ${item?.name || "channel"} to favorites`
+                        }
+                        title={favoriteSet.has(String(item?.id || "").trim()) ? "Favorited" : "Add to Favorites"}
+                      >
+                        <Icon
+                          name="Heart"
+                          size={13}
+                          fill={favoriteSet.has(String(item?.id || "").trim()) ? "currentColor" : "none"}
+                        />
+                      </button>
+                    </span>
                   </button>
                 ))}
               </div>

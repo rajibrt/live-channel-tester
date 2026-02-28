@@ -470,6 +470,10 @@ export default function IptvHomeClient({
         onToggleTvMode={() => setForceTvMode((prev) => !prev)}
         onToggleLeftSidebar={handleToggleLeftSidebar}
         onToggleRightPanel={handleToggleRightPanel}
+        onProfileIconClick={() => {
+          setShowLeftSidebar(false);
+          setShowRightPanel(false);
+        }}
         debugStats={debugStats}
         clientLabel={currentClient?.fullName || currentClient?.email || "Client"}
         clientProfile={currentClient}
@@ -507,6 +511,7 @@ export default function IptvHomeClient({
             isDark={isDark}
             isFavorite={selectedChannel ? favorites.includes(normalizeChannelId(selectedChannel.id)) : false}
             onToggleFavorite={toggleFavorite}
+            favorites={favorites}
             onPrevChannel={() => handleChannelStep(-1)}
             onNextChannel={() => handleChannelStep(1)}
             hasChannelNav={visibleChannels.length > 1}

@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Activity,
@@ -94,6 +94,7 @@ function urlBase64ToUint8Array(base64String) {
 
 export default function DashboardShell({ children }) {
   const pathname = usePathname()
+  const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [notificationMenuOpen, setNotificationMenuOpen] = useState(false)
   const [notifications, setNotifications] = useState([])
@@ -217,6 +218,48 @@ export default function DashboardShell({ children }) {
     } catch {
       return false
     }
+  }
+
+  const resolveNotificationUserId = (item) => {
+    const payload = item?.payload_json && typeof item.payload_json === 'object' ? item.payload_json : {}
+    const candidates = [
+      payload?.user_id,
+      payload?.client_user_id,
+      payload?.client_id,
+      payload?.userId,
+    ]
+    for (const candidate of candidates) {
+      const id = String(candidate || '').trim()
+      if (id) return id
+    }
+    return ''
+  }
+
+  const onNotificationClick = async (item) => {
+    if (!item) return
+    if (!item.is_read) await markNotificationsRead({ notificationId: item.id })
+
+    const userId = resolveNotificationUserId(item)
+    setNotificationMenuOpen(false)
+    if (!userId) return
+
+    if (pathname?.startsWith('/dashboard/clients')) {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('admin-open-client-user', {
+            detail: { userId, source: 'admin_notification', notificationId: String(item?.id || '') },
+          })
+        )
+      }
+      return
+    }
+
+    const params = new URLSearchParams({
+      openUser: userId,
+      openSource: 'admin_notification',
+      notif: String(item?.id || ''),
+    })
+    router.push(`/dashboard/clients?${params.toString()}`)
   }
 
   const enablePushNotifications = async () => {
@@ -376,9 +419,7 @@ export default function DashboardShell({ children }) {
                             type='button'
                             className={`${styles.notificationItem} ${item.is_read ? styles.notificationItemRead : ''}`}
                             role='menuitem'
-                            onClick={async () => {
-                              if (!item.is_read) await markNotificationsRead({ notificationId: item.id })
-                            }}
+                            onClick={() => onNotificationClick(item)}
                           >
                             <div className={styles.notificationItemTop}>
                               <span className={styles.notificationItemTitle}>{item.title || 'Notification'}</span>

@@ -62,17 +62,22 @@ export async function PATCH(request) {
   const admin = getSupabaseAdmin();
   const now = new Date().toISOString();
 
-  const { error } = await admin
-    .from(SETTINGS_TABLE)
-    .upsert(
-      {
-        key: SETTINGS_KEY,
-        value_json: { speed_seconds: speed, icon_text: iconText },
-        updated_by_admin: auth.current.user.id,
-        updated_at: now,
-      },
-      { onConflict: "key" }
-    );
+  const payload = {
+    key: SETTINGS_KEY,
+    value_json: { speed_seconds: speed, icon_text: iconText },
+    updated_by_admin: auth.current.user.id,
+    updated_at: now,
+  };
+
+  let { error } = await admin.from(SETTINGS_TABLE).upsert(payload, { onConflict: "key" });
+  const isUpdatedByFkError =
+    String(error?.code || "") === "23503" &&
+    String(error?.message || "").includes("admin_settings_updated_by_admin_fkey");
+  if (isUpdatedByFkError) {
+    ({ error } = await admin
+      .from(SETTINGS_TABLE)
+      .upsert({ ...payload, updated_by_admin: null }, { onConflict: "key" }));
+  }
 
   if (error) {
     return NextResponse.json({ error: formatDbError(error, "Failed to save ticker speed.") }, { status: 500 });

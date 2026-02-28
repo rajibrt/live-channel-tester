@@ -142,6 +142,7 @@ export default function TopNavbar({
   onToggleTvMode,
   onToggleLeftSidebar,
   onToggleRightPanel,
+  onProfileIconClick,
   debugStats,
   clientLabel,
   clientProfile,
@@ -594,6 +595,7 @@ export default function TopNavbar({
             aria-haspopup="menu"
             aria-expanded={userMenuOpen}
             onClick={() => {
+              if (typeof onProfileIconClick === "function") onProfileIconClick();
               setNotificationMenuOpen(false);
               setUserMenuOpen((prev) => !prev);
             }}
