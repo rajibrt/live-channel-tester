@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { CLIENT_SESSION_COOKIE } from "../../../../../../lib/clientAuth";
 import { upsertFacebookClientLogin } from "../../../../../../lib/facebookClientAuth";
+import { buildClientMetaFromRequest } from "../../../../../../lib/requestClientMeta";
 import { getSupabaseAnonConfig } from "../../../../../../lib/supabaseAdmin";
 import { createSessionToken, SESSION_MAX_AGE } from "../../../../../../lib/sessionToken";
 
@@ -20,9 +21,11 @@ export async function POST(request) {
       return NextResponse.json({ error: "Invalid OAuth token." }, { status: 401 });
     }
 
+    const requestMeta = buildClientMetaFromRequest(request);
     const loginResult = await upsertFacebookClientLogin({
       user: userRes.user,
       via: "facebook_oauth_hash",
+      requestMeta,
     });
     if (!loginResult.ok) {
       return NextResponse.json({ error: loginResult.errorMessage || "Failed to save profile." }, { status: 500 });

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { CLIENT_SESSION_COOKIE } from "../../../../../../lib/clientAuth";
 import { upsertFacebookClientLogin } from "../../../../../../lib/facebookClientAuth";
+import { buildClientMetaFromRequest } from "../../../../../../lib/requestClientMeta";
 import { getSupabaseAnonConfig } from "../../../../../../lib/supabaseAdmin";
 import { createSessionToken, SESSION_MAX_AGE } from "../../../../../../lib/sessionToken";
 
@@ -20,9 +21,11 @@ export async function GET(request) {
       return NextResponse.redirect(new URL("/client-login?error=facebook_callback", request.url), { status: 302 });
     }
 
+    const requestMeta = buildClientMetaFromRequest(request);
     const loginResult = await upsertFacebookClientLogin({
       user: data.user,
       via: "facebook_oauth",
+      requestMeta,
     });
     if (!loginResult.ok) {
       return NextResponse.redirect(

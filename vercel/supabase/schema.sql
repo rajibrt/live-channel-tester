@@ -290,6 +290,10 @@ create index if not exists client_users_provider_user_id_idx on public.client_us
 create index if not exists client_users_last_watched_at_idx on public.client_users(last_watched_at desc);
 create index if not exists client_recent_history_user_time_idx on public.client_recent_history(user_id, watched_at desc);
 create index if not exists client_activity_events_user_time_idx on public.client_activity_events(user_id, created_at desc);
+create index if not exists client_activity_events_type_time_idx on public.client_activity_events(event_type, created_at desc);
+create index if not exists client_activity_events_playback_channel_idx
+on public.client_activity_events((event_data->>'channel_id'), created_at desc)
+where event_type in ('playback_attempt', 'playback_failed');
 create index if not exists client_notification_reads_user_time_idx on public.client_notification_reads(user_id, read_at desc);
 create index if not exists admin_announcements_created_idx on public.admin_announcements(created_at desc);
 create index if not exists admin_announcements_published_idx on public.admin_announcements(is_published, created_at desc);

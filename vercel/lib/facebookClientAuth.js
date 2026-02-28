@@ -84,7 +84,7 @@ function pickFacebookProfileUrl(user, providerUserId) {
   return "";
 }
 
-export async function upsertFacebookClientLogin({ user, via = "facebook_oauth" }) {
+export async function upsertFacebookClientLogin({ user, via = "facebook_oauth", requestMeta = {} }) {
   const userId = String(user?.id || "").trim();
   if (!userId) {
     return { ok: false, errorCode: "facebook_profile", errorMessage: "Missing user id." };
@@ -188,7 +188,11 @@ export async function upsertFacebookClientLogin({ user, via = "facebook_oauth" }
   await admin.from("client_activity_events").insert({
     user_id: userId,
     event_type: "client_login",
-    event_data: { via, approval_status: approvalStatus },
+    event_data: {
+      via,
+      approval_status: approvalStatus,
+      ...requestMeta,
+    },
   });
 
   if (!existing?.user_id && approvalStatus !== "approved") {

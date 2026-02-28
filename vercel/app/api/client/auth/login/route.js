@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { CLIENT_SESSION_COOKIE } from "../../../../../lib/clientAuth";
+import { buildClientMetaFromRequest } from "../../../../../lib/requestClientMeta";
 import { getSupabaseAdmin, getSupabaseAnonConfig } from "../../../../../lib/supabaseAdmin";
 import { createSessionToken, SESSION_MAX_AGE } from "../../../../../lib/sessionToken";
 
@@ -56,12 +57,15 @@ export async function POST(request) {
     return NextResponse.redirect(new URL("/client-login?error=invalid", request.url), { status: 302 });
   }
 
+  const requestMeta = buildClientMetaFromRequest(request);
+
   await admin.from("client_activity_events").insert({
     user_id: data.user.id,
     event_type: "client_login",
     event_data: {
       via: isEmailLogin ? "email_password" : "mobile_password",
       approval_status: String(profile?.approval_status || "approved").toLowerCase(),
+      ...requestMeta,
     },
   });
 

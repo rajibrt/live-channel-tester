@@ -10,6 +10,7 @@ import styles from "./iptv.module.css";
 import { usePersistentArray } from "./usePersistentArray";
 
 const LAST_CHANNEL_KEY = "iptv:v1:last-channel-id";
+const DEVICE_KEY_STORAGE = "iptv:v1:device-key";
 
 function normalizeChannelId(value) {
   return String(value || "").trim();
@@ -76,6 +77,39 @@ export default function IptvHomeClient({
   const [forceTvMode, setForceTvMode] = useState(false);
   const [hasRestoredChannel, setHasRestoredChannel] = useState(false);
   const watchSessionRef = useRef({ channelId: "", channelName: "", startedAt: 0 });
+  const deviceMeta = useMemo(() => {
+    if (typeof window === "undefined") return {};
+    let deviceKey = "";
+    try {
+      deviceKey = String(window.localStorage.getItem(DEVICE_KEY_STORAGE) || "").trim();
+      if (!deviceKey) {
+        const generated =
+          (window.crypto?.randomUUID?.() || `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`)
+            .replace(/-/g, "")
+            .slice(0, 24);
+        deviceKey = generated;
+        window.localStorage.setItem(DEVICE_KEY_STORAGE, deviceKey);
+      }
+    } catch {
+      deviceKey = "";
+    }
+
+    const tz = Intl?.DateTimeFormat?.().resolvedOptions?.().timeZone || "";
+    const ua = String(window.navigator?.userAgent || "");
+    const platform = String(window.navigator?.platform || "");
+    const lang = String(window.navigator?.language || "");
+    const w = Number(window.screen?.width || 0);
+    const h = Number(window.screen?.height || 0);
+
+    return {
+      device_key: deviceKey,
+      tz,
+      lang,
+      platform,
+      ua,
+      screen: w > 0 && h > 0 ? `${w}x${h}` : "",
+    };
+  }, []);
 
   const flushWatchHistory = useCallback((minimumSeconds = 5) => {
     const session = watchSessionRef.current;
@@ -105,7 +139,10 @@ export default function IptvHomeClient({
     fetch("/api/client/activity", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ event_type: eventType, event_data: eventData || {} }),
+      body: JSON.stringify({
+        event_type: eventType,
+        event_data: { ...(eventData || {}), ...deviceMeta },
+      }),
     }).catch(() => {});
   };
 
@@ -521,6 +558,12 @@ export default function IptvHomeClient({
             selectedCategory={selectedCategory}
             onSelectCategory={handleFullscreenCategorySelect}
             onSelectChannel={handleSelectChannel}
+            onPlaybackAttempt={(payload) => {
+              trackActivity("playback_attempt", payload || {});
+            }}
+            onPlaybackFailure={(payload) => {
+              trackActivity("playback_failed", payload || {});
+            }}
           />
           <div className={`${styles.debugBadge} ${styles.debugBadgeMobile}`}>
             <strong>Debug</strong>

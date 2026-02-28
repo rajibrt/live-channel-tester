@@ -46,6 +46,8 @@ export default function VideoPlayer({
   selectedCategory,
   onSelectCategory,
   onSelectChannel,
+  onPlaybackAttempt,
+  onPlaybackFailure,
 }) {
   const videoRef = useRef(null);
   const shellRef = useRef(null);
@@ -191,8 +193,29 @@ export default function VideoPlayer({
     }
 
     let cancelled = false;
+    let failureReported = false;
     setStatus("loading");
     setErrorMessage("");
+
+    const reportAttempt = () => {
+      onPlaybackAttempt?.({
+        channel_id: String(channel?.id || ""),
+        channel_name: String(channel?.name || ""),
+        stream_url: String(channel?.streamUrl || ""),
+      });
+    };
+
+    const reportFailure = (reason, details = {}) => {
+      if (failureReported || cancelled) return;
+      failureReported = true;
+      onPlaybackFailure?.({
+        channel_id: String(channel?.id || ""),
+        channel_name: String(channel?.name || ""),
+        stream_url: String(channel?.streamUrl || ""),
+        reason: String(reason || "stream_unavailable"),
+        ...details,
+      });
+    };
 
     let playbackStarted = false;
     const markPlaying = () => {
@@ -209,6 +232,7 @@ export default function VideoPlayer({
       if (cancelled) return;
       setErrorMessage("Stream unavailable");
       setStatus("error");
+      reportFailure("video_tag_error");
     };
     video.addEventListener("loadeddata", markPlaying);
     video.addEventListener("loadedmetadata", markPlaying);
@@ -231,6 +255,8 @@ export default function VideoPlayer({
         // autoplay can be blocked
       });
     };
+
+    reportAttempt();
 
     (async () => {
       try {
@@ -267,6 +293,10 @@ export default function VideoPlayer({
               }
               setErrorMessage("Stream unavailable");
               setStatus("error");
+              reportFailure("hls_fatal_error", {
+                hls_type: String(data?.type || ""),
+                hls_detail: String(data?.details || ""),
+              });
             });
             return;
           }
@@ -282,6 +312,7 @@ export default function VideoPlayer({
         }
         setErrorMessage("Stream unavailable");
         setStatus("error");
+        reportFailure("playback_exception");
       }
     })();
 
@@ -299,7 +330,7 @@ export default function VideoPlayer({
         hlsRef.current = null;
       }
     };
-  }, [channel]);
+  }, [channel, onPlaybackAttempt, onPlaybackFailure]);
 
   useEffect(() => {
     const adjustVolume = (delta) => {

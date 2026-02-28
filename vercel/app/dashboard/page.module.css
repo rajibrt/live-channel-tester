@@ -109,6 +109,36 @@
   gap: 12px;
 }
 
+.statsCompact4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.statsCompact3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.statsCompact4 .statCard,
+.statsCompact3 .statCard {
+  border-radius: 14px;
+  padding: 12px 14px;
+}
+
+.statsCompact4 .statCard p,
+.statsCompact3 .statCard p {
+  font-size: 12px;
+}
+
+.statsCompact4 .statCard strong,
+.statsCompact3 .statCard strong {
+  margin-top: 4px;
+  font-size: clamp(20px, 1.9vw, 28px);
+}
+
+.statsCompact4 .metaMuted,
+.statsCompact3 .metaMuted {
+  margin-top: 4px;
+}
+
 .statCard {
   background: linear-gradient(155deg, color-mix(in oklab, var(--card) 94%, transparent), color-mix(in oklab, var(--background) 90%, var(--card)));
   border: 1px solid var(--border);
@@ -154,6 +184,141 @@
   gap: 12px;
 }
 
+.chartsGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.lineTrendSection {
+  display: grid;
+}
+
+.trendGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.trendPanel {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--background) 96%, #0b1226) 0%,
+    color-mix(in oklab, var(--background) 92%, #0b1226) 100%
+  );
+  padding: 10px;
+  min-width: 0;
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--foreground) 6%, transparent);
+}
+
+.trendPanelHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.trendPanelHead p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+
+.trendPanelHead strong {
+  font-size: 14px;
+  color: var(--foreground);
+}
+
+.trendSvg {
+  width: 100%;
+  height: 186px;
+  display: block;
+}
+
+.trendArea {
+  fill: color-mix(in oklab, #4f67ff 24%, transparent);
+  opacity: 0.22;
+}
+
+.trendLine {
+  fill: none;
+  stroke: #4f67ff;
+  stroke-width: 2.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 6px color-mix(in oklab, #4f67ff 38%, transparent));
+}
+
+.trendGridLine {
+  stroke: color-mix(in oklab, var(--foreground) 10%, transparent);
+  stroke-width: 1;
+}
+
+.trendAxisLine {
+  stroke: color-mix(in oklab, var(--foreground) 54%, transparent);
+  stroke-width: 1.1;
+}
+
+.trendAxisLabel {
+  fill: color-mix(in oklab, var(--foreground) 84%, transparent);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.trendActiveGuide {
+  stroke: color-mix(in oklab, var(--foreground) 70%, transparent);
+  stroke-width: 1;
+  stroke-dasharray: 6 4;
+}
+
+.trendPoint {
+  fill: color-mix(in oklab, var(--background) 96%, #030712);
+  stroke: #4f67ff;
+  stroke-width: 2.4;
+}
+
+.trendPointActive {
+  fill: #4f67ff;
+  stroke: #6f83ff;
+  stroke-width: 2.4;
+}
+
+.trendTooltipBox {
+  fill: color-mix(in oklab, #11131b 94%, var(--background));
+  stroke: color-mix(in oklab, var(--foreground) 16%, transparent);
+  stroke-width: 1;
+}
+
+.trendTooltipLabel {
+  fill: color-mix(in oklab, var(--foreground) 96%, transparent);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.trendTooltipDivider {
+  stroke: color-mix(in oklab, var(--foreground) 15%, transparent);
+  stroke-width: 1;
+}
+
+.trendTooltipValue {
+  fill: color-mix(in oklab, var(--foreground) 96%, transparent);
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.trendPanelFoot {
+  margin-top: 2px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+
 .card {
   background: color-mix(in oklab, var(--card) 88%, transparent);
   border: 1px solid var(--border);
@@ -166,6 +331,154 @@
 .card h2 {
   margin: 0 0 14px;
   font-size: 18px;
+}
+
+.chartCard {
+  border-radius: 16px;
+  padding: 14px;
+}
+
+.chartCard h2 {
+  margin-bottom: 8px;
+  font-size: 16px;
+}
+
+.chartCard .hint {
+  margin: 0 0 10px;
+  font-size: 12px;
+}
+
+.miniBars {
+  display: grid;
+  gap: 9px;
+}
+
+.miniBarRow {
+  display: grid;
+  gap: 5px;
+}
+
+.miniBarLabel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+
+.miniBarLabel span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.miniBarLabel strong {
+  color: var(--foreground);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.miniBarTrack {
+  height: 8px;
+  background: color-mix(in oklab, var(--background) 84%, var(--card));
+  border: 1px solid color-mix(in oklab, var(--border) 72%, transparent);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.miniBarFill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+}
+
+.barTone1 {
+  background: linear-gradient(90deg, #22d3ee, #3b82f6);
+}
+
+.barTone2 {
+  background: linear-gradient(90deg, #60a5fa, #6366f1);
+}
+
+.barTone3 {
+  background: linear-gradient(90deg, #818cf8, #a855f7);
+}
+
+.barTone4 {
+  background: linear-gradient(90deg, #fb7185, #f97316);
+}
+
+.barTone5 {
+  background: linear-gradient(90deg, #34d399, #14b8a6);
+}
+
+.donutWrap {
+  display: grid;
+  grid-template-columns: 108px 1fr;
+  align-items: center;
+  gap: 12px;
+}
+
+.donutChart {
+  width: 108px;
+  height: 108px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--foreground) 10%, transparent);
+}
+
+.donutCenter {
+  width: 72px;
+  height: 72px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--background) 90%, var(--card));
+  border: 1px solid var(--border);
+  display: grid;
+  place-content: center;
+  text-align: center;
+}
+
+.donutCenter strong {
+  display: block;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.donutCenter span {
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+
+.donutLegend {
+  display: grid;
+  gap: 8px;
+}
+
+.donutLegend p {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: var(--muted-foreground);
+}
+
+.legendDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  display: inline-block;
+  border: 1px solid color-mix(in oklab, var(--foreground) 16%, transparent);
+}
+
+.legendApproved {
+  background: var(--chart-2);
+}
+
+.legendPending {
+  background: var(--destructive);
 }
 
 .skeleton {
@@ -1096,6 +1409,47 @@
   padding-bottom: 8px;
 }
 
+.collapsibleCard {
+  padding: 10px 12px;
+}
+
+.collapsibleSummary {
+  list-style: none;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--foreground);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  user-select: none;
+}
+
+.collapsibleSummary::-webkit-details-marker {
+  display: none;
+}
+
+.collapsibleSummary::before {
+  content: "▸";
+  font-size: 11px;
+  color: var(--muted-foreground);
+  transition: transform 0.18s ease;
+}
+
+.collapsibleCard[open] .collapsibleSummary::before {
+  transform: rotate(90deg);
+}
+
+.collapsibleBody {
+  margin-top: 10px;
+  display: grid;
+  gap: 12px;
+}
+
+.tableTitleGap {
+  margin-top: 4px !important;
+}
+
 .viewerModal {
   max-width: min(1080px, 96vw);
 }
@@ -1654,6 +2008,13 @@
   }
 
   .stats,
+  .statsCompact4,
+  .statsCompact3,
+  .chartsGrid,
+  .trendGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .grid {
     grid-template-columns: 1fr;
   }
@@ -1702,6 +2063,19 @@
 
   .topBar {
     flex-direction: column;
+  }
+
+  .stats,
+  .statsCompact4,
+  .statsCompact3,
+  .chartsGrid,
+  .trendGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .donutWrap {
+    grid-template-columns: 1fr;
+    justify-items: start;
   }
 
   .tableWrap table {
