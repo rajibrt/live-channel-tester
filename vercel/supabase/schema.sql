@@ -77,6 +77,9 @@ create table if not exists public.client_users (
   provider_user_id text not null default '',
   avatar_url text not null default '',
   oauth_profile_json jsonb not null default '{}'::jsonb,
+  lifetime_watch_count bigint not null default 0,
+  lifetime_watch_seconds bigint not null default 0,
+  last_watched_at timestamptz null,
   is_active boolean not null default true,
   created_by_admin uuid null references public.admin_users(user_id) on delete set null,
   created_at timestamptz not null default now(),
@@ -93,6 +96,9 @@ alter table public.client_users add column if not exists auth_provider text not 
 alter table public.client_users add column if not exists provider_user_id text not null default '';
 alter table public.client_users add column if not exists avatar_url text not null default '';
 alter table public.client_users add column if not exists oauth_profile_json jsonb not null default '{}'::jsonb;
+alter table public.client_users add column if not exists lifetime_watch_count bigint not null default 0;
+alter table public.client_users add column if not exists lifetime_watch_seconds bigint not null default 0;
+alter table public.client_users add column if not exists last_watched_at timestamptz null;
 update public.client_users
 set approval_status = case
   when coalesce(is_active, true) then 'approved'
@@ -103,6 +109,38 @@ update public.client_users
 set mobile_login_key = right(regexp_replace(mobile_number, '\D', '', 'g'), 11)
 where mobile_login_key is null
   and length(regexp_replace(mobile_number, '\D', '', 'g')) >= 11;
+
+create or replace function public.increment_client_watch_totals(
+  p_user_id uuid,
+  p_watch_seconds integer,
+  p_watched_at timestamptz default now()
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if p_user_id is null then
+    return;
+  end if;
+
+  if coalesce(p_watch_seconds, 0) <= 0 then
+    return;
+  end if;
+
+  update public.client_users
+  set
+    lifetime_watch_count = coalesce(lifetime_watch_count, 0) + 1,
+    lifetime_watch_seconds = coalesce(lifetime_watch_seconds, 0) + greatest(p_watch_seconds, 0),
+    last_watched_at = case
+      when last_watched_at is null then p_watched_at
+      else greatest(last_watched_at, p_watched_at)
+    end,
+    updated_at = now()
+  where user_id = p_user_id;
+end;
+$$;
 
 create table if not exists public.admin_notifications (
   id uuid primary key default gen_random_uuid(),
@@ -147,6 +185,28 @@ create table if not exists public.client_recent_history (
   watch_seconds integer not null default 0,
   source text not null default 'home'
 );
+
+with lifetime as (
+  select
+    user_id,
+    count(*) filter (where source <> 'sync')::bigint as total_count,
+    coalesce(sum(greatest(watch_seconds, 0)) filter (where source <> 'sync'), 0)::bigint as total_seconds,
+    max(watched_at) filter (where source <> 'sync') as last_watch_at
+  from public.client_recent_history
+  group by user_id
+)
+update public.client_users cu
+set
+  lifetime_watch_count = greatest(coalesce(cu.lifetime_watch_count, 0), coalesce(l.total_count, 0)),
+  lifetime_watch_seconds = greatest(coalesce(cu.lifetime_watch_seconds, 0), coalesce(l.total_seconds, 0)),
+  last_watched_at = case
+    when cu.last_watched_at is null then l.last_watch_at
+    when l.last_watch_at is null then cu.last_watched_at
+    else greatest(cu.last_watched_at, l.last_watch_at)
+  end,
+  updated_at = now()
+from lifetime l
+where cu.user_id = l.user_id;
 
 create table if not exists public.client_favorites (
   user_id uuid not null references public.client_users(user_id) on delete cascade,
@@ -227,6 +287,7 @@ on public.client_users(mobile_login_key)
 where mobile_login_key is not null;
 create index if not exists client_users_approval_status_idx on public.client_users(approval_status);
 create index if not exists client_users_provider_user_id_idx on public.client_users(provider_user_id);
+create index if not exists client_users_last_watched_at_idx on public.client_users(last_watched_at desc);
 create index if not exists client_recent_history_user_time_idx on public.client_recent_history(user_id, watched_at desc);
 create index if not exists client_activity_events_user_time_idx on public.client_activity_events(user_id, created_at desc);
 create index if not exists client_notification_reads_user_time_idx on public.client_notification_reads(user_id, read_at desc);

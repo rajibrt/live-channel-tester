@@ -20,7 +20,7 @@ export async function GET() {
   const admin = getSupabaseAdmin();
   const { data, error } = await admin
     .from("client_users")
-    .select("user_id,email,full_name,mobile_number,mobile_login_key,is_active,approval_status,approval_note,auth_provider,provider_user_id,avatar_url,created_at,updated_at")
+    .select("user_id,email,full_name,mobile_number,mobile_login_key,is_active,approval_status,approval_note,auth_provider,provider_user_id,avatar_url,oauth_profile_json,lifetime_watch_count,lifetime_watch_seconds,last_watched_at,created_at,updated_at")
     .order("created_at", { ascending: false });
 
   if (error) return NextResponse.json({ error: error.message || "Failed to load users" }, { status: 500 });
@@ -66,7 +66,7 @@ export async function POST(request) {
 
   const { data: existingByMobile } = await admin
     .from("client_users")
-    .select("user_id,email,full_name,mobile_number,mobile_login_key,is_active,approval_status,approval_note,auth_provider,provider_user_id,avatar_url,created_at,updated_at")
+    .select("user_id,email,full_name,mobile_number,mobile_login_key,is_active,approval_status,approval_note,auth_provider,provider_user_id,avatar_url,oauth_profile_json,lifetime_watch_count,lifetime_watch_seconds,last_watched_at,created_at,updated_at")
     .eq("mobile_login_key", mobileLoginKey)
     .maybeSingle();
 
@@ -122,6 +122,9 @@ export async function POST(request) {
       provider_user_id: "",
       avatar_url: "",
       oauth_profile_json: {},
+      lifetime_watch_count: 0,
+      lifetime_watch_seconds: 0,
+      last_watched_at: null,
       is_active: true,
       created_by_admin: auth.current.user.id,
       created_at: now,
@@ -159,6 +162,10 @@ export async function POST(request) {
       auth_provider: "admin_created",
       provider_user_id: "",
       avatar_url: "",
+      oauth_profile_json: {},
+      lifetime_watch_count: 0,
+      lifetime_watch_seconds: 0,
+      last_watched_at: null,
       created_at: now,
       updated_at: now,
     },

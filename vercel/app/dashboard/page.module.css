@@ -1302,9 +1302,9 @@
 }
 
 .clientUsersTable .colClientActions {
-  width: 96px !important;
-  min-width: 96px;
-  max-width: 96px;
+  width: 136px !important;
+  min-width: 136px;
+  max-width: 136px;
   white-space: nowrap;
   overflow: hidden;
 }
@@ -1326,6 +1326,15 @@
   border-radius: 8px;
   font-size: 0;
   justify-content: center;
+}
+
+.clientActionDanger {
+  color: color-mix(in oklab, var(--destructive) 88%, var(--foreground));
+  border-color: color-mix(in oklab, var(--destructive) 48%, var(--border));
+}
+
+.clientActionDanger:hover {
+  background: color-mix(in oklab, var(--destructive) 14%, var(--card));
 }
 
 .cellEllipsis {
@@ -1428,6 +1437,9 @@
   gap: 7px;
   color: var(--muted-foreground);
   font-size: 14px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .metaActions {
@@ -1469,6 +1481,14 @@
 .announceModal {
   width: min(960px, 96vw);
   max-width: 960px;
+}
+
+.clientModal {
+  width: min(920px, 96vw);
+  max-width: 920px;
+  max-height: min(92dvh, 920px);
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .richEditor {
@@ -1706,6 +1726,17 @@
 
   .floatingSaveInner {
     justify-content: space-between;
+    width: 100%;
+  }
+
+  .clientModal {
+    width: min(96vw, 560px);
+    max-height: 92dvh;
+    padding: 14px;
+  }
+
+  .modalActionBtn {
+    min-width: 0;
     width: 100%;
   }
 }

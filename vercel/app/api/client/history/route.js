@@ -27,16 +27,45 @@ export async function POST(request) {
 
   const admin = getSupabaseAdmin();
   const userId = auth.current.user.id;
+  const watchedAt = new Date().toISOString();
 
   const { error: insertErr } = await admin.from("client_recent_history").insert({
     user_id: userId,
     channel_id: channelId,
     channel_name: channelName,
+    watched_at: watchedAt,
     watch_seconds: watchSeconds,
     source: "watch",
   });
   if (insertErr) {
     return NextResponse.json({ error: insertErr.message || "Failed to store history" }, { status: 500 });
+  }
+
+  const { error: totalErr } = await admin.rpc("increment_client_watch_totals", {
+    p_user_id: userId,
+    p_watch_seconds: watchSeconds,
+    p_watched_at: watchedAt,
+  });
+  if (totalErr && !String(totalErr.message || "").toLowerCase().includes("increment_client_watch_totals")) {
+    const { data: current } = await admin
+      .from("client_users")
+      .select("lifetime_watch_seconds,lifetime_watch_count,last_watched_at")
+      .eq("user_id", userId)
+      .maybeSingle();
+    const currentSeconds = Math.max(0, Number(current?.lifetime_watch_seconds || 0));
+    const currentCount = Math.max(0, Number(current?.lifetime_watch_count || 0));
+    const currentLast = String(current?.last_watched_at || "");
+    const nextLast =
+      currentLast && new Date(currentLast).getTime() > new Date(watchedAt).getTime() ? currentLast : watchedAt;
+    await admin
+      .from("client_users")
+      .update({
+        lifetime_watch_seconds: currentSeconds + watchSeconds,
+        lifetime_watch_count: currentCount + 1,
+        last_watched_at: nextLast,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("user_id", userId);
   }
 
   const { data: staleRows, error: staleErr } = await admin

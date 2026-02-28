@@ -90,3 +90,43 @@ export async function PATCH(request, { params }) {
 
   return NextResponse.json({ ok: true });
 }
+
+export async function DELETE(_request, { params }) {
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
+
+  const p = await params;
+  const userId = String(p?.userId || "").trim();
+  if (!userId) return NextResponse.json({ error: "Missing userId" }, { status: 400 });
+
+  const admin = getSupabaseAdmin();
+  const { data: existing, error: existingErr } = await admin
+    .from("client_users")
+    .select("user_id,is_active")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (existingErr) {
+    return NextResponse.json({ error: existingErr.message || "Failed to load user" }, { status: 500 });
+  }
+  if (!existing?.user_id) {
+    return NextResponse.json({ error: "User not found." }, { status: 404 });
+  }
+  if (existing.is_active !== false) {
+    return NextResponse.json({ error: "Only inactive profiles can be deleted." }, { status: 400 });
+  }
+
+  const { error: authDeleteErr } = await admin.auth.admin.deleteUser(userId, false);
+  const authDeleteMsg = String(authDeleteErr?.message || "");
+  const userMissingInAuth = authDeleteMsg.toLowerCase().includes("not found");
+  if (authDeleteErr && !userMissingInAuth) {
+    return NextResponse.json({ error: authDeleteMsg || "Failed to delete auth user." }, { status: 500 });
+  }
+
+  const { error: profileDeleteErr } = await admin.from("client_users").delete().eq("user_id", userId);
+  if (profileDeleteErr && userMissingInAuth) {
+    return NextResponse.json({ error: profileDeleteErr.message || "Failed to delete client profile." }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true });
+}

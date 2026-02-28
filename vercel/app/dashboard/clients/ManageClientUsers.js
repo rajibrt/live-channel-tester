@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Eye, EyeOff, History, Pencil, Plus } from "lucide-react";
+import { Eye, EyeOff, History, Pencil, Plus, Trash2 } from "lucide-react";
 import styles from "../page.module.css";
 import {
   AlertDialog,
@@ -35,6 +35,39 @@ const EMPTY_EDIT_FORM = {
   new_password: "",
   confirm_password: "",
 };
+
+function getFacebookProfileUrl(row) {
+  if (String(row?.auth_provider || "").toLowerCase() !== "facebook") return "";
+  const fromMeta = String(row?.oauth_profile_json?.profile_url || "").trim();
+  if (fromMeta && /^https?:\/\//i.test(fromMeta)) {
+    try {
+      const parsed = new URL(fromMeta);
+      if (/facebook\.com$/i.test(parsed.hostname) || /\.facebook\.com$/i.test(parsed.hostname)) {
+        const firstSegment = String(parsed.pathname || "").replace(/^\/+/, "").split("/")[0] || "";
+        const uuidLike = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(firstSegment);
+        if (!uuidLike) return parsed.toString();
+      }
+    } catch {
+      // ignore invalid metadata URL
+    }
+  }
+  const usernameCandidates = [
+    row?.oauth_profile_json?.user_name,
+    row?.oauth_profile_json?.username,
+    row?.oauth_profile_json?.preferred_username,
+  ];
+  for (const candidate of usernameCandidates) {
+    const username = String(candidate || "").trim();
+    if (/^[A-Za-z0-9.]{3,100}$/.test(username)) {
+      return `https://www.facebook.com/${username}`;
+    }
+  }
+  const providerId = String(row?.provider_user_id || "").trim();
+  if (/^\d{5,30}$/.test(providerId)) {
+    return `https://www.facebook.com/profile.php?id=${providerId}`;
+  }
+  return "";
+}
 
 function TruncatedTooltipCell({ text = "-", className = "", asButton = false, onClick }) {
   const value = String(text || "-");
@@ -198,7 +231,10 @@ export default function ManageClientUsers({ initialItems = [] }) {
   }
 
   function openView(row) {
-    setViewUser(row);
+    setViewUser({
+      ...row,
+      facebook_profile_url: getFacebookProfileUrl(row),
+    });
     setViewOpen(true);
   }
 
@@ -328,6 +364,33 @@ export default function ManageClientUsers({ initialItems = [] }) {
       setItems((prev) => prev.map((row) => (row.user_id === userId ? { ...row, is_active: nextActive } : row)));
     } catch (err) {
       setError(err?.message || "Failed to update status.");
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  async function deleteInactiveUser(row) {
+    if (!row || !row.user_id) return;
+    if (row.is_active) {
+      setError("Only inactive profiles can be deleted.");
+      return;
+    }
+    const confirmed = window.confirm("Delete this inactive client profile permanently?");
+    if (!confirmed) return;
+
+    setBusyId(row.user_id);
+    setError("");
+    setMessage("");
+    try {
+      const res = await fetch(`/api/admin/client-users/${row.user_id}`, {
+        method: "DELETE",
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload?.error || "Failed to delete inactive user.");
+      setItems((prev) => prev.filter((item) => item.user_id !== row.user_id));
+      setMessage("Inactive client profile deleted.");
+    } catch (err) {
+      setError(err?.message || "Failed to delete inactive user.");
     } finally {
       setBusyId("");
     }
@@ -502,7 +565,7 @@ export default function ManageClientUsers({ initialItems = [] }) {
       </div>
 
       <AlertDialog open={editOpen} onOpenChange={setEditOpen}>
-        <AlertDialogContent>
+        <AlertDialogContent className={styles.clientModal}>
           <AlertDialogHeader>
             <AlertDialogTitle>Edit Client User</AlertDialogTitle>
             <AlertDialogDescription>
@@ -511,84 +574,86 @@ export default function ManageClientUsers({ initialItems = [] }) {
           </AlertDialogHeader>
 
           <form onSubmit={saveEdit} className={styles.form}>
-            <div className={styles.field}>
-              <span>Email <em className={styles.optionalMark}>Optional</em></span>
-              <input
-                type="email"
-                value={editForm.email}
-                onChange={(e) => setEditForm((prev) => ({ ...prev, email: e.target.value }))}
-                placeholder="client@example.com"
-              />
-            </div>
-            <div className={styles.field}>
-              <span>Mobile Number <em className={styles.optionalMark}>Optional</em></span>
-              <input
-                type="tel"
-                value={editForm.mobile_number}
-                onChange={(e) => setEditForm((prev) => ({ ...prev, mobile_number: e.target.value }))}
-                placeholder="e.g. +8801XXXXXXXXX"
-              />
-              <small className={styles.fieldHint}>Keep empty if Facebook profile does not provide a phone number.</small>
-            </div>
-            <div className={styles.field}>
-              <span>Full Name</span>
-              <input
-                type="text"
-                value={editForm.full_name}
-                onChange={(e) => setEditForm((prev) => ({ ...prev, full_name: e.target.value }))}
-                placeholder="Optional"
-              />
-            </div>
-            <label className={styles.field}>
-              <span>Approval Status</span>
-              <select
-                value={editForm.approval_status}
-                onChange={(e) => setEditForm((prev) => ({ ...prev, approval_status: e.target.value }))}
-              >
-                <option value="pending">Pending</option>
-                <option value="approved">Approved</option>
-                <option value="rejected">Rejected</option>
-              </select>
-            </label>
-            <label className={styles.field}>
-              <span>Approval Note</span>
-              <input
-                type="text"
-                value={editForm.approval_note}
-                onChange={(e) => setEditForm((prev) => ({ ...prev, approval_note: e.target.value }))}
-                placeholder="Optional reviewer note"
-              />
-            </label>
-            <label className={styles.field}>
-              <span>New Password <em className={styles.optionalMark}>Optional</em></span>
-              <div className={styles.passwordWrap}>
+            <div className={styles.formGrid}>
+              <div className={styles.field}>
+                <span>Email <em className={styles.optionalMark}>Optional</em></span>
+                <input
+                  type="email"
+                  value={editForm.email}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, email: e.target.value }))}
+                  placeholder="client@example.com"
+                />
+              </div>
+              <div className={styles.field}>
+                <span>Mobile Number <em className={styles.optionalMark}>Optional</em></span>
+                <input
+                  type="tel"
+                  value={editForm.mobile_number}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, mobile_number: e.target.value }))}
+                  placeholder="e.g. +8801XXXXXXXXX"
+                />
+                <small className={styles.fieldHint}>Keep empty if Facebook profile does not provide a phone number.</small>
+              </div>
+              <div className={styles.field}>
+                <span>Full Name</span>
+                <input
+                  type="text"
+                  value={editForm.full_name}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, full_name: e.target.value }))}
+                  placeholder="Optional"
+                />
+              </div>
+              <label className={styles.field}>
+                <span>Approval Status</span>
+                <select
+                  value={editForm.approval_status}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, approval_status: e.target.value }))}
+                >
+                  <option value="pending">Pending</option>
+                  <option value="approved">Approved</option>
+                  <option value="rejected">Rejected</option>
+                </select>
+              </label>
+              <label className={`${styles.field} ${styles.full}`}>
+                <span>Approval Note</span>
+                <input
+                  type="text"
+                  value={editForm.approval_note}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, approval_note: e.target.value }))}
+                  placeholder="Optional reviewer note"
+                />
+              </label>
+              <label className={styles.field}>
+                <span>New Password <em className={styles.optionalMark}>Optional</em></span>
+                <div className={styles.passwordWrap}>
+                  <input
+                    type={showEditPassword ? "text" : "password"}
+                    value={editForm.new_password}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, new_password: e.target.value }))}
+                    minLength={8}
+                    placeholder="Leave blank to keep current password"
+                  />
+                  <Button
+                    type="button"
+                    className={styles.passwordToggle}
+                    onClick={() => setShowEditPassword((prev) => !prev)}
+                    aria-label={showEditPassword ? "Hide password" : "Show password"}
+                  >
+                    {showEditPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </Button>
+                </div>
+                <small className={styles.fieldHint}>Minimum 8 characters if you want to change password.</small>
+              </label>
+              <div className={styles.field}>
+                <span>Confirm New Password <em className={styles.optionalMark}>Optional</em></span>
                 <input
                   type={showEditPassword ? "text" : "password"}
-                  value={editForm.new_password}
-                  onChange={(e) => setEditForm((prev) => ({ ...prev, new_password: e.target.value }))}
+                  value={editForm.confirm_password}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, confirm_password: e.target.value }))}
                   minLength={8}
-                  placeholder="Leave blank to keep current password"
+                  placeholder="Repeat new password"
                 />
-                <Button
-                  type="button"
-                  className={styles.passwordToggle}
-                  onClick={() => setShowEditPassword((prev) => !prev)}
-                  aria-label={showEditPassword ? "Hide password" : "Show password"}
-                >
-                  {showEditPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                </Button>
               </div>
-              <small className={styles.fieldHint}>Minimum 8 characters if you want to change password.</small>
-            </label>
-            <div className={styles.field}>
-              <span>Confirm New Password <em className={styles.optionalMark}>Optional</em></span>
-              <input
-                type={showEditPassword ? "text" : "password"}
-                value={editForm.confirm_password}
-                onChange={(e) => setEditForm((prev) => ({ ...prev, confirm_password: e.target.value }))}
-                minLength={8}
-                placeholder="Repeat new password"
-              />
             </div>
             <label className={styles.checkRow}>
               <input
@@ -612,7 +677,7 @@ export default function ManageClientUsers({ initialItems = [] }) {
       </AlertDialog>
 
       <AlertDialog open={viewOpen} onOpenChange={setViewOpen}>
-        <AlertDialogContent>
+        <AlertDialogContent className={styles.clientModal}>
           <AlertDialogHeader>
             <AlertDialogTitle>Client Details</AlertDialogTitle>
             <AlertDialogDescription>
@@ -647,6 +712,21 @@ export default function ManageClientUsers({ initialItems = [] }) {
             <div className={styles.field}>
               <span>Provider User ID</span>
               <p className={styles.metaLine}>{viewUser?.provider_user_id || "-"}</p>
+            </div>
+            <div className={styles.field}>
+              <span>Facebook Profile</span>
+              {viewUser?.facebook_profile_url ? (
+                <a
+                  href={viewUser.facebook_profile_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={styles.link}
+                >
+                  Visit Facebook Profile
+                </a>
+              ) : (
+                <p className={styles.metaLine}>-</p>
+              )}
             </div>
             <div className={styles.field}>
               <span>Views</span>
@@ -835,6 +915,23 @@ export default function ManageClientUsers({ initialItems = [] }) {
                           <TooltipContent>View history</TooltipContent>
                         </Tooltip>
                       </Button>
+                      {!row.is_active ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className={`${styles.secondaryBtn} ${styles.clientActionBtn} ${styles.clientActionDanger}`}
+                          disabled={busyId === row.user_id}
+                          onClick={() => deleteInactiveUser(row)}
+                          aria-label="Delete inactive profile"
+                        >
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span><Trash2 size={14} /></span>
+                            </TooltipTrigger>
+                            <TooltipContent>Delete inactive profile</TooltipContent>
+                          </Tooltip>
+                        </Button>
+                      ) : null}
                     </div>
                   </TableCell>
                 </TableRow>

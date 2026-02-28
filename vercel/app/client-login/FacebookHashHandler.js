@@ -36,7 +36,11 @@ export default function FacebookHashHandler() {
       })
       .catch((err) => {
         if (!active) return;
-        setMessage(err?.message || "Facebook sign-in failed.");
+        const msg = err?.message || "Facebook sign-in failed.";
+        setMessage(msg);
+        const q = new URLSearchParams();
+        q.set("error", "facebook_profile");
+        window.history.replaceState({}, "", `/client-login?${q.toString()}`);
       })
       .finally(() => {
         if (active) setWorking(false);
