@@ -63,6 +63,9 @@ export async function GET(request) {
   if (!clientSession && !adminSession) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  if (clientSession && String(clientSession?.client?.approval_status || "approved").toLowerCase() !== "approved") {
+    return NextResponse.json({ error: "Account approval pending." }, { status: 403 });
+  }
 
   const urlValue = request.nextUrl.searchParams.get("url") || "";
   const target = normalizeStreamUrl(urlValue);

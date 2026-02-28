@@ -40,6 +40,7 @@ function AnnouncementTicker({
 }) {
   const [tickerChunkRepeatCount, setTickerChunkRepeatCount] = useState(2);
   const [tickerShiftPx, setTickerShiftPx] = useState(0);
+  const [tickerViewportWidthPx, setTickerViewportWidthPx] = useState(0);
   const tickerViewportRef = useRef(null);
   const tickerBaseChunkRef = useRef(null);
 
@@ -47,6 +48,7 @@ function AnnouncementTicker({
     if (!tickerItems.length) {
       setTickerChunkRepeatCount(2);
       setTickerShiftPx(0);
+      setTickerViewportWidthPx(0);
       return;
     }
 
@@ -64,6 +66,7 @@ function AnnouncementTicker({
 
         const repeatCount = Math.max(2, Math.ceil(viewportWidth / baseChunkWidth) + 1);
         setTickerChunkRepeatCount((prev) => (prev === repeatCount ? prev : repeatCount));
+        setTickerViewportWidthPx((prev) => (Math.abs(prev - viewportWidth) < 0.5 ? prev : viewportWidth));
         setTickerShiftPx((prev) => (Math.abs(prev - baseChunkWidth) < 0.5 ? prev : baseChunkWidth));
       });
     };
@@ -106,13 +109,19 @@ function AnnouncementTicker({
 
   if (!tickerItems.length) return null;
 
+  const safeSpeedSeconds = Math.min(80, Math.max(1, Math.round(Number(tickerSpeedSeconds || 34))));
+  const safeViewportPx = Math.max(1, tickerViewportWidthPx || 1);
+  const safeShiftPx = Math.max(1, tickerShiftPx || 1);
+  // Keep visual speed constant: admin value is treated as time to traverse one viewport width.
+  const computedDurationSeconds = Math.max(1, (safeShiftPx * safeSpeedSeconds) / safeViewportPx);
+
   return (
     <div className={className} aria-live="polite" ref={tickerViewportRef}>
       <div
         className={styles.announcementTickerTrack}
         style={{
-          "--ticker-duration": `${tickerSpeedSeconds}s`,
-          "--ticker-shift": `${Math.max(1, Math.round(tickerShiftPx))}px`,
+          "--ticker-duration": `${computedDurationSeconds}s`,
+          "--ticker-shift": `${Math.round(safeShiftPx)}px`,
         }}
       >
         {Array.from({ length: tickerChunkRepeatCount }).map((_, chunkIndex) =>
@@ -156,6 +165,8 @@ export default function TopNavbar({
   const notificationMenuRef = useRef(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef(null);
+  const [deferredInstallPrompt, setDeferredInstallPrompt] = useState(null);
+  const [isIosInstallHint, setIsIosInstallHint] = useState(false);
   const [form, setForm] = useState({
     full_name: String(clientProfile?.fullName || ""),
     email: String(clientProfile?.email || ""),
@@ -175,7 +186,7 @@ export default function TopNavbar({
         const payload = await res.json().catch(() => ({}));
         if (!res.ok || !active) return;
         const items = Array.isArray(payload?.items) ? payload.items : [];
-        const speed = Math.min(80, Math.max(8, Math.round(Number(payload?.speed_seconds || 34))));
+        const speed = Math.min(80, Math.max(1, Math.round(Number(payload?.speed_seconds || 34))));
         const iconText = String(payload?.icon_text || "•").replace(/\s+/g, " ").trim().slice(0, 16) || "•";
         setTickerSpeedSeconds(speed);
         setTickerIconText(iconText);
@@ -233,6 +244,31 @@ export default function TopNavbar({
   }, [loadNotifications]);
 
   useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const nav = window.navigator;
+    const ua = String(nav?.userAgent || "").toLowerCase();
+    const isIos = /iphone|ipad|ipod/.test(ua);
+    const isStandalone = window.matchMedia?.("(display-mode: standalone)")?.matches || nav?.standalone === true;
+    setIsIosInstallHint(isIos && !isStandalone);
+
+    const onBeforeInstallPrompt = (event) => {
+      event.preventDefault();
+      setDeferredInstallPrompt(event);
+    };
+    const onInstalled = () => {
+      setDeferredInstallPrompt(null);
+      setIsIosInstallHint(false);
+    };
+
+    window.addEventListener("beforeinstallprompt", onBeforeInstallPrompt);
+    window.addEventListener("appinstalled", onInstalled);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", onBeforeInstallPrompt);
+      window.removeEventListener("appinstalled", onInstalled);
+    };
+  }, []);
+
+  useEffect(() => {
     const onPointerDown = (event) => {
       if (!(event.target instanceof Node)) return;
       if (!userMenuRef.current?.contains(event.target)) setUserMenuOpen(false);
@@ -267,6 +303,23 @@ export default function TopNavbar({
       return true;
     } catch {
       return false;
+    }
+  }
+
+  async function triggerInstallPrompt() {
+    if (deferredInstallPrompt?.prompt) {
+      try {
+        await deferredInstallPrompt.prompt();
+        await deferredInstallPrompt.userChoice;
+      } catch {
+        // ignore install prompt errors
+      } finally {
+        setDeferredInstallPrompt(null);
+      }
+      return;
+    }
+    if (isIosInstallHint) {
+      window.alert("To install this app on iPhone: tap Share, then choose 'Add to Home Screen'.");
     }
   }
 
@@ -358,6 +411,19 @@ export default function TopNavbar({
         <Button type="button" variant="ghost" size="icon" onClick={onToggleTheme} className={styles.iconBtn}>
           {isDark ? <Icon name="Sun" size={18} stroke="var(--primary)" /> : <Icon name="Moon" size={18} stroke="var(--primary)" />}
         </Button>
+        {(deferredInstallPrompt || isIosInstallHint) ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={triggerInstallPrompt}
+            className={styles.iconBtn}
+            title="Install App"
+            aria-label="Install App"
+          >
+            <Icon name="Download" size={18} />
+          </Button>
+        ) : null}
         <div className={styles.notificationMenuWrap} ref={notificationMenuRef}>
           <Button
             type="button"

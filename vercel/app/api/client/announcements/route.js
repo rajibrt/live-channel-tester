@@ -4,7 +4,7 @@ import { getSupabaseAdmin } from "../../../../lib/supabaseAdmin";
 function normalizeSpeed(value) {
   const num = Number(value);
   if (!Number.isFinite(num)) return 34;
-  return Math.min(80, Math.max(8, Math.round(num)));
+  return Math.min(80, Math.max(1, Math.round(num)));
 }
 
 function normalizeIconText(value) {

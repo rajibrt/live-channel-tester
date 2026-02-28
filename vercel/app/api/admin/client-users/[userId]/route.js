@@ -27,6 +27,23 @@ export async function PATCH(request, { params }) {
   const patches = {};
   if (typeof body?.is_active === "boolean") patches.is_active = body.is_active;
   if (typeof body?.full_name === "string") patches.full_name = body.full_name.trim();
+  if (typeof body?.approval_status === "string") {
+    const next = String(body.approval_status || "").trim().toLowerCase();
+    if (!["pending", "approved", "rejected"].includes(next)) {
+      return NextResponse.json({ error: "approval_status must be pending, approved, or rejected" }, { status: 400 });
+    }
+    patches.approval_status = next;
+    if (next === "approved") {
+      patches.approved_at = new Date().toISOString();
+      patches.approved_by_admin = auth.current.user.id;
+    } else {
+      patches.approved_at = null;
+      patches.approved_by_admin = null;
+    }
+  }
+  if (typeof body?.approval_note === "string") {
+    patches.approval_note = String(body.approval_note || "").trim();
+  }
   let nextEmail = "";
   if (typeof body?.email === "string") {
     const prepared = normalizeEmail(body.email);

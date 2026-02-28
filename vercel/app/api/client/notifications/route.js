@@ -8,6 +8,7 @@ export async function GET() {
   const auth = await requireClientApi();
   if (!auth.ok) return auth.response;
 
+  const approvalStatus = String(auth.current?.client?.approval_status || "approved").toLowerCase();
   const userId = auth.current.user.id;
   const admin = getSupabaseAdmin();
 
@@ -47,6 +48,21 @@ export async function GET() {
       is_read: readSet.has(id),
     };
   });
+
+  if (approvalStatus !== "approved") {
+    const rejected = approvalStatus === "rejected";
+    items.unshift({
+      id: "system-approval-pending",
+      title: rejected ? "Profile not approved" : "Profile approval pending",
+      content_html: rejected
+        ? "<p>Your profile is not approved yet. Please contact support for further steps.</p>"
+        : "<p>Your account is waiting for admin approval. Channel playback stays locked until approval is complete.</p>",
+      is_pinned: true,
+      published_at: null,
+      updated_at: new Date().toISOString(),
+      is_read: false,
+    });
+  }
 
   const unread_count = items.reduce((acc, item) => acc + (item.is_read ? 0 : 1), 0);
 

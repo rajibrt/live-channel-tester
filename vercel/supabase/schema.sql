@@ -69,6 +69,14 @@ create table if not exists public.client_users (
   full_name text not null default '',
   mobile_number text not null default '',
   mobile_login_key text,
+  approval_status text not null default 'approved',
+  approved_at timestamptz null,
+  approved_by_admin uuid null references public.admin_users(user_id) on delete set null,
+  approval_note text not null default '',
+  auth_provider text not null default 'password',
+  provider_user_id text not null default '',
+  avatar_url text not null default '',
+  oauth_profile_json jsonb not null default '{}'::jsonb,
   is_active boolean not null default true,
   created_by_admin uuid null references public.admin_users(user_id) on delete set null,
   created_at timestamptz not null default now(),
@@ -77,10 +85,48 @@ create table if not exists public.client_users (
 
 alter table public.client_users add column if not exists mobile_number text not null default '';
 alter table public.client_users add column if not exists mobile_login_key text;
+alter table public.client_users add column if not exists approval_status text not null default 'approved';
+alter table public.client_users add column if not exists approved_at timestamptz null;
+alter table public.client_users add column if not exists approved_by_admin uuid null references public.admin_users(user_id) on delete set null;
+alter table public.client_users add column if not exists approval_note text not null default '';
+alter table public.client_users add column if not exists auth_provider text not null default 'password';
+alter table public.client_users add column if not exists provider_user_id text not null default '';
+alter table public.client_users add column if not exists avatar_url text not null default '';
+alter table public.client_users add column if not exists oauth_profile_json jsonb not null default '{}'::jsonb;
+update public.client_users
+set approval_status = case
+  when coalesce(is_active, true) then 'approved'
+  else 'rejected'
+end
+where coalesce(approval_status, '') not in ('pending', 'approved', 'rejected');
 update public.client_users
 set mobile_login_key = right(regexp_replace(mobile_number, '\D', '', 'g'), 11)
 where mobile_login_key is null
   and length(regexp_replace(mobile_number, '\D', '', 'g')) >= 11;
+
+create table if not exists public.admin_notifications (
+  id uuid primary key default gen_random_uuid(),
+  type text not null default 'system',
+  title text not null,
+  message text not null default '',
+  payload_json jsonb not null default '{}'::jsonb,
+  target_admin_id uuid null references public.admin_users(user_id) on delete cascade,
+  is_read boolean not null default false,
+  read_at timestamptz null,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.admin_push_subscriptions (
+  id bigint generated always as identity primary key,
+  admin_user_id uuid not null references public.admin_users(user_id) on delete cascade,
+  endpoint text not null unique,
+  p256dh text not null,
+  auth text not null,
+  user_agent text not null default '',
+  is_active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
 
 create table if not exists public.client_state (
   user_id uuid primary key references public.client_users(user_id) on delete cascade,
@@ -179,12 +225,17 @@ create index if not exists client_users_email_idx on public.client_users(email);
 create unique index if not exists client_users_mobile_login_key_uidx
 on public.client_users(mobile_login_key)
 where mobile_login_key is not null;
+create index if not exists client_users_approval_status_idx on public.client_users(approval_status);
+create index if not exists client_users_provider_user_id_idx on public.client_users(provider_user_id);
 create index if not exists client_recent_history_user_time_idx on public.client_recent_history(user_id, watched_at desc);
 create index if not exists client_activity_events_user_time_idx on public.client_activity_events(user_id, created_at desc);
 create index if not exists client_notification_reads_user_time_idx on public.client_notification_reads(user_id, read_at desc);
 create index if not exists admin_announcements_created_idx on public.admin_announcements(created_at desc);
 create index if not exists admin_announcements_published_idx on public.admin_announcements(is_published, created_at desc);
 create index if not exists admin_announcements_pinned_idx on public.admin_announcements(is_pinned, created_at desc);
+create index if not exists admin_notifications_created_idx on public.admin_notifications(created_at desc);
+create index if not exists admin_notifications_read_idx on public.admin_notifications(is_read, created_at desc);
+create index if not exists admin_push_subscriptions_admin_idx on public.admin_push_subscriptions(admin_user_id, is_active);
 
 alter table public.playlists enable row level security;
 alter table public.channels enable row level security;
@@ -201,6 +252,8 @@ alter table public.client_activity_events enable row level security;
 alter table public.client_notification_reads enable row level security;
 alter table public.admin_announcements enable row level security;
 alter table public.admin_settings enable row level security;
+alter table public.admin_notifications enable row level security;
+alter table public.admin_push_subscriptions enable row level security;
 
 drop policy if exists deny_all_playlists on public.playlists;
 create policy deny_all_playlists on public.playlists for all using (false) with check (false);
@@ -232,3 +285,7 @@ drop policy if exists deny_all_admin_announcements on public.admin_announcements
 create policy deny_all_admin_announcements on public.admin_announcements for all using (false) with check (false);
 drop policy if exists deny_all_admin_settings on public.admin_settings;
 create policy deny_all_admin_settings on public.admin_settings for all using (false) with check (false);
+drop policy if exists deny_all_admin_notifications on public.admin_notifications;
+create policy deny_all_admin_notifications on public.admin_notifications for all using (false) with check (false);
+drop policy if exists deny_all_admin_push_subscriptions on public.admin_push_subscriptions;
+create policy deny_all_admin_push_subscriptions on public.admin_push_subscriptions for all using (false) with check (false);

@@ -9,7 +9,7 @@ async function getClientUsers() {
   const [{ data: users }, { data: historyRows }] = await Promise.all([
     admin
     .from("client_users")
-    .select("user_id,email,full_name,mobile_number,is_active,created_at,updated_at")
+    .select("user_id,email,full_name,mobile_number,is_active,approval_status,approval_note,auth_provider,provider_user_id,avatar_url,created_at,updated_at")
     .order("created_at", { ascending: false }),
     admin
       .from("client_recent_history")

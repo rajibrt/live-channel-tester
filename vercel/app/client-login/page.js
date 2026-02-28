@@ -3,13 +3,26 @@ import styles from "../login/page.module.css";
 import { getCurrentClient } from "../../lib/clientAuth";
 import { redirect } from "next/navigation";
 import PasswordField from "../../components/auth/PasswordField";
+import FacebookHashHandler from "./FacebookHashHandler";
 
 export default async function ClientLoginPage({ searchParams }) {
   const current = await getCurrentClient();
   if (current) redirect("/");
 
   const params = await searchParams;
-  const hasError = Boolean(params?.error);
+  const errorCode = String(params?.error || "").trim().toLowerCase();
+  const hasError = Boolean(errorCode);
+  const pending = String(params?.pending || "").trim() === "1";
+  const errorMessage =
+    errorCode === "inactive"
+      ? "Your account is inactive. Please contact support."
+      : errorCode === "facebook_start"
+        ? "Could not start Facebook sign-in. Please try again."
+        : errorCode === "facebook_callback"
+          ? "Facebook sign-in failed. Please try again."
+          : errorCode === "facebook_profile"
+            ? "Facebook sign-in succeeded, but profile setup failed."
+            : "Login failed. Please check your credentials and try again.";
 
   return (
     <main className={styles.page}>
@@ -37,13 +50,19 @@ export default async function ClientLoginPage({ searchParams }) {
 
       <section className={styles.formPane}>
         <div className={styles.formShell}>
+          <FacebookHashHandler />
           <p className={styles.formTag}>Sign In</p>
           <h2 className={styles.formTitle}>Client Login</h2>
           <p className={styles.formText}>Use email or registered mobile last 11 digits with password.</p>
 
           {hasError ? (
             <p className={`${styles.note} ${styles.errorNote}`} role="alert">
-              Login failed. Please check your credentials and try again.
+              {errorMessage}
+            </p>
+          ) : null}
+          {pending ? (
+            <p className={styles.note} role="status">
+              Your profile is waiting for admin approval. Channel playback is locked until approval.
             </p>
           ) : null}
 
@@ -63,6 +82,11 @@ export default async function ClientLoginPage({ searchParams }) {
 
             <button type="submit" className={styles.submit}>Sign In</button>
           </form>
+
+          <p className={styles.divider}>or continue with</p>
+          <a href="/api/client/auth/facebook/start" className={styles.socialBtn} style={{ display: "inline-flex", justifyContent: "center", textDecoration: "none" }}>
+            Continue with Facebook
+          </a>
         </div>
       </section>
     </main>

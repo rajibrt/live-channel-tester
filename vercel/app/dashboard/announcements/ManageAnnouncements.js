@@ -67,7 +67,7 @@ function stripHtml(html) {
 function normalizeSpeed(value) {
   const num = Number(value);
   if (!Number.isFinite(num)) return 34;
-  return Math.min(80, Math.max(8, Math.round(num)));
+  return Math.min(80, Math.max(1, Math.round(num)));
 }
 
 function TruncatedTooltipCell({ text = "-", className = "", maxLen = 120 }) {
@@ -480,7 +480,7 @@ export default function ManageAnnouncements({ initialItems = [], loadError = "" 
             <span>Ticker Speed (Desktop, seconds)</span>
             <input
               type="number"
-              min={8}
+              min={1}
               max={80}
               step={1}
               value={tickerSpeedSeconds}

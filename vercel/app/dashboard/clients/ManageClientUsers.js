@@ -30,6 +30,8 @@ const EMPTY_EDIT_FORM = {
   full_name: "",
   mobile_number: "",
   is_active: true,
+  approval_status: "approved",
+  approval_note: "",
   new_password: "",
   confirm_password: "",
 };
@@ -186,6 +188,8 @@ export default function ManageClientUsers({ initialItems = [] }) {
       full_name: row.full_name || "",
       mobile_number: row.mobile_number || "",
       is_active: !!row.is_active,
+      approval_status: String(row.approval_status || "approved"),
+      approval_note: String(row.approval_note || ""),
       new_password: "",
       confirm_password: "",
     });
@@ -278,6 +282,8 @@ export default function ManageClientUsers({ initialItems = [] }) {
           mobile_number: editForm.mobile_number,
           is_active: editForm.is_active,
           ...(nextPassword ? { new_password: nextPassword } : {}),
+          approval_status: editForm.approval_status,
+          approval_note: editForm.approval_note,
         }),
       });
       const payload = await res.json().catch(() => ({}));
@@ -291,6 +297,8 @@ export default function ManageClientUsers({ initialItems = [] }) {
                 full_name: editForm.full_name.trim(),
                 mobile_number: editForm.mobile_number.trim(),
                 is_active: editForm.is_active,
+                approval_status: editForm.approval_status,
+                approval_note: editForm.approval_note.trim(),
               }
             : row
         )
@@ -532,6 +540,26 @@ export default function ManageClientUsers({ initialItems = [] }) {
               />
             </div>
             <label className={styles.field}>
+              <span>Approval Status</span>
+              <select
+                value={editForm.approval_status}
+                onChange={(e) => setEditForm((prev) => ({ ...prev, approval_status: e.target.value }))}
+              >
+                <option value="pending">Pending</option>
+                <option value="approved">Approved</option>
+                <option value="rejected">Rejected</option>
+              </select>
+            </label>
+            <label className={styles.field}>
+              <span>Approval Note</span>
+              <input
+                type="text"
+                value={editForm.approval_note}
+                onChange={(e) => setEditForm((prev) => ({ ...prev, approval_note: e.target.value }))}
+                placeholder="Optional reviewer note"
+              />
+            </label>
+            <label className={styles.field}>
               <span>New Password <em className={styles.optionalMark}>Optional</em></span>
               <div className={styles.passwordWrap}>
                 <input
@@ -607,6 +635,18 @@ export default function ManageClientUsers({ initialItems = [] }) {
             <div className={styles.field}>
               <span>Status</span>
               <p className={styles.metaLine}>{viewUser?.is_active ? "Active" : "Inactive"}</p>
+            </div>
+            <div className={styles.field}>
+              <span>Approval</span>
+              <p className={styles.metaLine}>{String(viewUser?.approval_status || "approved")}</p>
+            </div>
+            <div className={styles.field}>
+              <span>Provider</span>
+              <p className={styles.metaLine}>{String(viewUser?.auth_provider || "password")}</p>
+            </div>
+            <div className={styles.field}>
+              <span>Provider User ID</span>
+              <p className={styles.metaLine}>{viewUser?.provider_user_id || "-"}</p>
             </div>
             <div className={styles.field}>
               <span>Views</span>
@@ -711,6 +751,7 @@ export default function ManageClientUsers({ initialItems = [] }) {
                     Status {statusFilter === "active" ? "(A)" : statusFilter === "inactive" ? "(I)" : "(All)"}
                   </button>
                 </TableHead>
+                <TableHead className={styles.colClientStatus}>Approval</TableHead>
                 <TableHead className={styles.colClientViews}>
                   <button type="button" className={styles.rowLinkBtn} onClick={() => toggleHeaderSort("most_views", "least_views")}>
                     Views {sortMarker("most_views", "least_views")}
@@ -745,6 +786,9 @@ export default function ManageClientUsers({ initialItems = [] }) {
                   </TableCell>
                   <TableCell className={styles.colClientStatus}>
                     <TruncatedTooltipCell text={row.is_active ? "Active" : "Inactive"} />
+                  </TableCell>
+                  <TableCell className={styles.colClientStatus}>
+                    <TruncatedTooltipCell text={String(row.approval_status || "approved")} />
                   </TableCell>
                   <TableCell className={styles.colClientViews}>
                     <TruncatedTooltipCell text={Number(row.watch_count || 0)} />
@@ -797,7 +841,7 @@ export default function ManageClientUsers({ initialItems = [] }) {
               ))}
             {!filteredItems.length ? (
               <TableRow>
-                <TableCell colSpan={8} className={styles.pending}>No users found for this filter.</TableCell>
+                <TableCell colSpan={9} className={styles.pending}>No users found for this filter.</TableCell>
               </TableRow>
             ) : null}
             </TableBody>

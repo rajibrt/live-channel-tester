@@ -33,7 +33,7 @@ export async function POST(request) {
   const admin = getSupabaseAdmin();
   let profileQuery = admin
     .from("client_users")
-    .select("user_id,email,is_active")
+    .select("user_id,email,is_active,approval_status")
     .eq("is_active", true);
   profileQuery = isEmailLogin
     ? profileQuery.eq("email", loginEmail)
@@ -59,10 +59,14 @@ export async function POST(request) {
   await admin.from("client_activity_events").insert({
     user_id: data.user.id,
     event_type: "client_login",
-    event_data: { via: isEmailLogin ? "email_password" : "mobile_password" },
+    event_data: {
+      via: isEmailLogin ? "email_password" : "mobile_password",
+      approval_status: String(profile?.approval_status || "approved").toLowerCase(),
+    },
   });
 
-  const res = NextResponse.redirect(new URL("/", request.url), { status: 302 });
+  const nextPath = String(profile?.approval_status || "").toLowerCase() === "approved" ? "/" : "/?pending=1";
+  const res = NextResponse.redirect(new URL(nextPath, request.url), { status: 302 });
   const sessionToken = createSessionToken({ sub: data.user.id, typ: "client" }, SESSION_MAX_AGE);
   res.cookies.set(CLIENT_SESSION_COOKIE, sessionToken, {
     path: "/",

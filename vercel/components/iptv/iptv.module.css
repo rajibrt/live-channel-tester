@@ -580,21 +580,19 @@
 .announcementTickerTitleBtn {
   border: 0;
   background: transparent;
-  color: color-mix(in oklab, var(--primary) 72%, var(--foreground));
+  color: color-mix(in oklab, var(--primary) 88%, var(--destructive));
   font: inherit;
   font-weight: 700;
   cursor: pointer;
   padding: 0 1px;
   border-radius: 4px;
-  text-decoration: underline;
-  text-decoration-thickness: 1px;
-  text-decoration-color: color-mix(in oklab, var(--primary) 62%, transparent);
-  text-underline-offset: 2px;
+  text-decoration: none;
+  transition: color 0.18s ease;
 }
 
 .announcementTickerTitleBtn:hover {
-  color: var(--primary);
-  text-decoration-color: var(--primary);
+  color: var(--chart-5);
+  text-decoration: none;
 }
 
 .announcementTickerTitleBtn:focus-visible {
@@ -620,6 +618,23 @@
 
 .announcementArticleBody :is(h1, h2, h3, h4, h5, h6, p, ul, ol) {
   margin: 0 0 10px;
+}
+
+.announcementArticleBody ul,
+.announcementArticleBody ol {
+  padding-left: 1.5rem;
+}
+
+.announcementArticleBody ul {
+  list-style: disc;
+}
+
+.announcementArticleBody ol {
+  list-style: decimal;
+}
+
+.announcementArticleBody li {
+  margin: 0 0 4px;
 }
 
 @keyframes ticker-loop-seamless {
@@ -1775,6 +1790,30 @@
     z-index: 60;
   }
 
+  .notificationDropdown {
+    position: fixed;
+    top: calc(64px + 8px);
+    left: 14px;
+    right: 14px;
+    width: auto;
+    max-width: none;
+    z-index: 90;
+  }
+
+  .notificationHeader {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .notificationHeaderActions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .notificationList {
+    max-height: min(56vh, 420px);
+  }
+
   .sidebarHeaderMobile {
     display: flex;
   }
@@ -1869,6 +1908,31 @@
   .announcementTickerMobile {
     left: 8px;
     right: 8px;
+  }
+
+  .notificationDropdown {
+    left: 12px;
+    right: 12px;
+    top: calc(64px + 6px);
+    border-radius: 10px;
+  }
+
+  .notificationHeader {
+    padding: 8px;
+  }
+
+  .notificationHeader strong {
+    font-size: 13px;
+  }
+
+  .notificationHeaderActions {
+    gap: 6px;
+    font-size: 11px;
+  }
+
+  .notificationMarkAllBtn {
+    padding: 4px 7px;
+    font-size: 11px;
   }
 
   .topLeft,

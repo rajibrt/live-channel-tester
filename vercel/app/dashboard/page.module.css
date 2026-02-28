@@ -1507,6 +1507,24 @@
   text-decoration: underline;
 }
 
+.richEditable ul,
+.richEditable ol {
+  margin: 0 0 10px;
+  padding-left: 1.5rem;
+}
+
+.richEditable ul {
+  list-style: disc;
+}
+
+.richEditable ol {
+  list-style: decimal;
+}
+
+.richEditable li {
+  margin: 0 0 4px;
+}
+
 .richColorInput {
   position: absolute;
   width: 1px;
