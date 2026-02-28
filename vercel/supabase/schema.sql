@@ -143,6 +143,13 @@ add column if not exists show_title_in_ticker boolean not null default false;
 alter table public.admin_announcements
 add column if not exists position integer not null default 0;
 
+create table if not exists public.client_notification_reads (
+  user_id uuid not null references public.client_users(user_id) on delete cascade,
+  announcement_id uuid not null references public.admin_announcements(id) on delete cascade,
+  read_at timestamptz not null default now(),
+  primary key (user_id, announcement_id)
+);
+
 with ordered as (
   select id, row_number() over (order by created_at asc, id asc) as rn
   from public.admin_announcements
@@ -174,6 +181,7 @@ on public.client_users(mobile_login_key)
 where mobile_login_key is not null;
 create index if not exists client_recent_history_user_time_idx on public.client_recent_history(user_id, watched_at desc);
 create index if not exists client_activity_events_user_time_idx on public.client_activity_events(user_id, created_at desc);
+create index if not exists client_notification_reads_user_time_idx on public.client_notification_reads(user_id, read_at desc);
 create index if not exists admin_announcements_created_idx on public.admin_announcements(created_at desc);
 create index if not exists admin_announcements_published_idx on public.admin_announcements(is_published, created_at desc);
 create index if not exists admin_announcements_pinned_idx on public.admin_announcements(is_pinned, created_at desc);
@@ -190,6 +198,7 @@ alter table public.client_state enable row level security;
 alter table public.client_recent_history enable row level security;
 alter table public.client_favorites enable row level security;
 alter table public.client_activity_events enable row level security;
+alter table public.client_notification_reads enable row level security;
 alter table public.admin_announcements enable row level security;
 alter table public.admin_settings enable row level security;
 
@@ -217,6 +226,8 @@ drop policy if exists deny_all_client_favorites on public.client_favorites;
 create policy deny_all_client_favorites on public.client_favorites for all using (false) with check (false);
 drop policy if exists deny_all_client_activity_events on public.client_activity_events;
 create policy deny_all_client_activity_events on public.client_activity_events for all using (false) with check (false);
+drop policy if exists deny_all_client_notification_reads on public.client_notification_reads;
+create policy deny_all_client_notification_reads on public.client_notification_reads for all using (false) with check (false);
 drop policy if exists deny_all_admin_announcements on public.admin_announcements;
 create policy deny_all_admin_announcements on public.admin_announcements for all using (false) with check (false);
 drop policy if exists deny_all_admin_settings on public.admin_settings;

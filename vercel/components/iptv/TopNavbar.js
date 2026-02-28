@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "../ui/button";
 import {
   AlertDialog,
@@ -10,7 +10,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "../ui/alert-dialog";
 import { Icon } from "./icons";
 import styles from "./iptv.module.css";
@@ -30,6 +29,101 @@ function stripHtml(value) {
     .replace(/<[^>]+>/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function AnnouncementTicker({
+  className,
+  tickerItems,
+  tickerSpeedSeconds,
+  tickerIconText,
+  onSelectItem,
+}) {
+  const [tickerChunkRepeatCount, setTickerChunkRepeatCount] = useState(2);
+  const [tickerShiftPx, setTickerShiftPx] = useState(0);
+  const tickerViewportRef = useRef(null);
+  const tickerBaseChunkRef = useRef(null);
+
+  useEffect(() => {
+    if (!tickerItems.length) {
+      setTickerChunkRepeatCount(2);
+      setTickerShiftPx(0);
+      return;
+    }
+
+    const viewportEl = tickerViewportRef.current;
+    const baseChunkEl = tickerBaseChunkRef.current;
+    if (!viewportEl || !baseChunkEl) return;
+
+    let frame = null;
+    const measureTicker = () => {
+      if (frame) cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const viewportWidth = viewportEl.getBoundingClientRect().width;
+        const baseChunkWidth = baseChunkEl.getBoundingClientRect().width;
+        if (!viewportWidth || !baseChunkWidth) return;
+
+        const repeatCount = Math.max(2, Math.ceil(viewportWidth / baseChunkWidth) + 1);
+        setTickerChunkRepeatCount((prev) => (prev === repeatCount ? prev : repeatCount));
+        setTickerShiftPx((prev) => (Math.abs(prev - baseChunkWidth) < 0.5 ? prev : baseChunkWidth));
+      });
+    };
+
+    measureTicker();
+    const resizeObserver = typeof ResizeObserver !== "undefined" ? new ResizeObserver(measureTicker) : null;
+    resizeObserver?.observe(viewportEl);
+    resizeObserver?.observe(baseChunkEl);
+    window.addEventListener("resize", measureTicker);
+
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", measureTicker);
+    };
+  }, [tickerItems, tickerIconText]);
+
+  const renderTickerChunk = (prefix, { ariaHidden = false, chunkRef = null } = {}) => (
+    <span className={styles.announcementTickerChunk} aria-hidden={ariaHidden} ref={chunkRef}>
+      {tickerItems.map((item, index) => (
+        <span className={styles.announcementTickerItemWrap} key={`${prefix}-${item.id || index}-${index}`}>
+          <span className={styles.announcementTickerItemIcon} aria-hidden="true">
+            {tickerIconText}
+          </span>
+          {item.show_title_in_ticker ? (
+            <button
+              type="button"
+              className={styles.announcementTickerTitleBtn}
+              onClick={() => onSelectItem(item)}
+            >
+              {item.text}
+            </button>
+          ) : (
+            <span className={styles.announcementTickerText}>{item.text}</span>
+          )}
+        </span>
+      ))}
+    </span>
+  );
+
+  if (!tickerItems.length) return null;
+
+  return (
+    <div className={className} aria-live="polite" ref={tickerViewportRef}>
+      <div
+        className={styles.announcementTickerTrack}
+        style={{
+          "--ticker-duration": `${tickerSpeedSeconds}s`,
+          "--ticker-shift": `${Math.max(1, Math.round(tickerShiftPx))}px`,
+        }}
+      >
+        {Array.from({ length: tickerChunkRepeatCount }).map((_, chunkIndex) =>
+          renderTickerChunk(`chunk-${chunkIndex}`, {
+            ariaHidden: chunkIndex > 0,
+            chunkRef: chunkIndex === 0 ? tickerBaseChunkRef : null,
+          }),
+        )}
+      </div>
+    </div>
+  );
 }
 
 export default function TopNavbar({
@@ -54,6 +148,14 @@ export default function TopNavbar({
   const [tickerSpeedSeconds, setTickerSpeedSeconds] = useState(34);
   const [tickerIconText, setTickerIconText] = useState("•");
   const [activeTickerArticle, setActiveTickerArticle] = useState(null);
+  const [notifications, setNotifications] = useState([]);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
+  const [notificationsError, setNotificationsError] = useState("");
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notificationMenuOpen, setNotificationMenuOpen] = useState(false);
+  const notificationMenuRef = useRef(null);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef(null);
   const [form, setForm] = useState({
     full_name: String(clientProfile?.fullName || ""),
     email: String(clientProfile?.email || ""),
@@ -107,6 +209,67 @@ export default function TopNavbar({
     };
   }, []);
 
+  const loadNotifications = useCallback(async () => {
+    setNotificationsLoading(true);
+    setNotificationsError("");
+    try {
+      const res = await fetch("/api/client/notifications", { cache: "no-store" });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload?.error || "Failed to load notifications.");
+      const items = Array.isArray(payload?.items) ? payload.items : [];
+      setNotifications(items);
+      setUnreadCount(Math.max(0, Number(payload?.unread_count || 0)));
+    } catch (err) {
+      setNotificationsError(err?.message || "Failed to load notifications.");
+    } finally {
+      setNotificationsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadNotifications();
+    const timer = setInterval(loadNotifications, 60000);
+    return () => clearInterval(timer);
+  }, [loadNotifications]);
+
+  useEffect(() => {
+    const onPointerDown = (event) => {
+      if (!(event.target instanceof Node)) return;
+      if (!userMenuRef.current?.contains(event.target)) setUserMenuOpen(false);
+      if (!notificationMenuRef.current?.contains(event.target)) setNotificationMenuOpen(false);
+    };
+    const onEscape = (event) => {
+      if (event.key === "Escape") {
+        setUserMenuOpen(false);
+        setNotificationMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("touchstart", onPointerDown, { passive: true });
+    window.addEventListener("keydown", onEscape);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("touchstart", onPointerDown);
+      window.removeEventListener("keydown", onEscape);
+    };
+  }, []);
+
+  async function markNotificationsRead({ announcementId = "", markAll = false } = {}) {
+    try {
+      const res = await fetch("/api/client/notifications/read", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(markAll ? { mark_all: true } : { announcement_id: announcementId }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload?.error || "Failed to update notifications.");
+      await loadNotifications();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   async function saveProfile(event) {
     event.preventDefault();
     setError("");
@@ -146,29 +309,6 @@ export default function TopNavbar({
     }
   }
 
-  const renderTickerChunk = (prefix, ariaHidden = false) => (
-    <span className={styles.announcementTickerChunk} aria-hidden={ariaHidden}>
-      {tickerItems.map((item, index) => (
-        <span className={styles.announcementTickerItemWrap} key={`${prefix}-${item.id || index}-${index}`}>
-          <span className={styles.announcementTickerItemIcon} aria-hidden="true">
-            {tickerIconText}
-          </span>
-          {item.show_title_in_ticker ? (
-            <button
-              type="button"
-              className={styles.announcementTickerTitleBtn}
-              onClick={() => setActiveTickerArticle(item)}
-            >
-              {item.text}
-            </button>
-          ) : (
-            <span className={styles.announcementTickerText}>{item.text}</span>
-          )}
-        </span>
-      ))}
-    </span>
-  );
-
   return (
     <header className={`${styles.topNavbar} ${isDark ? styles.darkGlass : styles.lightGlass}`}>
       <div className={styles.topLeft}>
@@ -184,14 +324,13 @@ export default function TopNavbar({
       </div>
 
       <div className={styles.topMiddle}>
-        {tickerItems.length ? (
-          <div className={styles.announcementTickerDesktop} aria-live="polite">
-            <div className={styles.announcementTickerTrack} style={{ "--ticker-duration": `${tickerSpeedSeconds}s` }}>
-              {renderTickerChunk("a")}
-              {renderTickerChunk("b", true)}
-            </div>
-          </div>
-        ) : null}
+        <AnnouncementTicker
+          className={styles.announcementTickerDesktop}
+          tickerItems={tickerItems}
+          tickerSpeedSeconds={tickerSpeedSeconds}
+          tickerIconText={tickerIconText}
+          onSelectItem={setActiveTickerArticle}
+        />
         <div className={`${styles.debugBadge} ${styles.debugBadgeDesktop}`}>
           <strong>Debug</strong>
           <span>links: {debugStats.total}</span>
@@ -219,17 +358,89 @@ export default function TopNavbar({
         <Button type="button" variant="ghost" size="icon" onClick={onToggleTheme} className={styles.iconBtn}>
           {isDark ? <Icon name="Sun" size={18} stroke="var(--primary)" /> : <Icon name="Moon" size={18} stroke="var(--primary)" />}
         </Button>
-        <Button type="button" variant="ghost" size="icon" className={`${styles.iconBtn} ${styles.hideSm}`}>
-          <Icon name="Bell" size={18} />
-          <span className={styles.badge}>3</span>
-        </Button>
+        <div className={styles.notificationMenuWrap} ref={notificationMenuRef}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={styles.iconBtn}
+            title="Notifications"
+            aria-haspopup="menu"
+            aria-expanded={notificationMenuOpen}
+            onClick={() => {
+              setUserMenuOpen(false);
+              const nextOpen = !notificationMenuOpen;
+              setNotificationMenuOpen(nextOpen);
+              if (nextOpen) loadNotifications();
+            }}
+          >
+            <Icon name="Bell" size={18} />
+            {unreadCount > 0 ? <span className={styles.badge}>{unreadCount > 99 ? "99+" : unreadCount}</span> : null}
+          </Button>
+          {notificationMenuOpen ? (
+            <div className={styles.notificationDropdown} role="menu" aria-label="Notifications">
+              <div className={styles.notificationHeader}>
+                <strong>Notifications</strong>
+                <div className={styles.notificationHeaderActions}>
+                  <span>{unreadCount} unread</span>
+                  <button
+                    type="button"
+                    className={styles.notificationMarkAllBtn}
+                    disabled={!notifications.length || unreadCount <= 0}
+                    onClick={() => markNotificationsRead({ markAll: true })}
+                  >
+                    Mark all read
+                  </button>
+                </div>
+              </div>
+              <div className={styles.notificationList}>
+                {notificationsLoading ? <p className={styles.notificationState}>Loading...</p> : null}
+                {notificationsError && !notificationsLoading ? <p className={styles.notificationState}>{notificationsError}</p> : null}
+                {!notificationsLoading && !notificationsError && !notifications.length ? (
+                  <p className={styles.notificationState}>No notifications yet.</p>
+                ) : null}
+                {!notificationsLoading && !notificationsError
+                  ? notifications.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        className={`${styles.notificationItem} ${item.is_read ? styles.notificationItemRead : ""}`}
+                        role="menuitem"
+                        onClick={async () => {
+                          if (!item.is_read) await markNotificationsRead({ announcementId: item.id });
+                          setActiveTickerArticle({
+                            id: item.id,
+                            title: item.title || "Announcement",
+                            content_html: item.content_html || "",
+                          });
+                          setNotificationMenuOpen(false);
+                        }}
+                      >
+                        <div className={styles.notificationItemTop}>
+                          <span className={styles.notificationItemTitle}>{item.title || "Announcement"}</span>
+                          {!item.is_read ? <span className={styles.notificationDot} aria-hidden="true" /> : null}
+                        </div>
+                        <span className={styles.notificationItemMeta}>
+                          {item.updated_at ? new Date(item.updated_at).toLocaleString() : "Recently updated"}
+                        </span>
+                      </button>
+                    ))
+                  : null}
+              </div>
+            </div>
+          ) : null}
+        </div>
 
-        <AlertDialog open={open} onOpenChange={setOpen}>
-          <AlertDialogTrigger asChild>
-            <Button type="button" variant="ghost" size="icon" className={styles.iconBtn} title="Profile">
-              <Icon name="User" size={18} />
-            </Button>
-          </AlertDialogTrigger>
+        <AlertDialog
+          open={open}
+          onOpenChange={(nextOpen) => {
+            setOpen(nextOpen);
+            if (nextOpen) {
+              setUserMenuOpen(false);
+              setNotificationMenuOpen(false);
+            }
+          }}
+        >
           <AlertDialogContent className={styles.profileModal}>
             <AlertDialogHeader>
               <AlertDialogTitle>Edit Profile</AlertDialogTitle>
@@ -307,15 +518,57 @@ export default function TopNavbar({
             </form>
           </AlertDialogContent>
         </AlertDialog>
-        <form action="/api/client/auth/logout" method="post" className={styles.clientAuthForm}>
-          <span className={`${styles.clientName} ${styles.hideSm}`} title={displayName || "Client"}>
-            {displayName || "Client"}
-          </span>
-          <Button type="submit" size="icon" className={styles.userBtn} title="Logout">
-            <Icon name="LogOut" size={17} />
+        <div className={styles.userMenuWrap} ref={userMenuRef}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={styles.iconBtn}
+            title="Profile Menu"
+            aria-haspopup="menu"
+            aria-expanded={userMenuOpen}
+            onClick={() => {
+              setNotificationMenuOpen(false);
+              setUserMenuOpen((prev) => !prev);
+            }}
+          >
+            <Icon name="User" size={18} />
           </Button>
-        </form>
+          {userMenuOpen ? (
+            <div className={styles.userMenuDropdown} role="menu" aria-label="User menu">
+              <div className={styles.userMenuHeader}>
+                <strong title={displayName || "Client"}>{displayName || "Client"}</strong>
+                <span title={readonlyEmail || "-"}>{readonlyEmail || "-"}</span>
+              </div>
+              <button
+                type="button"
+                className={styles.userMenuItem}
+                role="menuitem"
+                onClick={() => {
+                  setOpen(true);
+                  setUserMenuOpen(false);
+                }}
+              >
+                <Icon name="Settings" size={16} />
+                Edit Profile
+              </button>
+              <form action="/api/client/auth/logout" method="post">
+                <button type="submit" className={`${styles.userMenuItem} ${styles.userMenuItemDanger}`} role="menuitem">
+                  <Icon name="LogOut" size={16} />
+                  Logout
+                </button>
+              </form>
+            </div>
+          ) : null}
+        </div>
       </div>
+      <AnnouncementTicker
+        className={styles.announcementTickerMobile}
+        tickerItems={tickerItems}
+        tickerSpeedSeconds={tickerSpeedSeconds}
+        tickerIconText={tickerIconText}
+        onSelectItem={setActiveTickerArticle}
+      />
 
       <AlertDialog
         open={!!activeTickerArticle}

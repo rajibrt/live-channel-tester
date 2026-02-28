@@ -918,9 +918,10 @@ export default function VideoPlayer({
             onClick={handlePlay}
             disabled={!hasStream}
             aria-pressed={isPlayingActive}
+            aria-label="Play"
           >
             <Icon name="Play" size={16} />
-            Play
+            <span className={styles.controlLabel}>Play</span>
           </button>
           <button
             type="button"
@@ -928,9 +929,10 @@ export default function VideoPlayer({
             onClick={handlePause}
             disabled={!hasStream || isPaused}
             aria-pressed={isPauseActive}
+            aria-label="Pause"
           >
             <Icon name="Pause" size={16} />
-            Pause
+            <span className={styles.controlLabel}>Pause</span>
           </button>
           <button
             type="button"
@@ -938,9 +940,10 @@ export default function VideoPlayer({
             onClick={handleStop}
             disabled={!hasStream}
             aria-pressed={isStopActive}
+            aria-label="Stop"
           >
             <Icon name="Square" size={14} />
-            Stop
+            <span className={styles.controlLabel}>Stop</span>
           </button>
           <button
             type="button"
@@ -948,17 +951,18 @@ export default function VideoPlayer({
             onClick={togglePlayerFullscreen}
             disabled={!hasStream}
             aria-pressed={isFullscreen}
+            aria-label="Fullscreen"
           >
             <Icon name="Maximize2" size={14} />
-            Fullscreen
+            <span className={styles.controlLabel}>Fullscreen</span>
           </button>
           <div className={styles.desktopChannelNav}>
-            <button type="button" className={styles.navBtn} onClick={onPrevChannel} disabled={!hasChannelNav}>
+            <button type="button" className={styles.navBtn} onClick={onPrevChannel} disabled={!hasChannelNav} aria-label="Previous channel">
               <Icon name="ChevronLeft" size={16} />
-              Prev
+              <span className={styles.controlLabel}>Prev</span>
             </button>
-            <button type="button" className={styles.navBtn} onClick={onNextChannel} disabled={!hasChannelNav}>
-              Next
+            <button type="button" className={styles.navBtn} onClick={onNextChannel} disabled={!hasChannelNav} aria-label="Next channel">
+              <span className={styles.controlLabel}>Next</span>
               <Icon name="ChevronRight" size={16} />
             </button>
           </div>
@@ -995,7 +999,7 @@ export default function VideoPlayer({
                 <span className={styles.channelInfoLogoFallback}>{logoFallbackText}</span>
               )}
             </div>
-            <div>
+            <div className={styles.channelInfoText}>
               <h3>{channel.name}</h3>
               <div className={styles.channelMetaRow}>
                 <span className={styles.categoryPill}>{channel.category}</span>

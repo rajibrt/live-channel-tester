@@ -141,8 +141,9 @@
   position: absolute;
   top: -3px;
   right: -3px;
-  width: 18px;
+  min-width: 18px;
   height: 18px;
+  padding: 0 4px;
   border-radius: 999px;
   background: var(--destructive);
   color: var(--destructive-foreground);
@@ -180,6 +181,187 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.notificationMenuWrap {
+  position: relative;
+}
+
+.notificationDropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 80;
+  width: min(92vw, 360px);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--card) 96%, transparent);
+  box-shadow: var(--shadow-2xl);
+  overflow: hidden;
+}
+
+.notificationHeader {
+  padding: 10px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.notificationHeader strong {
+  font-size: 14px;
+}
+
+.notificationHeaderActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+
+.notificationMarkAllBtn {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px 8px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--foreground);
+  background: color-mix(in oklab, var(--card) 90%, transparent);
+  cursor: pointer;
+}
+
+.notificationMarkAllBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.notificationList {
+  max-height: min(52vh, 360px);
+  overflow: auto;
+  padding: 6px;
+  display: grid;
+  gap: 6px;
+}
+
+.notificationState {
+  margin: 0;
+  padding: 8px;
+  font-size: 13px;
+  color: var(--muted-foreground);
+}
+
+.notificationItem {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  display: grid;
+  gap: 5px;
+  text-align: left;
+  background: color-mix(in oklab, var(--card) 90%, transparent);
+  color: var(--foreground);
+  font: inherit;
+  cursor: pointer;
+}
+
+.notificationItemRead {
+  opacity: 0.85;
+}
+
+.notificationItemTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.notificationItemTitle {
+  font-size: 13px;
+  font-weight: 600;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.notificationDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--primary);
+  flex: 0 0 auto;
+}
+
+.notificationItemMeta {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+
+.userMenuWrap {
+  position: relative;
+}
+
+.userMenuDropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 80;
+  width: min(84vw, 260px);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--card) 96%, transparent);
+  box-shadow: var(--shadow-2xl);
+  padding: 6px;
+  display: grid;
+  gap: 4px;
+}
+
+.userMenuHeader {
+  padding: 8px 10px 9px;
+  border-bottom: 1px solid var(--border);
+  display: grid;
+  gap: 2px;
+}
+
+.userMenuHeader strong,
+.userMenuHeader span {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.userMenuHeader strong {
+  font-size: 13px;
+  color: var(--foreground);
+}
+
+.userMenuHeader span {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+
+.userMenuItem {
+  width: 100%;
+  border: 0;
+  border-radius: 10px;
+  padding: 9px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  color: var(--foreground);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+
+.userMenuItemDanger {
+  color: color-mix(in oklab, var(--destructive) 78%, var(--foreground));
 }
 
 .profileModal {
@@ -350,6 +532,10 @@
   position: relative;
 }
 
+.announcementTickerMobile {
+  display: none;
+}
+
 .announcementTickerTrack {
   position: absolute;
   left: 0;
@@ -368,7 +554,8 @@
 }
 
 .announcementTickerChunk {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
   flex-shrink: 0;
   font-size: 13px;
   font-weight: 600;
@@ -393,16 +580,27 @@
 .announcementTickerTitleBtn {
   border: 0;
   background: transparent;
-  color: var(--foreground);
+  color: color-mix(in oklab, var(--primary) 72%, var(--foreground));
   font: inherit;
   font-weight: 700;
   cursor: pointer;
-  padding: 0;
+  padding: 0 1px;
+  border-radius: 4px;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in oklab, var(--primary) 62%, transparent);
+  text-underline-offset: 2px;
 }
 
 .announcementTickerTitleBtn:hover {
   color: var(--primary);
-  text-decoration: underline;
+  text-decoration-color: var(--primary);
+}
+
+.announcementTickerTitleBtn:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  background: color-mix(in oklab, var(--primary) 12%, transparent);
 }
 
 .announcementArticleModal {
@@ -426,10 +624,10 @@
 
 @keyframes ticker-loop-seamless {
   from {
-    transform: translate(0, -50%);
+    transform: translate3d(0, -50%, 0);
   }
   to {
-    transform: translate(-50%, -50%);
+    transform: translate3d(calc(var(--ticker-shift, 1px) * -1), -50%, 0);
   }
 }
 
@@ -563,6 +761,9 @@
 .searchInput:focus-visible,
 .navBtn:focus-visible,
 .favoriteBtn:focus-visible,
+.userMenuItem:focus-visible,
+.notificationItem:focus-visible,
+.notificationMarkAllBtn:focus-visible,
 .channelCard:focus-visible,
 .fullscreenListBtn:focus-visible,
 .fullscreenSearchInput:focus-visible,
@@ -907,6 +1108,11 @@
   display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 0;
+}
+
+.channelInfoText {
+  min-width: 0;
 }
 
 .channelInfoLogo {
@@ -1073,6 +1279,7 @@
 .navBtn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   padding: 9px 12px;
   border-radius: 12px;
@@ -1082,6 +1289,10 @@
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
+}
+
+.controlLabel {
+  display: inline;
 }
 
 .navBtnInactive {
@@ -1371,6 +1582,20 @@
     background: color-mix(in oklab, var(--primary) 24%, transparent);
   }
 
+  .userMenuItem:hover:not(:disabled) {
+    background: color-mix(in oklab, var(--primary) 14%, transparent);
+  }
+
+  .userMenuItemDanger:hover:not(:disabled) {
+    background: color-mix(in oklab, var(--destructive) 14%, transparent);
+  }
+
+  .notificationItem:hover:not(:disabled),
+  .notificationMarkAllBtn:hover:not(:disabled) {
+    border-color: var(--ring);
+    background: color-mix(in oklab, var(--primary) 12%, transparent);
+  }
+
   .volumeMuteBtn:hover:not(.volumeMuteBtnActive):not(:disabled) {
     transform: translateY(-1px);
     border-color: var(--ring);
@@ -1535,6 +1760,21 @@
     display: none;
   }
 
+  .announcementTickerMobile {
+    display: flex;
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 12px;
+    right: 12px;
+    height: 34px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: color-mix(in oklab, var(--card) 90%, transparent);
+    align-items: center;
+    overflow: hidden;
+    z-index: 60;
+  }
+
   .sidebarHeaderMobile {
     display: flex;
   }
@@ -1579,6 +1819,11 @@
     padding: 12px;
   }
 
+  .contentWrap {
+    padding-top: 106px;
+    min-height: calc(100vh - 106px);
+  }
+
   .videoShell {
     border-radius: 14px;
   }
@@ -1621,6 +1866,11 @@
     padding: 0 8px;
   }
 
+  .announcementTickerMobile {
+    left: 8px;
+    right: 8px;
+  }
+
   .topLeft,
   .topRight {
     gap: 6px;
@@ -1650,17 +1900,81 @@
   }
 
   .channelInfo {
-    flex-direction: column;
-    align-items: flex-start;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px;
+  }
+
+  .channelInfoLogo {
+    width: 46px;
+    height: 46px;
+    border-radius: 12px;
+  }
+
+  .channelInfoLogoImg {
+    border-radius: 12px;
+  }
+
+  .channelInfoLeft {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  .channelInfoText {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .channelInfo h3 {
+    font-size: clamp(12px, 4vw, 18px);
+    line-height: 1.15;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .channelMetaRow {
+    display: flex;
+    margin-top: 4px;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .categoryPill {
+    font-size: 11px;
+    padding: 3px 8px;
+  }
+
+  .metaLive,
+  .metaOffline {
+    font-size: 11px;
   }
 
   .channelActions {
-    width: 100%;
-    justify-content: flex-start;
+    width: auto;
+    justify-content: flex-end;
+    flex: 0 0 auto;
+  }
+
+  .favoriteBtn {
+    padding: 8px 10px;
+    white-space: nowrap;
+    flex-shrink: 0;
   }
 
   .volumeControl input {
     width: min(180px, 42vw);
+  }
+
+  .controlLabel {
+    display: none;
+  }
+
+  .navBtn {
+    padding: 9px;
+    min-width: 44px;
+    gap: 0;
   }
 
   .channelGrid {
@@ -1706,5 +2020,15 @@
 
   .tvControl {
     display: none;
+  }
+
+  .channelInfo h3 {
+    font-size: clamp(11px, 3.8vw, 15px);
+  }
+
+  .favoriteBtn {
+    font-size: 12px;
+    padding: 7px 9px;
+    gap: 6px;
   }
 }

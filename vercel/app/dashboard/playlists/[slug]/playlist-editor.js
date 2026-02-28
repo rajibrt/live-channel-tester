@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import styles from "../../page.module.css";
 import {
   AlertDialog,
@@ -234,6 +234,48 @@ function GroupCombobox({ value, options, onCommit }) {
         </div>
       ) : null}
     </div>
+  );
+}
+
+function InlineEditableInput({ value, className, onCommit }) {
+  const [draft, setDraft] = useState(String(value ?? ""));
+  const isFocusedRef = useRef(false);
+
+  useEffect(() => {
+    if (!isFocusedRef.current) setDraft(String(value ?? ""));
+  }, [value]);
+
+  const commitIfChanged = () => {
+    const next = String(draft ?? "");
+    const current = String(value ?? "");
+    if (next !== current) onCommit(next);
+  };
+
+  return (
+    <input
+      className={className}
+      value={draft}
+      onFocus={() => {
+        isFocusedRef.current = true;
+      }}
+      onBlur={() => {
+        isFocusedRef.current = false;
+        commitIfChanged();
+      }}
+      onChange={(e) => setDraft(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          e.currentTarget.blur();
+          return;
+        }
+        if (e.key === "Escape") {
+          e.preventDefault();
+          setDraft(String(value ?? ""));
+          e.currentTarget.blur();
+        }
+      }}
+    />
   );
 }
 
@@ -487,21 +529,23 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
     });
   }, [groupsWithCount, groupSearch, groupFilter]);
 
-  const changeChannel = (id, patch) => {
+  const changeChannel = useCallback((id, patch) => {
     setChannels((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
-  };
+  }, []);
 
-  const applyChannelGroupChange = (channelId, rawCategory) => {
+  const applyChannelGroupChange = useCallback((channelId, rawCategory) => {
     const nextCategory = String(rawCategory || "").trim() || "Uncategorized";
-    const max = Math.max(
-      0,
-      ...channels
-        .filter((x) => x.category === nextCategory && x.id !== channelId)
-        .map((x) => Number(x.order || 0))
-    );
-    changeChannel(channelId, { category: nextCategory, order: max + 1 });
+    setChannels((prev) => {
+      const max = Math.max(
+        0,
+        ...prev
+          .filter((x) => x.category === nextCategory && x.id !== channelId)
+          .map((x) => Number(x.order || 0))
+      );
+      return prev.map((c) => (c.id === channelId ? { ...c, category: nextCategory, order: max + 1 } : c));
+    });
     setGroupOrder((prev) => (prev.includes(nextCategory) ? prev : [...prev, nextCategory]));
-  };
+  }, []);
 
   const moveGroup = (groupName, dir) => {
     setGroupOrder((prev) => {
@@ -1001,7 +1045,13 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
         ),
         cell: ({ row }) => {
           const c = row.original;
-          return <input className={styles.inlineInput} value={c.name} onChange={(e) => changeChannel(c.id, { name: e.target.value })} />;
+          return (
+            <InlineEditableInput
+              className={styles.inlineInput}
+              value={c.name}
+              onCommit={(nextValue) => changeChannel(c.id, { name: nextValue })}
+            />
+          );
         },
       },
       {
@@ -1151,6 +1201,7 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
   const channelsTable = useReactTable({
     data: channelsInSelected,
     columns: channelColumns,
+    getRowId: (row) => String(row.id),
     state: {
       sorting: channelSorting,
       globalFilter: channelSearch,
@@ -1537,7 +1588,7 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
             </thead>
             <tbody>
               {channelsTable.getRowModel().rows.map((row) => (
-                <tr key={row.id}>
+                <tr key={String(row.original?.id ?? row.id)}>
                   {row.getVisibleCells().map((cell) => {
                     const cellClass = cell.column.id === "serial"
                       ? styles.colSerial
@@ -1557,7 +1608,7 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
                       ? styles.colPreview
                       : undefined;
                     return (
-                      <td key={cell.id} className={cellClass}>
+                      <td key={`${String(row.original?.id ?? row.id)}-${cell.column.id}`} className={cellClass}>
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </td>
                     );
