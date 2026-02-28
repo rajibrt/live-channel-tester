@@ -75,7 +75,7 @@ export async function getDashboardReports() {
   const cutoff30d = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
   const cutoff365d = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
 
-  const [{ data: events }, { data: history }, { data: users }, { data: loginEventsTrend }] = await Promise.all([
+  const [{ data: events }, { data: history }, { data: users }, { data: visitorEventsTrend }] = await Promise.all([
     admin
       .from("client_activity_events")
       .select("user_id,event_type,event_data,created_at")
@@ -93,8 +93,7 @@ export async function getDashboardReports() {
       .select("user_id,approval_status,auth_provider,created_at,is_active"),
     admin
       .from("client_activity_events")
-      .select("created_at,event_type")
-      .eq("event_type", "client_login")
+      .select("user_id,created_at,event_type")
       .gte("created_at", cutoff365d.toISOString())
       .order("created_at", { ascending: true })
       .limit(200000),
@@ -103,7 +102,7 @@ export async function getDashboardReports() {
   const eventRows = Array.isArray(events) ? events : [];
   const historyRows = (Array.isArray(history) ? history : []).filter((row) => String(row?.source || "") !== "sync");
   const userRows = Array.isArray(users) ? users : [];
-  const loginTrendRows = Array.isArray(loginEventsTrend) ? loginEventsTrend : [];
+  const visitorTrendRows = Array.isArray(visitorEventsTrend) ? visitorEventsTrend : [];
 
   const sessionEvents = eventRows.filter((row) => String(row?.event_type || "") === "client_login");
   const playbackAttempts7d = eventRows.filter((row) => String(row?.event_type || "") === "playback_attempt");
@@ -286,14 +285,28 @@ export async function getDashboardReports() {
     };
   });
 
-  addToBucketMap(dayBuckets, (at) => startOfHour(at), loginTrendRows.filter((r) => safeDate(r?.created_at) >= cutoff24h));
-  addToBucketMap(weekBuckets, (at) => startOfDay(at), loginTrendRows.filter((r) => safeDate(r?.created_at) >= cutoff7d));
-  addToBucketMap(monthBuckets, (at) => startOfDay(at), loginTrendRows.filter((r) => safeDate(r?.created_at) >= cutoff30d));
-  addToBucketMap(
-    yearBuckets,
-    (at) => startOfMonth(at),
-    loginTrendRows.filter((r) => safeDate(r?.created_at) >= cutoff365d)
-  );
+  const visitorEventTypes = new Set(["presence_ping", "channel_select", "playback_attempt", "client_login"]);
+  const relevantVisitors = visitorTrendRows.filter((row) => visitorEventTypes.has(String(row?.event_type || "")));
+
+  const fillUniqueUserBuckets = (buckets, keyFn, rows) => {
+    const bucketUsers = new Map(buckets.map((b) => [b.key, new Set()]));
+    for (const row of rows) {
+      const at = safeDate(row?.created_at);
+      const userId = String(row?.user_id || "").trim();
+      if (!at || !userId) continue;
+      const key = keyFn(at).toISOString();
+      if (!bucketUsers.has(key)) continue;
+      bucketUsers.get(key).add(userId);
+    }
+    for (const bucket of buckets) {
+      bucket.value = bucketUsers.get(bucket.key)?.size || 0;
+    }
+  };
+
+  fillUniqueUserBuckets(dayBuckets, (at) => startOfHour(at), relevantVisitors.filter((r) => safeDate(r?.created_at) >= cutoff24h));
+  fillUniqueUserBuckets(weekBuckets, (at) => startOfDay(at), relevantVisitors.filter((r) => safeDate(r?.created_at) >= cutoff7d));
+  fillUniqueUserBuckets(monthBuckets, (at) => startOfDay(at), relevantVisitors.filter((r) => safeDate(r?.created_at) >= cutoff30d));
+  fillUniqueUserBuckets(yearBuckets, (at) => startOfMonth(at), relevantVisitors.filter((r) => safeDate(r?.created_at) >= cutoff365d));
 
   const newDeviceCount24 = [...devices24].filter((key) => !devicesBefore24.has(key)).length;
   const returningViewers7d = [...sessionsByUser7d.values()].filter((count) => count >= 2).length;
@@ -328,6 +341,12 @@ export async function getDashboardReports() {
     top_playback_failures_7d: topPlaybackFailures7d,
     login_methods_24h: Object.fromEntries([...loginMethod24.entries()].sort((a, b) => b[1] - a[1])),
     top_channels_7d: topChannels7d,
+    visitor_trend: {
+      day: dayBuckets,
+      week: weekBuckets,
+      month: monthBuckets,
+      year: yearBuckets,
+    },
     user_login_trend: {
       day: dayBuckets,
       week: weekBuckets,

@@ -309,6 +309,18 @@
   font-weight: 700;
 }
 
+.trendTooltipGroup {
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.22s ease, transform 0.22s ease;
+  pointer-events: none;
+}
+
+.trendTooltipVisible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
 .trendPanelFoot {
   margin-top: 2px;
   display: grid;
