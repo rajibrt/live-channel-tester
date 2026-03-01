@@ -1,3 +1,4 @@
+import nodemailer from "nodemailer";
 import { getSupabaseAdmin } from "./supabaseAdmin";
 
 const SETTINGS_TABLE = "admin_settings";
@@ -144,16 +145,6 @@ function validateSmtpConfig(settings) {
   if (settings.reply_to && !looksLikeEmail(settings.reply_to)) throw new Error("Reply-to email is invalid.");
 }
 
-async function loadNodemailer() {
-  try {
-    const dynamicImport = new Function("m", "return import(m);");
-    const mod = await dynamicImport("nodemailer");
-    return mod?.default || mod || null;
-  } catch {
-    return null;
-  }
-}
-
 export async function loadEmailSettings(adminClient) {
   const admin = adminClient || getSupabaseAdmin();
   const { data, error } = await admin
@@ -202,11 +193,6 @@ export async function sendSmtpEmail({ settings, to, subject, html, text, verify 
   validateSmtpConfig(cfg);
   if (!isDeliverableEmail(to)) {
     throw new Error("Recipient email is invalid.");
-  }
-
-  const nodemailer = await loadNodemailer();
-  if (!nodemailer?.createTransport) {
-    throw new Error("Email package not installed. Run npm install in vercel project.");
   }
 
   const transport = nodemailer.createTransport({
@@ -286,31 +272,51 @@ export function buildWelcomeEmail({ clientUser, settings }) {
   ];
 
   const detailsHtml = detailRows
-    .map(([k, v]) => `<tr><td style="padding:6px 10px;border:1px solid #d6e0f5;font-weight:600;">${escapeHtml(k)}</td><td style="padding:6px 10px;border:1px solid #d6e0f5;">${escapeHtml(v)}</td></tr>`)
+    .map(
+      ([k, v]) => `<tr>
+        <th style="padding:10px 12px;border-bottom:1px solid #e3e9f7;text-align:left;font-size:13px;line-height:1.35;color:#324868;width:38%;vertical-align:top;">${escapeHtml(k)}</th>
+        <td style="padding:10px 12px;border-bottom:1px solid #e3e9f7;font-size:14px;line-height:1.45;color:#10213d;word-break:break-word;overflow-wrap:anywhere;">${escapeHtml(v)}</td>
+      </tr>`
+    )
     .join("");
-
-  const logoBlock = logoUrl
-    ? `<div style="padding:0 0 16px;"><img src="${escapeHtml(logoUrl)}" alt="${escapeHtml(brand)}" style="height:42px;max-width:220px;object-fit:contain;display:block;" /></div>`
-    : `<div style="padding:0 0 12px;font-size:18px;font-weight:700;color:#11223b;">${escapeHtml(brand)}</div>`;
-
-  const linkBlock = siteUrl
-    ? `<p style="margin:18px 0 0;">
-        <a href="${escapeHtml(siteUrl)}" style="display:inline-block;padding:10px 16px;background:#0f4fcc;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;">Visit Website</a>
-      </p>`
-    : "";
 
   const html = `<!doctype html>
 <html>
-  <body style="margin:0;padding:18px;background:#f4f7fc;font-family:Arial,sans-serif;color:#14243d;">
-    <div style="max-width:700px;margin:0 auto;background:#ffffff;border:1px solid #d8e2f3;border-radius:12px;padding:20px;">
-      ${logoBlock}
-      <h2 style="margin:0 0 8px;font-size:22px;color:#0f2c54;">Welcome to ${escapeHtml(brand)}</h2>
-      <p style="margin:0 0 10px;font-size:14px;line-height:1.55;">Hello ${escapeHtml(fullName)},</p>
-      <p style="margin:0 0 12px;font-size:14px;line-height:1.6;">${escapeHtml(messageBody)}</p>
-      <p style="margin:0 0 14px;font-size:14px;line-height:1.6;">Your account is approved. Below is your account information:</p>
-      <table style="width:100%;border-collapse:collapse;font-size:13px;background:#fbfdff;">${detailsHtml}</table>
-      ${linkBlock}
-      <p style="margin:18px 0 0;font-size:13px;line-height:1.6;">${safeSite ? `Website: <a href="${escapeHtml(siteUrl)}">${safeSite}</a><br />` : ""}Thank you for staying with ${escapeHtml(brand)}.</p>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body { margin: 0 !important; padding: 0 !important; background: #edf2fb; }
+      @media only screen and (max-width: 600px) {
+        .outer-pad { padding: 4px !important; }
+        .container { width: 100% !important; max-width: 100% !important; }
+        .card { padding: 10px !important; border-radius: 10px !important; border-left: 0 !important; border-right: 0 !important; }
+        .hero { padding: 10px !important; border-radius: 9px !important; }
+        .logo { height: 34px !important; max-width: 170px !important; }
+        .heading { font-size: 31px !important; line-height: 1.06 !important; margin-bottom: 4px !important; }
+        .content-text { font-size: 16px !important; line-height: 1.5 !important; margin-bottom: 10px !important; }
+        .meta-table th, .meta-table td { padding: 8px !important; font-size: 14px !important; line-height: 1.35 !important; }
+        .meta-table th { width: 34% !important; }
+        .cta-link { display: block !important; width: 100% !important; box-sizing: border-box !important; text-align: center !important; padding: 12px !important; }
+      }
+    </style>
+  </head>
+  <body style="margin:0;padding:0;background:#edf2fb;font-family:Arial,sans-serif;color:#14243d;">
+    <div class="outer-pad" style="padding:18px;">
+      <div class="container" style="max-width:680px;width:100%;margin:0 auto;">
+      <div class="card" style="background:#ffffff;border:1px solid #d7e0f4;border-radius:16px;padding:22px;">
+      <div class="hero" style="margin:0 0 14px;padding:14px;border-radius:12px;background:linear-gradient(135deg,#f6f9ff,#ecf2ff);border:1px solid #e5ecff;">
+        ${logoUrl ? `<div style="padding:0 0 10px;"><img class="logo" src="${escapeHtml(logoUrl)}" alt="${escapeHtml(brand)}" style="height:42px;max-width:220px;object-fit:contain;display:block;" /></div>` : `<div style="padding:0 0 8px;font-size:18px;font-weight:700;color:#11223b;">${escapeHtml(brand)}</div>`}
+        <h2 class="heading" style="margin:0 0 6px;font-size:36px;line-height:1.12;color:#0d2a52;">Welcome to ${escapeHtml(brand)}</h2>
+        <p class="content-text" style="margin:0;font-size:16px;line-height:1.5;color:#41587a;">Your account is now approved and ready.</p>
+      </div>
+      <p class="content-text" style="margin:0 0 10px;font-size:16px;line-height:1.6;">Hello ${escapeHtml(fullName)},</p>
+      <p class="content-text" style="margin:0 0 12px;font-size:16px;line-height:1.65;">${escapeHtml(messageBody)}</p>
+      <p class="content-text" style="margin:0 0 12px;font-size:16px;line-height:1.6;">Below is your account information:</p>
+      <table class="meta-table" style="width:100%;border-collapse:separate;border-spacing:0;background:#f9fbff;border:1px solid #e3e9f7;border-radius:12px;overflow:hidden;">${detailsHtml}</table>
+      ${siteUrl ? `<p style="margin:18px 0 0;"><a class="cta-link" href="${escapeHtml(siteUrl)}" style="display:inline-block;padding:12px 18px;background:linear-gradient(135deg,#0f4fcc,#2162df);color:#ffffff;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px;line-height:1;">Visit Website</a></p>` : ""}
+      <p style="margin:18px 0 0;font-size:14px;line-height:1.65;color:#334a6d;">${safeSite ? `Website: <a href="${escapeHtml(siteUrl)}" style="color:#2058cd;word-break:break-word;overflow-wrap:anywhere;">${safeSite}</a><br />` : ""}Thank you for staying with ${escapeHtml(brand)}.</p>
+      </div>
+      </div>
     </div>
   </body>
 </html>`;

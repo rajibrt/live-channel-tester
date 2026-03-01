@@ -153,6 +153,17 @@
   font-size: 13px;
 }
 
+.statLabelWithIcon {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.statLabelWithIcon svg {
+  color: color-mix(in oklab, var(--foreground) 72%, var(--muted-foreground));
+  flex-shrink: 0;
+}
+
 .statCard strong {
   display: block;
   margin-top: 6px;
@@ -845,6 +856,29 @@
 
 .primaryBtnCompact:hover {
   filter: brightness(1.06);
+}
+
+.secondaryBtnCompact {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 14px;
+  background: color-mix(in oklab, var(--card) 90%, var(--muted));
+  color: var(--foreground);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.secondaryBtnCompact:hover {
+  background: color-mix(in oklab, var(--background) 84%, var(--card));
+}
+
+.secondaryBtnCompact:disabled {
+  opacity: 0.72;
+  cursor: not-allowed;
 }
 
 .passwordWrap {
@@ -1878,6 +1912,127 @@
   overflow-x: hidden;
 }
 
+.clientViewHero {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: color-mix(in oklab, var(--card) 86%, var(--background));
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.clientViewHeroMain {
+  min-width: 0;
+}
+
+.clientViewKicker {
+  margin: 0;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted-foreground);
+}
+
+.clientViewTitle {
+  margin: 4px 0 0;
+  font-size: 21px;
+  line-height: 1.2;
+}
+
+.clientViewSubtitle {
+  margin: 6px 0 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.clientViewPills {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.clientViewPill {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--foreground);
+  background: color-mix(in oklab, var(--card) 84%, transparent);
+  text-transform: capitalize;
+}
+
+.clientViewPillGood {
+  border-color: color-mix(in oklab, var(--chart-2) 60%, var(--border));
+  background: color-mix(in oklab, var(--chart-2) 30%, var(--card));
+}
+
+.clientViewPillMuted {
+  border-color: color-mix(in oklab, var(--muted) 60%, var(--border));
+  color: var(--muted-foreground);
+}
+
+.clientViewGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.clientViewCard {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: color-mix(in oklab, var(--card) 92%, transparent);
+}
+
+.clientViewCardTitle {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.clientViewList {
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.clientViewRow {
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr);
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.clientViewRow dt {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+.clientViewRow dd {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.clientViewActions {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
 .richEditor {
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -2075,6 +2230,11 @@
     width: 100%;
   }
 
+  .secondaryBtnCompact {
+    justify-content: center;
+    width: 100%;
+  }
+
   .streamPreviewRow {
     grid-template-columns: 1fr;
   }
@@ -2140,6 +2300,22 @@
     width: min(96vw, 560px);
     max-height: 92dvh;
     padding: 14px;
+  }
+
+  .clientViewHero {
+    flex-direction: column;
+  }
+
+  .clientViewPills {
+    justify-content: flex-start;
+  }
+
+  .clientViewGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .clientViewRow {
+    grid-template-columns: 108px minmax(0, 1fr);
   }
 
   .modalActionBtn {

@@ -75,7 +75,7 @@ export async function getDashboardReports() {
   const cutoff30d = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
   const cutoff365d = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
 
-  const [{ data: events }, { data: history }, { data: users }, { data: visitorEventsTrend }] = await Promise.all([
+  const [{ data: events }, { data: history }, { data: users }, { data: visitorEventsTrend }, { data: visitorHistoryTrend }] = await Promise.all([
     admin
       .from("client_activity_events")
       .select("user_id,event_type,event_data,created_at")
@@ -97,12 +97,21 @@ export async function getDashboardReports() {
       .gte("created_at", cutoff365d.toISOString())
       .order("created_at", { ascending: true })
       .limit(200000),
+    admin
+      .from("client_recent_history")
+      .select("user_id,watched_at,source")
+      .gte("watched_at", cutoff365d.toISOString())
+      .order("watched_at", { ascending: true })
+      .limit(200000),
   ]);
 
   const eventRows = Array.isArray(events) ? events : [];
   const historyRows = (Array.isArray(history) ? history : []).filter((row) => String(row?.source || "") !== "sync");
   const userRows = Array.isArray(users) ? users : [];
   const visitorTrendRows = Array.isArray(visitorEventsTrend) ? visitorEventsTrend : [];
+  const visitorHistoryRows = (Array.isArray(visitorHistoryTrend) ? visitorHistoryTrend : []).filter(
+    (row) => String(row?.source || "") !== "sync"
+  );
 
   const sessionEvents = eventRows.filter((row) => String(row?.event_type || "") === "client_login");
   const playbackAttempts7d = eventRows.filter((row) => String(row?.event_type || "") === "playback_attempt");
@@ -286,7 +295,12 @@ export async function getDashboardReports() {
   });
 
   const visitorEventTypes = new Set(["presence_ping", "channel_select", "playback_attempt", "client_login"]);
-  const relevantVisitors = visitorTrendRows.filter((row) => visitorEventTypes.has(String(row?.event_type || "")));
+  const relevantEventVisitors = visitorTrendRows.filter((row) => visitorEventTypes.has(String(row?.event_type || "")));
+  const relevantHistoryVisitors = visitorHistoryRows.map((row) => ({
+    user_id: row?.user_id,
+    created_at: row?.watched_at,
+  }));
+  const relevantVisitors = [...relevantEventVisitors, ...relevantHistoryVisitors];
 
   const fillUniqueUserBuckets = (buckets, keyFn, rows) => {
     const bucketUsers = new Map(buckets.map((b) => [b.key, new Set()]));

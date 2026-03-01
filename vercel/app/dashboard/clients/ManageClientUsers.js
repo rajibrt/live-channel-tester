@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Eye, EyeOff, History, Mail, Pencil, Plus, Trash2 } from "lucide-react";
+import { Activity, Eye, EyeOff, History, Mail, Pencil, Plus, RotateCcw, UserCheck, Users, Users2 } from "lucide-react";
 import styles from "../page.module.css";
+import ActiveViewersPanel from "../ActiveViewersPanel";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -17,6 +18,7 @@ import {
 import { Button } from "../../../components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../../components/ui/table";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../../../components/ui/tooltip";
+import { Switch } from "../../../components/ui/switch";
 
 const EMPTY_FORM = {
   email: "",
@@ -33,6 +35,8 @@ const EMPTY_EDIT_FORM = {
   is_active: true,
   approval_status: "approved",
   approval_note: "",
+  provider_user_id: "",
+  facebook_profile_url: "",
   new_password: "",
   confirm_password: "",
 };
@@ -124,13 +128,14 @@ function TruncatedTooltipCell({ text = "-", className = "", asButton = false, on
   );
 }
 
-export default function ManageClientUsers({ initialItems = [] }) {
+export default function ManageClientUsers({ initialItems = [], initialActiveViewers = [] }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [items, setItems] = useState(Array.isArray(initialItems) ? initialItems : []);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [approvalFilter, setApprovalFilter] = useState("all");
   const [activityFilter, setActivityFilter] = useState("all");
   const [watchTierFilter, setWatchTierFilter] = useState("all");
   const [sortMode, setSortMode] = useState("created_desc");
@@ -152,7 +157,22 @@ export default function ManageClientUsers({ initialItems = [] }) {
   const [viewOpen, setViewOpen] = useState(false);
   const [viewUser, setViewUser] = useState(null);
   const [welcomeBusyId, setWelcomeBusyId] = useState("");
+  const [toast, setToast] = useState({ open: false, type: "success", title: "", description: "" });
+  const toastTimerRef = useRef(null);
   const lastOpenedUserRef = useRef("");
+
+  function showToast(type, title, description) {
+    window.clearTimeout(toastTimerRef.current);
+    setToast({
+      open: true,
+      type: type === "error" ? "error" : "success",
+      title: String(title || ""),
+      description: String(description || ""),
+    });
+    toastTimerRef.current = window.setTimeout(() => {
+      setToast((prev) => ({ ...prev, open: false }));
+    }, 3500);
+  }
 
   function cycleStatusFilter() {
     setStatusFilter((prev) => (prev === "all" ? "active" : prev === "active" ? "inactive" : "all"));
@@ -169,6 +189,10 @@ export default function ManageClientUsers({ initialItems = [] }) {
   }
 
   const activeCount = useMemo(() => items.filter((x) => x.is_active).length, [items]);
+  const pendingApprovalCount = useMemo(
+    () => items.filter((x) => String(x?.approval_status || "").toLowerCase() === "pending").length,
+    [items]
+  );
   const noActivityCount = useMemo(() => items.filter((x) => Number(x.watch_count || 0) <= 0).length, [items]);
   const filteredItems = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
@@ -178,6 +202,8 @@ export default function ManageClientUsers({ initialItems = [] }) {
         (statusFilter === "active" && row.is_active) ||
         (statusFilter === "inactive" && !row.is_active);
       if (!statusMatch) return false;
+      const approvalStatus = String(row?.approval_status || "approved").toLowerCase();
+      if (approvalFilter !== "all" && approvalStatus !== approvalFilter) return false;
 
       const watchCount = Number(row.watch_count || 0);
       const totalWatch = Number(row.total_watch_seconds || 0);
@@ -223,7 +249,18 @@ export default function ManageClientUsers({ initialItems = [] }) {
       return timeValue(b.created_at) - timeValue(a.created_at);
     });
     return sorted;
-  }, [items, searchTerm, statusFilter, activityFilter, watchTierFilter, sortMode]);
+  }, [items, searchTerm, statusFilter, approvalFilter, activityFilter, watchTierFilter, sortMode]);
+
+  const hasActiveFilters = useMemo(
+    () =>
+      searchTerm.trim().length > 0 ||
+      statusFilter !== "all" ||
+      approvalFilter !== "all" ||
+      activityFilter !== "all" ||
+      watchTierFilter !== "all" ||
+      sortMode !== "created_desc",
+    [searchTerm, statusFilter, approvalFilter, activityFilter, watchTierFilter, sortMode]
+  );
 
   function openEdit(row) {
     setError("");
@@ -236,6 +273,8 @@ export default function ManageClientUsers({ initialItems = [] }) {
       is_active: !!row.is_active,
       approval_status: String(row.approval_status || "approved"),
       approval_note: String(row.approval_note || ""),
+      provider_user_id: String(row.provider_user_id || ""),
+      facebook_profile_url: String(getFacebookProfileUrl(row) || ""),
       new_password: "",
       confirm_password: "",
     });
@@ -289,6 +328,12 @@ export default function ManageClientUsers({ initialItems = [] }) {
     };
   }, [items]);
 
+  useEffect(() => {
+    return () => {
+      window.clearTimeout(toastTimerRef.current);
+    };
+  }, []);
+
   async function openHistory(row) {
     setError("");
     setMessage("");
@@ -337,10 +382,13 @@ export default function ManageClientUsers({ initialItems = [] }) {
       const emailResult = payload?.welcome_email && typeof payload.welcome_email === "object" ? payload.welcome_email : null;
       if (emailResult?.sent) {
         setMessage("Client user created. Welcome email sent.");
+        showToast("success", "Welcome email sent", `Sent to ${created?.email || "client email"}.`);
       } else if (emailResult?.error) {
         setMessage(`Client user created. Welcome email failed: ${emailResult.error}`);
+        showToast("error", "Welcome email failed", String(emailResult.error || "Unknown email error."));
       } else if (emailResult?.reason && String(emailResult.reason || "") !== "Not triggered.") {
         setMessage(`Client user created. Welcome email skipped: ${emailResult.reason}`);
+        showToast("error", "Welcome email skipped", String(emailResult.reason || "Email not sent."));
       } else {
         setMessage("Client user created.");
       }
@@ -380,6 +428,8 @@ export default function ManageClientUsers({ initialItems = [] }) {
           ...(nextPassword ? { new_password: nextPassword } : {}),
           approval_status: editForm.approval_status,
           approval_note: editForm.approval_note,
+          provider_user_id: editForm.provider_user_id,
+          facebook_profile_url: editForm.facebook_profile_url,
         }),
       });
       const payload = await res.json().catch(() => ({}));
@@ -395,6 +445,11 @@ export default function ManageClientUsers({ initialItems = [] }) {
                 is_active: editForm.is_active,
                 approval_status: editForm.approval_status,
                 approval_note: editForm.approval_note.trim(),
+                provider_user_id: String(editForm.provider_user_id || "").trim(),
+                oauth_profile_json: {
+                  ...(row.oauth_profile_json && typeof row.oauth_profile_json === "object" ? row.oauth_profile_json : {}),
+                  profile_url: String(editForm.facebook_profile_url || "").trim(),
+                },
               }
             : row
         )
@@ -403,10 +458,13 @@ export default function ManageClientUsers({ initialItems = [] }) {
       const emailResult = payload?.welcome_email && typeof payload.welcome_email === "object" ? payload.welcome_email : null;
       if (emailResult?.sent) {
         setMessage("Client user updated. Welcome email sent.");
+        showToast("success", "Welcome email sent", `Sent to ${editForm.email || "client email"}.`);
       } else if (emailResult?.error) {
         setMessage(`Client user updated. Welcome email failed: ${emailResult.error}`);
+        showToast("error", "Welcome email failed", String(emailResult.error || "Unknown email error."));
       } else if (emailResult?.reason && String(emailResult.reason || "") !== "Not triggered.") {
         setMessage(`Client user updated. Welcome email skipped: ${emailResult.reason}`);
+        showToast("error", "Welcome email skipped", String(emailResult.reason || "Email not sent."));
       } else {
         setMessage("Client user updated.");
       }
@@ -479,8 +537,10 @@ export default function ManageClientUsers({ initialItems = [] }) {
       const payload = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(payload?.error || "Failed to send welcome email.");
       setMessage(payload?.message || "Welcome email sent.");
+      showToast("success", "Welcome email sent", `Sent to ${viewUser?.email || "client email"}.`);
     } catch (err) {
       setError(err?.message || "Failed to send welcome email.");
+      showToast("error", "Welcome email failed", err?.message || "Failed to send welcome email.");
     } finally {
       setWelcomeBusyId("");
     }
@@ -498,32 +558,68 @@ export default function ManageClientUsers({ initialItems = [] }) {
     return `${remain}s`;
   }
 
+  function clearFilters() {
+    setSearchTerm("");
+    setStatusFilter("all");
+    setApprovalFilter("all");
+    setActivityFilter("all");
+    setWatchTierFilter("all");
+    setSortMode("created_desc");
+  }
+
   return (
     <section className={styles.form}>
       <div className={styles.stats}>
+        <ActiveViewersPanel title="Watching Now" viewers={initialActiveViewers} />
         <article className={styles.statCard}>
-          <p>Total Clients</p>
+          <p className={styles.statLabelWithIcon}>
+            <Users size={14} />
+            <span>Total Clients</span>
+          </p>
           <strong>{items.length}</strong>
         </article>
         <article className={styles.statCard}>
-          <p>Active Clients</p>
+          <p className={styles.statLabelWithIcon}>
+            <UserCheck size={14} />
+            <span>Active Clients</span>
+          </p>
           <strong>{activeCount}</strong>
         </article>
+        <button
+          type="button"
+          className={styles.statCardButton}
+          onClick={() => setApprovalFilter((prev) => (prev === "pending" ? "all" : "pending"))}
+          aria-pressed={approvalFilter === "pending"}
+          title="Toggle pending approval filter"
+        >
+          <p className={styles.statLabelWithIcon}>
+            <Users2 size={14} />
+            <span>Pending Approval</span>
+          </p>
+          <strong>{pendingApprovalCount}</strong>
+          <small className={styles.metaMuted}>
+            {approvalFilter === "pending" ? "Showing pending only" : "Click to filter table"}
+          </small>
+        </button>
         <article className={styles.statCard}>
-          <p>No Activity</p>
+          <p className={styles.statLabelWithIcon}>
+            <Activity size={14} />
+            <span>No Activity</span>
+          </p>
           <strong>{noActivityCount}</strong>
         </article>
       </div>
 
       <div className={styles.controlRowEnd}>
-        <AlertDialog open={createOpen} onOpenChange={setCreateOpen}>
-          <AlertDialogTrigger asChild>
-            <Button type="button" className={styles.primaryBtnCompact}>
-              <Plus size={16} />
-              <span>New Client</span>
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
+        <div className={styles.controlRow}>
+          <AlertDialog open={createOpen} onOpenChange={setCreateOpen}>
+            <AlertDialogTrigger asChild>
+              <Button type="button" className={styles.primaryBtnCompact}>
+                <Plus size={16} />
+                <span>New Client</span>
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>Create Client User</AlertDialogTitle>
               <AlertDialogDescription>
@@ -594,8 +690,20 @@ export default function ManageClientUsers({ initialItems = [] }) {
                 </Button>
               </AlertDialogFooter>
             </form>
-          </AlertDialogContent>
-        </AlertDialog>
+            </AlertDialogContent>
+          </AlertDialog>
+          <Button
+            type="button"
+            variant="outline"
+            className={styles.secondaryBtnCompact}
+            onClick={clearFilters}
+            disabled={!hasActiveFilters}
+            title="Reset all table filters"
+          >
+            <RotateCcw size={15} />
+            <span>Clear Filters</span>
+          </Button>
+        </div>
         {message ? <p className={styles.successText}>{message}</p> : null}
       </div>
 
@@ -615,6 +723,15 @@ export default function ManageClientUsers({ initialItems = [] }) {
             <option value="all">All</option>
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
+          </select>
+        </label>
+        <label className={styles.field}>
+          <span>Approval Filter</span>
+          <select value={approvalFilter} onChange={(e) => setApprovalFilter(e.target.value)}>
+            <option value="all">All Approval States</option>
+            <option value="pending">Pending</option>
+            <option value="approved">Approved</option>
+            <option value="rejected">Rejected</option>
           </select>
         </label>
         <label className={styles.field}>
@@ -694,15 +811,22 @@ export default function ManageClientUsers({ initialItems = [] }) {
                 />
               </div>
               <label className={styles.field}>
-                <span>Approval Status</span>
-                <select
-                  value={editForm.approval_status}
-                  onChange={(e) => setEditForm((prev) => ({ ...prev, approval_status: e.target.value }))}
-                >
-                  <option value="pending">Pending</option>
-                  <option value="approved">Approved</option>
-                  <option value="rejected">Rejected</option>
-                </select>
+                <span>Facebook User ID <em className={styles.optionalMark}>Optional</em></span>
+                <input
+                  type="text"
+                  value={editForm.provider_user_id}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, provider_user_id: e.target.value }))}
+                  placeholder="Facebook numeric/user id"
+                />
+              </label>
+              <label className={styles.field}>
+                <span>Facebook Profile Link <em className={styles.optionalMark}>Optional</em></span>
+                <input
+                  type="url"
+                  value={editForm.facebook_profile_url}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, facebook_profile_url: e.target.value }))}
+                  placeholder="https://www.facebook.com/username"
+                />
               </label>
               <label className={`${styles.field} ${styles.full}`}>
                 <span>Approval Note</span>
@@ -745,14 +869,33 @@ export default function ManageClientUsers({ initialItems = [] }) {
                 />
               </div>
             </div>
-            <label className={styles.checkRow}>
-              <input
-                type="checkbox"
-                checked={editForm.is_active}
-                onChange={(e) => setEditForm((prev) => ({ ...prev, is_active: e.target.checked }))}
-              />
-              <span>Active account</span>
-            </label>
+            <div className={styles.formGrid}>
+              <label className={styles.checkRow}>
+                <Switch
+                  checked={!!editForm.is_active}
+                  onCheckedChange={(checked) => setEditForm((prev) => ({ ...prev, is_active: !!checked }))}
+                />
+                <span>Active account</span>
+              </label>
+              <label className={styles.checkRow}>
+                <Switch
+                  checked={String(editForm.approval_status || "").toLowerCase() === "approved"}
+                  onCheckedChange={(checked) =>
+                    setEditForm((prev) => ({ ...prev, approval_status: checked ? "approved" : "pending" }))
+                  }
+                />
+                <span>Approved</span>
+              </label>
+              <label className={styles.checkRow}>
+                <Switch
+                  checked={String(editForm.approval_status || "").toLowerCase() === "rejected"}
+                  onCheckedChange={(checked) =>
+                    setEditForm((prev) => ({ ...prev, approval_status: checked ? "rejected" : "pending" }))
+                  }
+                />
+                <span>Rejected</span>
+              </label>
+            </div>
             {error ? <p className={styles.errorText}>{error}</p> : null}
             <AlertDialogFooter>
               <AlertDialogCancel asChild>
@@ -771,82 +914,97 @@ export default function ManageClientUsers({ initialItems = [] }) {
           <AlertDialogHeader>
             <AlertDialogTitle>Client Details</AlertDialogTitle>
             <AlertDialogDescription>
-              Review this user info, then click Edit to update.
+              Review account information before entering edit mode.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <div className={styles.formGrid}>
-            <div className={styles.field}>
-              <span>Full Name</span>
-              <p className={styles.metaLine}>{viewUser?.full_name || "-"}</p>
+          <div className={styles.clientViewHero}>
+            <div className={styles.clientViewHeroMain}>
+              <p className={styles.clientViewKicker}>Client Profile</p>
+              <h3 className={styles.clientViewTitle}>{viewUser?.full_name || "Unnamed Client"}</h3>
+              <p className={styles.clientViewSubtitle}>{viewUser?.email || "-"}</p>
             </div>
-            <div className={styles.field}>
-              <span>Mobile</span>
-              <p className={styles.metaLine}>{viewUser?.mobile_number || "-"}</p>
-            </div>
-            <div className={styles.field}>
-              <span>Email</span>
-              <p className={styles.metaLine}>{viewUser?.email || "-"}</p>
-            </div>
-            <div className={styles.field}>
-              <span>Status</span>
-              <p className={styles.metaLine}>{viewUser?.is_active ? "Active" : "Inactive"}</p>
-            </div>
-            <div className={styles.field}>
-              <span>Approval</span>
-              <p className={styles.metaLine}>{String(viewUser?.approval_status || "approved")}</p>
-            </div>
-            <div className={styles.field}>
-              <span>Provider</span>
-              <p className={styles.metaLine}>{String(viewUser?.auth_provider || "password")}</p>
-            </div>
-            <div className={styles.field}>
-              <span>Provider User ID</span>
-              <p className={styles.metaLine}>{viewUser?.provider_user_id || "-"}</p>
-            </div>
-            <div className={styles.field}>
-              <span>Facebook Profile</span>
-              {viewUser?.facebook_profile_url ? (
-                <a
-                  href={viewUser.facebook_profile_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={styles.link}
-                >
-                  Visit Facebook Profile
-                </a>
-              ) : viewUser?.facebook_search_url ? (
-                <a
-                  href={viewUser.facebook_search_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={styles.link}
-                >
-                  Search on Facebook
-                </a>
-              ) : (
-                <p className={styles.metaLine}>-</p>
-              )}
-            </div>
-            <div className={styles.field}>
-              <span>Views</span>
-              <p className={styles.metaLine}>{Number(viewUser?.watch_count || 0)}</p>
-            </div>
-            <div className={styles.field}>
-              <span>Watch Time</span>
-              <p className={styles.metaLine}>{formatWatchDuration(viewUser?.total_watch_seconds)}</p>
-            </div>
-            <div className={styles.field}>
-              <span>Last Activity</span>
-              <p className={styles.metaLine}>
-                {viewUser?.last_watched_at ? new Date(viewUser.last_watched_at).toLocaleString() : "No activity"}
-              </p>
-            </div>
-            <div className={styles.field}>
-              <span>Created</span>
-              <p className={styles.metaLine}>{viewUser?.created_at ? new Date(viewUser.created_at).toLocaleString() : "-"}</p>
+            <div className={styles.clientViewPills}>
+              <span className={`${styles.clientViewPill} ${viewUser?.is_active ? styles.clientViewPillGood : styles.clientViewPillMuted}`}>
+                {viewUser?.is_active ? "Active" : "Inactive"}
+              </span>
+              <span className={styles.clientViewPill}>
+                {String(viewUser?.approval_status || "approved")}
+              </span>
+              <span className={styles.clientViewPill}>
+                {String(viewUser?.auth_provider || "password")}
+              </span>
             </div>
           </div>
-          <AlertDialogFooter>
+
+          <div className={styles.clientViewGrid}>
+            <section className={styles.clientViewCard}>
+              <h4 className={styles.clientViewCardTitle}>Identity</h4>
+              <dl className={styles.clientViewList}>
+                <div className={styles.clientViewRow}><dt>Full Name</dt><dd>{viewUser?.full_name || "-"}</dd></div>
+                <div className={styles.clientViewRow}><dt>Email</dt><dd>{viewUser?.email || "-"}</dd></div>
+                <div className={styles.clientViewRow}><dt>Mobile</dt><dd>{viewUser?.mobile_number || "-"}</dd></div>
+                <div className={styles.clientViewRow}><dt>Provider User ID</dt><dd>{viewUser?.provider_user_id || "-"}</dd></div>
+              </dl>
+            </section>
+
+            <section className={styles.clientViewCard}>
+              <h4 className={styles.clientViewCardTitle}>Access & Approval</h4>
+              <dl className={styles.clientViewList}>
+                <div className={styles.clientViewRow}><dt>Status</dt><dd>{viewUser?.is_active ? "Active" : "Inactive"}</dd></div>
+                <div className={styles.clientViewRow}><dt>Approval</dt><dd>{String(viewUser?.approval_status || "approved")}</dd></div>
+                <div className={styles.clientViewRow}><dt>Provider</dt><dd>{String(viewUser?.auth_provider || "password")}</dd></div>
+                <div className={styles.clientViewRow}>
+                  <dt>Created</dt>
+                  <dd>{viewUser?.created_at ? new Date(viewUser.created_at).toLocaleString() : "-"}</dd>
+                </div>
+              </dl>
+            </section>
+
+            <section className={styles.clientViewCard}>
+              <h4 className={styles.clientViewCardTitle}>Engagement</h4>
+              <dl className={styles.clientViewList}>
+                <div className={styles.clientViewRow}><dt>Views</dt><dd>{Number(viewUser?.watch_count || 0)}</dd></div>
+                <div className={styles.clientViewRow}><dt>Watch Time</dt><dd>{formatWatchDuration(viewUser?.total_watch_seconds)}</dd></div>
+                <div className={styles.clientViewRow}>
+                  <dt>Last Activity</dt>
+                  <dd>{viewUser?.last_watched_at ? new Date(viewUser.last_watched_at).toLocaleString() : "No activity"}</dd>
+                </div>
+              </dl>
+            </section>
+
+            <section className={styles.clientViewCard}>
+              <h4 className={styles.clientViewCardTitle}>External Profile</h4>
+              <dl className={styles.clientViewList}>
+                <div className={styles.clientViewRow}>
+                  <dt>Facebook Profile</dt>
+                  <dd>
+                    {viewUser?.facebook_profile_url ? (
+                      <a
+                        href={viewUser.facebook_profile_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={styles.link}
+                      >
+                        Visit Facebook Profile
+                      </a>
+                    ) : viewUser?.facebook_search_url ? (
+                      <a
+                        href={viewUser.facebook_search_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={styles.link}
+                      >
+                        Search on Facebook
+                      </a>
+                    ) : (
+                      "-"
+                    )}
+                  </dd>
+                </div>
+              </dl>
+            </section>
+          </div>
+          <AlertDialogFooter className={styles.clientViewActions}>
             <AlertDialogCancel asChild>
               <Button type="button" variant="outline" className={`${styles.secondaryBtn} ${styles.modalActionBtn}`}>Close</Button>
             </AlertDialogCancel>
@@ -1060,6 +1218,29 @@ export default function ManageClientUsers({ initialItems = [] }) {
           </Table>
         </div>
       </TooltipProvider>
+
+      {toast.open ? (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            position: "fixed",
+            top: 18,
+            right: 18,
+            zIndex: 160,
+            width: "min(92vw, 360px)",
+            border: "1px solid var(--border)",
+            borderLeft: toast.type === "error" ? "4px solid #ef4444" : "4px solid #22c55e",
+            borderRadius: 12,
+            padding: "10px 12px",
+            background: "color-mix(in oklab, var(--card) 92%, transparent)",
+            boxShadow: "var(--shadow-xl)",
+          }}
+        >
+          <p style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>{toast.title}</p>
+          <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--muted-foreground)" }}>{toast.description}</p>
+        </div>
+      ) : null}
     </section>
   );
 }

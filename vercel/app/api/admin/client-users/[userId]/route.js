@@ -26,7 +26,7 @@ export async function PATCH(request, { params }) {
   const admin = getSupabaseAdmin();
   const { data: existing, error: existingErr } = await admin
     .from("client_users")
-    .select("user_id,email,full_name,mobile_number,is_active,approval_status,approved_at,auth_provider,created_at")
+    .select("user_id,email,full_name,mobile_number,is_active,approval_status,approved_at,auth_provider,provider_user_id,oauth_profile_json,created_at")
     .eq("user_id", userId)
     .maybeSingle();
 
@@ -55,6 +55,17 @@ export async function PATCH(request, { params }) {
   }
   if (typeof body?.approval_note === "string") {
     patches.approval_note = String(body.approval_note || "").trim();
+  }
+  if (typeof body?.provider_user_id === "string") {
+    patches.provider_user_id = String(body.provider_user_id || "").trim();
+  }
+  if (typeof body?.facebook_profile_url === "string") {
+    const raw = String(body.facebook_profile_url || "").trim();
+    if (raw && !/^https?:\/\//i.test(raw)) {
+      return NextResponse.json({ error: "facebook_profile_url must be a valid http(s) URL" }, { status: 400 });
+    }
+    const existingOauth = existing?.oauth_profile_json && typeof existing.oauth_profile_json === "object" ? existing.oauth_profile_json : {};
+    patches.oauth_profile_json = raw ? { ...existingOauth, profile_url: raw } : { ...existingOauth, profile_url: "" };
   }
   let nextEmail = "";
   if (typeof body?.email === "string") {

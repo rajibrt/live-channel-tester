@@ -2,7 +2,6 @@ import ManageClientUsers from "./ManageClientUsers";
 import styles from "../page.module.css";
 import { getSupabaseAdmin } from "../../../lib/supabaseAdmin";
 import { getActiveViewerSnapshot } from "../../../lib/activeViewers";
-import ActiveViewersPanel from "../ActiveViewersPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -133,13 +132,8 @@ export default async function ClientsPage() {
   const [items, activeViewers] = await Promise.all([getClientUsers(), getActiveViewerSnapshot()]);
 
   return (
-    <>
-      <section className={styles.stats}>
-        <ActiveViewersPanel title="Watching Now" viewers={activeViewers?.viewers || []} />
-      </section>
-      <section className={styles.card}>
-        <ManageClientUsers initialItems={items} />
-      </section>
-    </>
+    <section className={styles.card}>
+      <ManageClientUsers initialItems={items} initialActiveViewers={activeViewers?.viewers || []} />
+    </section>
   );
 }
