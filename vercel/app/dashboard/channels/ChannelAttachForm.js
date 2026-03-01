@@ -203,14 +203,17 @@ export default function ChannelAttachForm({
     logo_url: "",
   });
   const [saving, setSaving] = useState(false);
+  const [checking, setChecking] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [toast, setToast] = useState({ open: false, type: "success", title: "", description: "" });
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewError, setPreviewError] = useState("");
   const [previewLoading, setPreviewLoading] = useState(false);
   const prevPlaylistRef = useRef(String(playlistOptions[0] || "").trim().toLowerCase());
   const [previewVideoEl, setPreviewVideoEl] = useState(null);
   const previewHlsRef = useRef(null);
+  const toastTimerRef = useRef(null);
 
   const categoryOptions = useMemo(() => {
     const key = String(form.playlist_slug || "").trim().toLowerCase();
@@ -230,6 +233,25 @@ export default function ChannelAttachForm({
       category: String(categoryOptions[0] || ""),
     }));
   }, [form.playlist_slug, categoryOptions]);
+
+  useEffect(() => {
+    return () => {
+      window.clearTimeout(toastTimerRef.current);
+    };
+  }, []);
+
+  function showToast(type, title, description) {
+    setToast({
+      open: true,
+      type: type === "error" ? "error" : "success",
+      title: String(title || ""),
+      description: String(description || ""),
+    });
+    window.clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = window.setTimeout(() => {
+      setToast((prev) => ({ ...prev, open: false }));
+    }, 3600);
+  }
 
   useEffect(() => {
     if (!previewOpen) return undefined;
@@ -363,7 +385,14 @@ export default function ChannelAttachForm({
         body: data,
       });
       const payload = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(payload?.error || "Failed to save channel.");
+      if (!res.ok) {
+        if (res.status === 409 || payload?.code === "CHANNEL_ALREADY_EXISTS") {
+          showToast("error", "Channel already exists", "এই Stream URL আগেই সার্ভারে যোগ করা আছে।");
+          return;
+        }
+        throw new Error(payload?.error || "Failed to save channel.");
+      }
+      showToast("success", "Channel saved", "নতুন চ্যানেল সফলভাবে যোগ হয়েছে।");
       setMessage("Channel saved and attached to selected playlist/category.");
       setForm((prev) => ({
         ...prev,
@@ -378,9 +407,67 @@ export default function ChannelAttachForm({
     }
   }
 
+  async function onCheckExisting() {
+    const rawStream = String(form.stream_url || "").trim();
+    if (!rawStream) {
+      setError("Stream URL is required.");
+      return;
+    }
+
+    setError("");
+    setMessage("");
+    setChecking(true);
+    try {
+      const res = await fetch(`/api/admin/channels?stream_url=${encodeURIComponent(rawStream)}`, {
+        method: "GET",
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload?.error || "Failed to check stream URL.");
+
+      if (payload?.exists) {
+        const existingName = String(payload?.item?.name || "").trim();
+        showToast(
+          "error",
+          "Channel already exists",
+          existingName ? `Already added as "${existingName}".` : "এই Stream URL আগেই সার্ভারে যোগ করা আছে।"
+        );
+        return;
+      }
+      showToast("success", "Not found in database", "এই Stream URL এখনো সার্ভারে যোগ করা হয়নি।");
+    } catch (err) {
+      setError(err?.message || "Failed to check stream URL.");
+    } finally {
+      setChecking(false);
+    }
+  }
+
   return (
-    <form onSubmit={onSubmit} className={styles.form}>
-      <div className={styles.formGrid}>
+    <>
+      {toast.open ? (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            position: "fixed",
+            top: 24,
+            right: 24,
+            zIndex: 1200,
+            maxWidth: 360,
+            padding: "12px 14px",
+            borderRadius: 10,
+            borderLeft: toast.type === "error" ? "4px solid #ef4444" : "4px solid #22c55e",
+            background: "rgba(6, 18, 43, 0.96)",
+            border: "1px solid rgba(148, 163, 184, 0.35)",
+            boxShadow: "0 20px 45px rgba(2, 6, 23, 0.45)",
+            color: "#e2e8f0",
+          }}
+        >
+          <p style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>{toast.title}</p>
+          <p style={{ margin: "4px 0 0", fontSize: 13, opacity: 0.95 }}>{toast.description}</p>
+        </div>
+      ) : null}
+      <form onSubmit={onSubmit} className={styles.form}>
+        <div className={styles.formGrid}>
         <label className={styles.field}>
           <span>Playlist <em className={styles.requiredMark}>*</em></span>
           <SearchableCombobox
@@ -407,9 +494,9 @@ export default function ChannelAttachForm({
           />
           <small className={styles.fieldHint}>Choose existing channel name from selected playlist or type new name.</small>
         </label>
-      </div>
+        </div>
 
-      <label className={styles.field}>
+        <label className={styles.field}>
         <span>Stream URL <em className={styles.requiredMark}>*</em></span>
         <div className={styles.streamPreviewRow}>
           <input
@@ -427,10 +514,18 @@ export default function ChannelAttachForm({
           >
             Preview
           </button>
+          <button
+            type="button"
+            className={styles.secondaryBtn}
+            onClick={onCheckExisting}
+            disabled={!String(form.stream_url || "").trim() || checking || saving}
+          >
+            {checking ? "Checking..." : "Check"}
+          </button>
         </div>
-      </label>
+        </label>
 
-      <div className={styles.formGrid}>
+        <div className={styles.formGrid}>
         <label className={styles.field}>
           <span>Category (for selected playlist)</span>
           <SearchableCombobox
@@ -465,16 +560,16 @@ export default function ChannelAttachForm({
           </div>
           <small className={styles.fieldHint}>Logo preview</small>
         </label>
-      </div>
+        </div>
 
-      {error ? <p className={styles.errorText}>{error}</p> : null}
-      {message ? <p className={styles.successText}>{message}</p> : null}
+        {error ? <p className={styles.errorText}>{error}</p> : null}
+        {message ? <p className={styles.successText}>{message}</p> : null}
 
-      <button type="submit" className={styles.primaryBtn} disabled={saving}>
+        <button type="submit" className={styles.primaryBtn} disabled={saving}>
         {saving ? "Saving..." : "Save Channel"}
-      </button>
+        </button>
 
-      <AlertDialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <AlertDialog open={previewOpen} onOpenChange={setPreviewOpen}>
         <AlertDialogContent className={styles.viewerModal}>
           <AlertDialogHeader>
             <AlertDialogTitle>Stream Preview</AlertDialogTitle>
@@ -505,7 +600,8 @@ export default function ChannelAttachForm({
             </AlertDialogCancel>
           </AlertDialogFooter>
         </AlertDialogContent>
-      </AlertDialog>
-    </form>
+        </AlertDialog>
+      </form>
+    </>
   );
 }

@@ -48,6 +48,26 @@ export async function POST(request) {
   }
 
   const supabase = getSupabaseAdmin();
+  const { data: existingChannel, error: existingChannelError } = await supabase
+    .from("channels")
+    .select("id,name,category,logo_url,stream_url")
+    .eq("stream_url", streamUrl)
+    .maybeSingle();
+
+  if (existingChannelError) {
+    return NextResponse.json({ error: existingChannelError.message || "Failed to verify stream URL." }, { status: 500 });
+  }
+  if (existingChannel?.id) {
+    return NextResponse.json(
+      {
+        error: "This stream URL is already added on server.",
+        code: "CHANNEL_ALREADY_EXISTS",
+        item: existingChannel,
+      },
+      { status: 409 }
+    );
+  }
+
   const now = new Date().toISOString();
   await supabase
     .from("playlists")
@@ -158,5 +178,33 @@ export async function POST(request) {
       logo_url: logoUrl,
       playlist_slug: playlistSlug,
     },
+  });
+}
+
+export async function GET(request) {
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
+
+  const { searchParams } = new URL(request.url);
+  const streamUrl = normalizeStreamUrl(searchParams.get("stream_url"));
+  if (!streamUrl) {
+    return NextResponse.json({ error: "stream_url is required." }, { status: 400 });
+  }
+
+  const supabase = getSupabaseAdmin();
+  const { data: existingChannel, error } = await supabase
+    .from("channels")
+    .select("id,name,category,stream_url,logo_url")
+    .eq("stream_url", streamUrl)
+    .maybeSingle();
+
+  if (error) {
+    return NextResponse.json({ error: error.message || "Failed to verify stream URL." }, { status: 500 });
+  }
+
+  return NextResponse.json({
+    ok: true,
+    exists: Boolean(existingChannel?.id),
+    item: existingChannel || null,
   });
 }
