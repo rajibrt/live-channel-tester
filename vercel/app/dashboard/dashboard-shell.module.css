@@ -215,6 +215,18 @@
   cursor: pointer;
 }
 
+.languageBtn {
+  width: auto;
+  min-width: 78px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .iconBtn:hover {
   border-color: var(--ring);
 }
@@ -414,5 +426,33 @@
     border: 0;
     background: color-mix(in oklab, var(--background) 72%, transparent);
     z-index: 25;
+  }
+}
+
+@media (max-width: 640px) {
+  .header {
+    padding: 10px 12px;
+  }
+
+  .headerSubtitle {
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  .content {
+    padding: 12px 10px 18px;
+  }
+
+  .logoutBtn {
+    padding: 9px 10px;
+  }
+
+  .languageBtn {
+    min-width: 64px;
+    padding: 0 8px;
+  }
+
+  .logoutBtn span {
+    display: none;
   }
 }

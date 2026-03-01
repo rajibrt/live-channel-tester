@@ -8,6 +8,8 @@ export default function PasswordField({
   name = "password",
   label = "Password",
   placeholder = "Enter your password",
+  showLabel = "Show password",
+  hideLabel = "Hide password",
   autoComplete = "current-password",
   required = true,
 }) {
@@ -28,8 +30,8 @@ export default function PasswordField({
           type="button"
           className={styles.passwordToggle}
           onClick={() => setShowPassword((prev) => !prev)}
-          aria-label={showPassword ? "Hide password" : "Show password"}
-          title={showPassword ? "Hide password" : "Show password"}
+          aria-label={showPassword ? hideLabel : showLabel}
+          title={showPassword ? hideLabel : showLabel}
         >
           {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
         </button>

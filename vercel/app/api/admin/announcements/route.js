@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "../../../../lib/adminApi";
 import { getSupabaseAdmin } from "../../../../lib/supabaseAdmin";
+import { sendClientPush } from "../../../../lib/clientPushNotifications";
 
 const TABLE = "admin_announcements";
 
@@ -115,6 +116,18 @@ export async function POST(request) {
 
   if (error) {
     return NextResponse.json({ error: formatDbError(error, "Failed to create announcement.") }, { status: 500 });
+  }
+
+  if (isPublished) {
+    await sendClientPush({
+      title,
+      message: plainContent.slice(0, 180),
+      payload: {
+        kind: "announcement",
+        announcement_id: String(data?.id || ""),
+        target_url: "/",
+      },
+    });
   }
 
   return NextResponse.json({ ok: true, item: mapRow(data) });

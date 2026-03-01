@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Activity, Eye, EyeOff, History, Mail, Pencil, Plus, RotateCcw, UserCheck, Users, Users2 } from "lucide-react";
+import { Activity, Eye, EyeOff, History, Mail, Pencil, Plus, RotateCcw, Trash2, UserCheck, Users, Users2 } from "lucide-react";
 import styles from "../page.module.css";
 import ActiveViewersPanel from "../ActiveViewersPanel";
 import {

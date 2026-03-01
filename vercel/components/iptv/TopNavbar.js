@@ -14,6 +14,15 @@ import {
 import { Icon } from "./icons";
 import styles from "./iptv.module.css";
 
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
+  return outputArray;
+}
+
 function stripHtml(value) {
   const decoded = String(value || "")
     .replace(/&amp;/gi, "&")
@@ -138,7 +147,6 @@ function AnnouncementTicker({
 export default function TopNavbar({
   isDark,
   isTvMode,
-  onToggleTheme,
   onToggleTvMode,
   onToggleLeftSidebar,
   onToggleRightPanel,
@@ -168,6 +176,15 @@ export default function TopNavbar({
   const userMenuRef = useRef(null);
   const [deferredInstallPrompt, setDeferredInstallPrompt] = useState(null);
   const [isIosInstallHint, setIsIosInstallHint] = useState(false);
+  const [pushReady, setPushReady] = useState(false);
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushError, setPushError] = useState("");
+  const [showInstallCta, setShowInstallCta] = useState(false);
+  const [showPushCta, setShowPushCta] = useState(false);
+  const vapidPublicKeyRef = useRef(String(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "").trim());
+  const installDismissKeyRef = useRef("iptv:install-cta-dismissed");
+  const pushPromptedKeyRef = useRef("iptv:push-prompted");
   const [form, setForm] = useState({
     full_name: String(clientProfile?.fullName || ""),
     email: String(clientProfile?.email || ""),
@@ -255,10 +272,17 @@ export default function TopNavbar({
     const onBeforeInstallPrompt = (event) => {
       event.preventDefault();
       setDeferredInstallPrompt(event);
+      try {
+        const dismissed = window.localStorage.getItem(installDismissKeyRef.current) === "1";
+        setShowInstallCta(!dismissed);
+      } catch {
+        setShowInstallCta(true);
+      }
     };
     const onInstalled = () => {
       setDeferredInstallPrompt(null);
       setIsIosInstallHint(false);
+      setShowInstallCta(false);
     };
 
     window.addEventListener("beforeinstallprompt", onBeforeInstallPrompt);
@@ -267,6 +291,143 @@ export default function TopNavbar({
       window.removeEventListener("beforeinstallprompt", onBeforeInstallPrompt);
       window.removeEventListener("appinstalled", onInstalled);
     };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (isIosInstallHint) {
+      try {
+        const dismissed = window.localStorage.getItem(installDismissKeyRef.current) === "1";
+        setShowInstallCta(!dismissed);
+      } catch {
+        setShowInstallCta(true);
+      }
+    }
+  }, [isIosInstallHint]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const canPush = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+    setPushReady(canPush);
+    setPushEnabled(false);
+    if (!canPush) return;
+
+    const initPush = async () => {
+      try {
+        const registration = await navigator.serviceWorker.register("/sw.js");
+        const existing = await registration.pushManager.getSubscription();
+        setPushEnabled(Boolean(existing));
+        if (existing) {
+          await fetch("/api/client/push-subscriptions", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ subscription: existing, user_agent: navigator.userAgent }),
+          }).catch(() => {});
+        } else if (Notification.permission === "default") {
+          try {
+            const prompted = window.localStorage.getItem(pushPromptedKeyRef.current) === "1";
+            if (!prompted) setShowPushCta(true);
+          } catch {
+            setShowPushCta(true);
+          }
+        }
+      } catch {
+        setPushReady(false);
+      }
+    };
+    initPush();
+  }, []);
+
+  const resolveVapidPublicKey = useCallback(async () => {
+    const existing = String(vapidPublicKeyRef.current || "").trim();
+    if (existing) return existing;
+    try {
+      const res = await fetch("/api/client/push-config", { cache: "no-store" });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) return "";
+      const key = String(payload?.public_key || "").trim();
+      if (key) vapidPublicKeyRef.current = key;
+      return key;
+    } catch {
+      return "";
+    }
+  }, []);
+
+  const enablePushNotifications = useCallback(async () => {
+    if (typeof window === "undefined") return;
+    if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) return;
+    const vapidPublicKey = await resolveVapidPublicKey();
+    if (!vapidPublicKey) {
+      setPushError("Push is not configured yet. Please try again later.");
+      return;
+    }
+
+    setPushBusy(true);
+    setPushError("");
+    try {
+      const permission = await Notification.requestPermission();
+      try {
+        window.localStorage.setItem(pushPromptedKeyRef.current, "1");
+      } catch {
+        // ignore localStorage errors
+      }
+      setShowPushCta(false);
+      if (permission !== "granted") {
+        setPushEnabled(false);
+        return;
+      }
+
+      const registration = await navigator.serviceWorker.register("/sw.js");
+      let subscription = await registration.pushManager.getSubscription();
+      if (!subscription) {
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+        });
+      }
+      const saveRes = await fetch("/api/client/push-subscriptions", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ subscription, user_agent: navigator.userAgent }),
+      });
+      if (!saveRes.ok) throw new Error("Failed to enable push notifications.");
+      setPushEnabled(true);
+    } catch (err) {
+      setPushEnabled(false);
+      setPushError(err?.message || "Failed to enable push notifications.");
+    } finally {
+      setPushBusy(false);
+    }
+  }, [resolveVapidPublicKey]);
+
+  const disablePushNotifications = useCallback(async () => {
+    if (typeof window === "undefined") return;
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
+
+    setPushBusy(true);
+    setPushError("");
+    try {
+      const registration = await navigator.serviceWorker.register("/sw.js");
+      const subscription = await registration.pushManager.getSubscription();
+      if (!subscription) {
+        setPushEnabled(false);
+        return;
+      }
+      const endpoint = String(subscription.endpoint || "").trim();
+      await subscription.unsubscribe().catch(() => {});
+      if (endpoint) {
+        await fetch("/api/client/push-subscriptions", {
+          method: "DELETE",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ endpoint }),
+        }).catch(() => {});
+      }
+      setPushEnabled(false);
+    } catch (err) {
+      setPushError(err?.message || "Failed to disable push notifications.");
+    } finally {
+      setPushBusy(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -316,11 +477,35 @@ export default function TopNavbar({
         // ignore install prompt errors
       } finally {
         setDeferredInstallPrompt(null);
+        setShowInstallCta(false);
+        try {
+          window.localStorage.setItem(installDismissKeyRef.current, "1");
+        } catch {
+          // ignore localStorage errors
+        }
       }
       return;
     }
     if (isIosInstallHint) {
       window.alert("To install this app on iPhone: tap Share, then choose 'Add to Home Screen'.");
+    }
+  }
+
+  function dismissInstallCta() {
+    setShowInstallCta(false);
+    try {
+      window.localStorage.setItem(installDismissKeyRef.current, "1");
+    } catch {
+      // ignore localStorage errors
+    }
+  }
+
+  function dismissPushCta() {
+    setShowPushCta(false);
+    try {
+      window.localStorage.setItem(pushPromptedKeyRef.current, "1");
+    } catch {
+      // ignore localStorage errors
     }
   }
 
@@ -409,9 +594,6 @@ export default function TopNavbar({
         >
           <Icon name="MonitorPlay" size={18} />
         </Button>
-        <Button type="button" variant="ghost" size="icon" onClick={onToggleTheme} className={styles.iconBtn}>
-          {isDark ? <Icon name="Sun" size={18} stroke="var(--primary)" /> : <Icon name="Moon" size={18} stroke="var(--primary)" />}
-        </Button>
         {(deferredInstallPrompt || isIosInstallHint) ? (
           <Button
             type="button"
@@ -449,6 +631,23 @@ export default function TopNavbar({
               <div className={styles.notificationHeader}>
                 <strong>Notifications</strong>
                 <div className={styles.notificationHeaderActions}>
+                  {pushReady ? (
+                    <button
+                      type="button"
+                      className={`${styles.notificationMarkAllBtn} ${styles.pushHeaderBtn} ${pushEnabled ? styles.pushBtnActive : styles.pushBtnInactive}`}
+                      onClick={pushEnabled ? disablePushNotifications : enablePushNotifications}
+                      title={pushEnabled ? "Push: ON (click to disable)" : "Push: OFF (click to enable)"}
+                      aria-label={pushEnabled ? "Push notification is ON. Click to disable." : "Push notification is OFF. Click to enable."}
+                      disabled={pushBusy}
+                    >
+                      <Icon name={pushEnabled ? "BellRing" : "BellOff"} size={14} />
+                      <span>{pushBusy ? "..." : pushEnabled ? "Push ON" : "Push OFF"}</span>
+                      <span
+                        className={`${styles.pushStateDot} ${pushEnabled ? styles.pushStateDotOn : styles.pushStateDotOff}`}
+                        aria-hidden="true"
+                      />
+                    </button>
+                  ) : null}
                   <span>{unreadCount} unread</span>
                   <button
                     type="button"
@@ -637,6 +836,41 @@ export default function TopNavbar({
         tickerIconText={tickerIconText}
         onSelectItem={setActiveTickerArticle}
       />
+      {showInstallCta ? (
+        <div className={styles.mobileActionPrompt} role="status" aria-live="polite">
+          <div className={styles.mobileActionPromptText}>
+            <strong>Install WEBTV BD App</strong>
+            <span>Get quick access from your mobile home screen.</span>
+          </div>
+          <div className={styles.mobileActionPromptActions}>
+            <button type="button" className={styles.mobilePromptBtn} onClick={triggerInstallPrompt}>
+              <Icon name="Download" size={14} />
+              Install
+            </button>
+            <button type="button" className={styles.mobilePromptGhostBtn} onClick={dismissInstallCta}>
+              Later
+            </button>
+          </div>
+        </div>
+      ) : null}
+      {showPushCta && pushReady && !showInstallCta ? (
+        <div className={styles.mobileActionPrompt} role="status" aria-live="polite">
+          <div className={styles.mobileActionPromptText}>
+            <strong>Enable Push Notifications</strong>
+            <span>Get instant alerts for new announcements.</span>
+          </div>
+          <div className={styles.mobileActionPromptActions}>
+            <button type="button" className={styles.mobilePromptBtn} onClick={enablePushNotifications} disabled={pushBusy}>
+              <Icon name="Bell" size={14} />
+              {pushBusy ? "Enabling..." : "Allow"}
+            </button>
+            <button type="button" className={styles.mobilePromptGhostBtn} onClick={dismissPushCta}>
+              Later
+            </button>
+          </div>
+        </div>
+      ) : null}
+      {pushError ? <p className={styles.pushInlineError}>{pushError}</p> : null}
 
       <AlertDialog
         open={!!activeTickerArticle}

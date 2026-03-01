@@ -588,6 +588,34 @@
   gap: 14px;
 }
 
+.settingsTabs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.settingsTab {
+  text-decoration: none;
+  color: var(--muted-foreground);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  background: color-mix(in oklab, var(--card) 92%, var(--background));
+}
+
+.settingsTab:hover {
+  border-color: color-mix(in oklab, var(--ring) 60%, var(--border));
+}
+
+.settingsTabActive {
+  color: var(--primary-foreground);
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--primary) 0%, color-mix(in oklab, var(--primary) 58%, var(--accent)) 100%);
+}
+
 .settingsStatusGrid {
   gap: 14px;
 }
@@ -601,6 +629,60 @@
   border-radius: 14px;
   padding: 10px 12px;
   background: linear-gradient(145deg, color-mix(in oklab, var(--card) 92%, transparent), color-mix(in oklab, var(--background) 92%, var(--card)));
+}
+
+.adminListActions {
+  margin-bottom: 10px;
+}
+
+.adminUsersDesktopTable {
+  display: block;
+}
+
+.adminUsersMobileList {
+  display: none;
+}
+
+.adminUserMobileCard {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: color-mix(in oklab, var(--card) 90%, var(--background));
+  padding: 10px;
+  display: grid;
+  gap: 10px;
+}
+
+.adminUserMobileHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.adminUserMobileEmail {
+  font-size: 14px;
+  word-break: break-all;
+}
+
+.adminUserMobileGrid {
+  display: grid;
+  gap: 6px;
+}
+
+.adminUserMobileGrid p {
+  margin: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.adminUserMobileGrid span {
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+
+.adminUserMobileGrid strong {
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .settingsPanel {
@@ -629,6 +711,11 @@
   margin: 6px 0 0;
   color: var(--muted-foreground);
   font-size: 12px;
+}
+
+.adminCreateModal {
+  width: min(760px, 94vw);
+  max-width: min(760px, 94vw);
 }
 
 .settingsToggleRow {
@@ -1429,13 +1516,61 @@
 
 .streamPreviewRow {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 10px;
   align-items: center;
 }
 
 .streamPreviewRow input {
   min-width: 0;
+}
+
+.streamActionBtn {
+  min-width: 116px;
+  justify-content: center;
+  font-weight: 700;
+  border-width: 1px;
+  box-shadow: 0 8px 22px color-mix(in oklab, var(--background) 70%, transparent);
+}
+
+.streamActionBtn svg {
+  flex-shrink: 0;
+}
+
+.streamCheckBtn {
+  border-color: color-mix(in oklab, #22c55e 52%, var(--border));
+  background: linear-gradient(
+    135deg,
+    color-mix(in oklab, #16a34a 26%, var(--card)),
+    color-mix(in oklab, #22c55e 14%, var(--background))
+  );
+}
+
+.streamCheckBtn:hover {
+  border-color: color-mix(in oklab, #22c55e 75%, var(--border));
+  background: linear-gradient(
+    135deg,
+    color-mix(in oklab, #16a34a 34%, var(--card)),
+    color-mix(in oklab, #22c55e 18%, var(--background))
+  );
+}
+
+.streamPreviewBtn {
+  border-color: color-mix(in oklab, var(--ring) 64%, var(--border));
+  background: linear-gradient(
+    135deg,
+    color-mix(in oklab, var(--primary) 28%, var(--card)),
+    color-mix(in oklab, var(--ring) 18%, var(--background))
+  );
+}
+
+.streamPreviewBtn:hover {
+  border-color: color-mix(in oklab, var(--ring) 86%, var(--border));
+  background: linear-gradient(
+    135deg,
+    color-mix(in oklab, var(--primary) 36%, var(--card)),
+    color-mix(in oklab, var(--ring) 24%, var(--background))
+  );
 }
 
 .inlineRenameInput {
@@ -1694,6 +1829,10 @@
 
 .tableWrap tr:last-child td {
   border-bottom: 0;
+}
+
+.adminRowActive td {
+  background: color-mix(in oklab, var(--primary) 8%, var(--card));
 }
 
 /* Keep playlist editor channel rows compact without affecting other tables. */
@@ -2390,20 +2529,47 @@
     width: 100%;
     justify-content: center;
   }
+
+  .streamPreviewRow .streamActionBtn {
+    min-width: 0;
+  }
 }
 
 @media (max-width: 640px) {
   .page {
-    margin: -24px;
+    margin: 0;
   }
 
   .shell {
     padding: 20px 12px 24px;
   }
 
+  .settingsTabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+  }
+
+  .settingsTab {
+    text-align: center;
+  }
+
   .settingsStatusGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;
+  }
+
+  .adminListActions {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .adminListActions .primaryBtnCompact,
+  .adminListActions .secondaryBtnCompact {
+    width: 100%;
+    justify-content: center;
   }
 
   .topBar {
@@ -2448,6 +2614,12 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .settingsStatusGrid,
+  .stats.settingsStatusGrid,
+  .statsCompact4.settingsStatusGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
   .donutWrap {
     grid-template-columns: 1fr;
     justify-items: start;
@@ -2455,6 +2627,19 @@
 
   .tableWrap table {
     min-width: 760px;
+  }
+
+  .tableWrap .adminUsersTable {
+    min-width: 620px;
+  }
+
+  .adminUsersDesktopTable {
+    display: none;
+  }
+
+  .adminUsersMobileList {
+    display: grid;
+    gap: 10px;
   }
 
   .tableWrap .announceTable {
@@ -2503,6 +2688,26 @@
   .modalActionBtn {
     min-width: 0;
     width: 100%;
+  }
+}
+
+@media (max-width: 420px) {
+  .card {
+    border-radius: 16px;
+    padding: 12px;
+  }
+
+  .settingsTabs {
+    grid-template-columns: 1fr;
+  }
+
+  .tableWrap .adminUsersTable {
+    min-width: 540px;
+  }
+
+  .adminUserMobileCard {
+    padding: 9px;
+    border-radius: 12px;
   }
 }
 

@@ -4,6 +4,8 @@ import React from "react";
 import {
   Baby,
   Bell,
+  BellOff,
+  BellRing,
   BookOpen,
   ChevronLeft,
   ChevronRight,
@@ -43,6 +45,8 @@ const iconMap = {
   Menu,
   Grid3x3: Grid3X3,
   Bell,
+  BellOff,
+  BellRing,
   Moon,
   Sun,
   User,

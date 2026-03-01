@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { BellRing, MailCheck, Palette, Save, Send, Server, TestTube2 } from "lucide-react";
 import styles from "../page.module.css";
 import { Button } from "../../../components/ui/button";
+import { useI18n } from "../../../components/i18n/LanguageProvider";
 
 const DEFAULT_FORM = {
   welcome_auto_send: true,
@@ -30,6 +31,7 @@ const DEFAULT_FORM = {
 };
 
 export default function ManageEmailSettings() {
+  const { t } = useI18n();
   const [form, setForm] = useState(DEFAULT_FORM);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -50,12 +52,12 @@ export default function ManageEmailSettings() {
       try {
         const res = await fetch("/api/admin/email-settings", { cache: "no-store" });
         const payload = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(payload?.error || "Failed to load email settings.");
+        if (!res.ok) throw new Error(payload?.error || t("settings.failedLoadEmailSettings"));
         if (!active) return;
         setForm((prev) => ({ ...prev, ...(payload || {}) }));
       } catch (err) {
         if (!active) return;
-        setError(err?.message || "Failed to load email settings.");
+        setError(err?.message || t("settings.failedLoadEmailSettings"));
       } finally {
         if (active) setLoading(false);
       }
@@ -97,11 +99,11 @@ export default function ManageEmailSettings() {
         }),
       });
       const payload = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(payload?.error || "Failed to save email settings.");
+      if (!res.ok) throw new Error(payload?.error || t("settings.failedSaveEmailSettings"));
       setForm((prev) => ({ ...prev, ...(payload?.settings || {}), smtp_pass: "" }));
-      setMessage("Email settings saved.");
+      setMessage(t("settings.emailSettingsSaved"));
     } catch (err) {
-      setError(err?.message || "Failed to save email settings.");
+      setError(err?.message || t("settings.failedSaveEmailSettings"));
     } finally {
       setSaving(false);
     }
@@ -118,10 +120,10 @@ export default function ManageEmailSettings() {
         body: JSON.stringify({ recipient: form.test_recipient }),
       });
       const payload = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(payload?.error || "Failed to send test email.");
-      setMessage(`Test email sent to ${payload?.to || form.test_recipient || "recipient"}.`);
+      if (!res.ok) throw new Error(payload?.error || t("settings.failedSendTestEmail"));
+      setMessage(`${t("settings.testEmailSentTo")} ${payload?.to || form.test_recipient || t("settings.recipient")}.`);
     } catch (err) {
-      setError(err?.message || "Failed to send test email.");
+      setError(err?.message || t("settings.failedSendTestEmail"));
     } finally {
       setTesting(false);
     }
@@ -131,20 +133,20 @@ export default function ManageEmailSettings() {
     <section className={`${styles.form} ${styles.settingsLayout}`}>
       <div className={`${styles.stats} ${styles.statsCompact4} ${styles.settingsStatusGrid}`}>
         <article className={styles.statCard}>
-          <p className={styles.statLabelWithIcon}><Server size={14} /><span>SMTP</span></p>
-          <strong>{smtpConfigured ? "Ready" : "Incomplete"}</strong>
+          <p className={styles.statLabelWithIcon}><Server size={14} /><span>{t("settings.smtp")}</span></p>
+          <strong>{smtpConfigured ? t("settings.ready") : t("settings.incomplete")}</strong>
         </article>
         <article className={styles.statCard}>
-          <p className={styles.statLabelWithIcon}><MailCheck size={14} /><span>Auto Welcome</span></p>
-          <strong>{form.welcome_auto_send ? "Enabled" : "Disabled"}</strong>
+          <p className={styles.statLabelWithIcon}><MailCheck size={14} /><span>{t("settings.autoWelcome")}</span></p>
+          <strong>{form.welcome_auto_send ? t("settings.enabled") : t("settings.disabled")}</strong>
         </article>
         <article className={styles.statCard}>
-          <p className={styles.statLabelWithIcon}><Palette size={14} /><span>Brand</span></p>
+          <p className={styles.statLabelWithIcon}><Palette size={14} /><span>{t("settings.brand")}</span></p>
           <strong>{form.brand_name || "WEBTVBD"}</strong>
         </article>
         <article className={styles.statCard}>
-          <p className={styles.statLabelWithIcon}><BellRing size={14} /><span>Approval Alerts</span></p>
-          <strong>{form.approval_request_auto_send ? "Enabled" : "Disabled"}</strong>
+          <p className={styles.statLabelWithIcon}><BellRing size={14} /><span>{t("settings.approvalAlerts")}</span></p>
+          <strong>{form.approval_request_auto_send ? t("settings.enabled") : t("settings.disabled")}</strong>
         </article>
       </div>
 
@@ -152,11 +154,11 @@ export default function ManageEmailSettings() {
         <div className={styles.controlRow}>
           <Button type="button" className={styles.primaryBtn} disabled={loading || saving} onClick={saveSettings}>
             <Save size={16} />
-            <span>{saving ? "Saving..." : "Save Email Settings"}</span>
+            <span>{saving ? t("settings.saving") : t("settings.saveEmailSettings")}</span>
           </Button>
           <Button type="button" variant="outline" className={styles.secondaryBtn} disabled={loading || testing} onClick={sendTestEmail}>
             <Send size={16} />
-            <span>{testing ? "Testing..." : "Send Test Email"}</span>
+            <span>{testing ? t("settings.testing") : t("settings.sendTestEmail")}</span>
           </Button>
         </div>
         {message ? <p className={styles.successText}>{message}</p> : null}
@@ -166,8 +168,8 @@ export default function ManageEmailSettings() {
 
       <section className={styles.settingsPanel}>
         <header className={styles.settingsPanelHead}>
-          <h3 className={styles.settingsPanelTitle}><Server size={17} /> SMTP Connectivity</h3>
-          <p className={styles.settingsPanelHint}>Mail server connection এবং sender identity setup করুন।</p>
+          <h3 className={styles.settingsPanelTitle}><Server size={17} /> {t("settings.smtpConnectivity")}</h3>
+          <p className={styles.settingsPanelHint}>{t("settings.smtpHint")}</p>
         </header>
         <div className={styles.formGrid}>
           <label className={styles.field}>
@@ -255,8 +257,8 @@ export default function ManageEmailSettings() {
 
       <section className={styles.settingsPanel}>
         <header className={styles.settingsPanelHead}>
-          <h3 className={styles.settingsPanelTitle}><Palette size={17} /> Brand & Website</h3>
-          <p className={styles.settingsPanelHint}>Email header/logo এবং website CTA link এখান থেকে control করুন।</p>
+          <h3 className={styles.settingsPanelTitle}><Palette size={17} /> {t("settings.brandWebsite")}</h3>
+          <p className={styles.settingsPanelHint}>{t("settings.brandWebsiteHint")}</p>
         </header>
         <div className={styles.formGrid}>
           <label className={styles.field}>
@@ -295,8 +297,8 @@ export default function ManageEmailSettings() {
 
       <section className={styles.settingsPanel}>
         <header className={styles.settingsPanelHead}>
-          <h3 className={styles.settingsPanelTitle}><MailCheck size={17} /> Welcome Email</h3>
-          <p className={styles.settingsPanelHint}>Client approved হলে যে mail যাবে তার content template।</p>
+          <h3 className={styles.settingsPanelTitle}><MailCheck size={17} /> {t("settings.welcomeEmail")}</h3>
+          <p className={styles.settingsPanelHint}>{t("settings.welcomeEmailHint")}</p>
         </header>
         <div className={styles.formGrid}>
           <label className={`${styles.checkRow} ${styles.settingsToggleRow} ${styles.full}`}>
@@ -332,8 +334,8 @@ export default function ManageEmailSettings() {
 
       <section className={styles.settingsPanel}>
         <header className={styles.settingsPanelHead}>
-          <h3 className={styles.settingsPanelTitle}><BellRing size={17} /> Approval Request Alerts</h3>
-          <p className={styles.settingsPanelHint}>New approval request আসলে admin inbox-এ instant alert পাঠাবে।</p>
+          <h3 className={styles.settingsPanelTitle}><BellRing size={17} /> {t("settings.approvalRequestAlerts")}</h3>
+          <p className={styles.settingsPanelHint}>{t("settings.approvalRequestHint")}</p>
         </header>
         <div className={styles.formGrid}>
           <label className={`${styles.checkRow} ${styles.settingsToggleRow} ${styles.full}`}>
@@ -386,8 +388,8 @@ export default function ManageEmailSettings() {
 
       <section className={styles.settingsPanel}>
         <header className={styles.settingsPanelHead}>
-          <h3 className={styles.settingsPanelTitle}><TestTube2 size={17} /> Test Delivery</h3>
-          <p className={styles.settingsPanelHint}>SMTP configuration save করার পরে test mail পাঠিয়ে verify করুন।</p>
+          <h3 className={styles.settingsPanelTitle}><TestTube2 size={17} /> {t("settings.testDelivery")}</h3>
+          <p className={styles.settingsPanelHint}>{t("settings.testDeliveryHint")}</p>
         </header>
         <div className={styles.formGrid}>
           <label className={styles.field}>

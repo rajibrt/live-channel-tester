@@ -75,7 +75,17 @@ export async function getDashboardReports() {
   const cutoff30d = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
   const cutoff365d = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
 
-  const [{ data: events }, { data: history }, { data: users }, { data: visitorEventsTrend }, { data: visitorHistoryTrend }] = await Promise.all([
+  const [
+    { data: events },
+    { data: history },
+    { data: users },
+    { data: visitorEventsTrend },
+    { data: visitorHistoryTrend },
+    { count: totalSessionsCount },
+    { count: totalPlaybackAttemptsCount },
+    { count: totalPlaybackFailuresCount },
+    { count: totalWatchSessionsCount },
+  ] = await Promise.all([
     admin
       .from("client_activity_events")
       .select("user_id,event_type,event_data,created_at")
@@ -103,6 +113,22 @@ export async function getDashboardReports() {
       .gte("watched_at", cutoff365d.toISOString())
       .order("watched_at", { ascending: true })
       .limit(200000),
+    admin
+      .from("client_activity_events")
+      .select("id", { count: "exact", head: true })
+      .eq("event_type", "client_login"),
+    admin
+      .from("client_activity_events")
+      .select("id", { count: "exact", head: true })
+      .eq("event_type", "playback_attempt"),
+    admin
+      .from("client_activity_events")
+      .select("id", { count: "exact", head: true })
+      .eq("event_type", "playback_failed"),
+    admin
+      .from("client_recent_history")
+      .select("id", { count: "exact", head: true })
+      .neq("source", "sync"),
   ]);
 
   const eventRows = Array.isArray(events) ? events : [];
@@ -335,6 +361,11 @@ export async function getDashboardReports() {
 
   return {
     generated_at: now.toISOString(),
+    total_sessions: Math.max(0, Number(totalSessionsCount || 0)),
+    total_playback_attempts: Math.max(0, Number(totalPlaybackAttemptsCount || 0)),
+    total_playback_failures: Math.max(0, Number(totalPlaybackFailuresCount || 0)),
+    total_watch_sessions: Math.max(0, Number(totalWatchSessionsCount || 0)),
+    total_users: userRows.length,
     sessions_24h: sessions24.length,
     sessions_7d: sessionEvents.length,
     active_users_24h: activeUsers24Set.size,

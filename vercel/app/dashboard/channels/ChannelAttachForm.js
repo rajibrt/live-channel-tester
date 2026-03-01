@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import styles from "../page.module.css";
+import { CirclePlay, SearchCheck } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -508,19 +509,21 @@ export default function ChannelAttachForm({
           />
           <button
             type="button"
-            className={styles.secondaryBtn}
-            onClick={() => setPreviewOpen(true)}
-            disabled={!String(form.stream_url || "").trim()}
-          >
-            Preview
-          </button>
-          <button
-            type="button"
-            className={styles.secondaryBtn}
+            className={`${styles.secondaryBtn} ${styles.streamActionBtn} ${styles.streamCheckBtn}`}
             onClick={onCheckExisting}
             disabled={!String(form.stream_url || "").trim() || checking || saving}
           >
-            {checking ? "Checking..." : "Check"}
+            <SearchCheck size={16} aria-hidden="true" />
+            <span>{checking ? "Checking..." : "Check"}</span>
+          </button>
+          <button
+            type="button"
+            className={`${styles.secondaryBtn} ${styles.streamActionBtn} ${styles.streamPreviewBtn}`}
+            onClick={() => setPreviewOpen(true)}
+            disabled={!String(form.stream_url || "").trim()}
+          >
+            <CirclePlay size={16} aria-hidden="true" />
+            <span>Preview</span>
           </button>
         </div>
         </label>

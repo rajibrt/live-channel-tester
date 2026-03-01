@@ -6,90 +6,97 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Activity,
   Bell,
-  CircleUserRound,
+  Languages,
   LayoutDashboard,
   ListVideo,
   LogOut,
+  Menu,
   Megaphone,
   MonitorPlay,
   Settings,
   Tv,
   Users,
+  X,
 } from 'lucide-react'
 import styles from './dashboard-shell.module.css'
+import { useI18n } from '../../components/i18n/LanguageProvider'
 
-const NAV_GROUPS = [
-  {
-    label: 'Main',
-    items: [{ href: '/dashboard', label: 'Overview', icon: LayoutDashboard }],
-  },
-  {
-    label: 'Content',
-    items: [
-      { href: '/dashboard/playlists', label: 'Playlists', icon: ListVideo },
-      { href: '/dashboard/channels', label: 'Add New Channel', icon: Tv },
-      { href: '/dashboard/announcements', label: 'Announcements', icon: Megaphone },
-    ],
-  },
-  {
-    label: 'Operations',
-    items: [{ href: '/dashboard/local-check', label: 'Local Check', icon: Activity }],
-  },
-  {
-    label: 'Access',
-    items: [{ href: '/dashboard/clients', label: 'Clients', icon: Users }],
-  },
-  {
-    label: 'System',
-    items: [{ href: '/dashboard/settings', label: 'Settings', icon: Settings }],
-  },
-]
+const nextLocale = (locale) => (locale === 'bn' ? 'en' : 'bn')
 
-function sectionMeta(pathname) {
-  if (!pathname) return { title: 'Overview', subtitle: 'Admin control center' }
+function createNavGroups(t) {
+  return [
+    {
+      label: t('dashboardShell.groupMain'),
+      items: [{ href: '/dashboard', label: t('dashboardShell.navOverview'), icon: LayoutDashboard }],
+    },
+    {
+      label: t('dashboardShell.groupContent'),
+      items: [
+        { href: '/dashboard/playlists', label: t('dashboardShell.navPlaylists'), icon: ListVideo },
+        { href: '/dashboard/channels', label: t('dashboardShell.navAddChannel'), icon: Tv },
+        { href: '/dashboard/announcements', label: t('dashboardShell.navAnnouncements'), icon: Megaphone },
+      ],
+    },
+    {
+      label: t('dashboardShell.groupOperations'),
+      items: [{ href: '/dashboard/local-check', label: t('dashboardShell.navLocalCheck'), icon: Activity }],
+    },
+    {
+      label: t('dashboardShell.groupAccess'),
+      items: [{ href: '/dashboard/clients', label: t('dashboardShell.navClients'), icon: Users }],
+    },
+    {
+      label: t('dashboardShell.groupSystem'),
+      items: [{ href: '/dashboard/settings', label: t('dashboardShell.navSettings'), icon: Settings }],
+    },
+  ]
+}
+
+function sectionMeta(pathname, t) {
+  if (!pathname) return { title: t('dashboardShell.titleOverview'), subtitle: t('dashboardShell.subtitleOverview') }
   if (pathname === '/dashboard')
-    return { title: 'Overview', subtitle: 'Admin control center' }
+    return { title: t('dashboardShell.titleOverview'), subtitle: t('dashboardShell.subtitleOverview') }
   if (pathname.startsWith('/dashboard/playlists/')) {
     const slug = pathname.split('/').filter(Boolean).at(-1) || 'playlist'
-    return { title: 'Playlist Editor', subtitle: `Editing: ${slug}` }
+    return { title: t('dashboardShell.titlePlaylistEditor'), subtitle: `${t('dashboardShell.subtitleEditing')} ${slug}` }
   }
   if (pathname.startsWith('/dashboard/playlists')) {
     return {
-      title: 'Playlists',
-      subtitle: 'Manage playlists and public token links',
+      title: t('dashboardShell.titlePlaylists'),
+      subtitle: t('dashboardShell.subtitlePlaylists'),
     }
   }
   if (pathname.startsWith('/dashboard/channels')) {
     return {
-      title: 'Add New Channel',
-      subtitle: 'Manage channel metadata and assignments',
+      title: t('dashboardShell.titleAddChannel'),
+      subtitle: t('dashboardShell.subtitleAddChannel'),
     }
   }
   if (pathname.startsWith('/dashboard/announcements')) {
     return {
-      title: 'Announcements',
-      subtitle: 'Publish updates, notices, and article posts',
+      title: t('dashboardShell.titleAnnouncements'),
+      subtitle: t('dashboardShell.subtitleAnnouncements'),
     }
   }
   if (pathname.startsWith('/dashboard/local-check')) {
     return {
-      title: 'Local Check',
-      subtitle: 'Run route-aware stream health verification',
+      title: t('dashboardShell.titleLocalCheck'),
+      subtitle: t('dashboardShell.subtitleLocalCheck'),
     }
   }
   if (pathname.startsWith('/dashboard/settings')) {
     return {
-      title: 'Settings',
-      subtitle: 'Configure email delivery, welcome templates, and approval request alerts',
+      title: t('dashboardShell.titleSettings'),
+      subtitle: t('dashboardShell.subtitleSettings'),
     }
   }
   if (pathname.startsWith('/dashboard/clients')) {
     return {
-      title: 'Client Users',
-      subtitle: 'Create and control viewer login accounts',
+      title: t('dashboardShell.titleClients'),
+      subtitle: t('dashboardShell.subtitleClients'),
     }
   }
-  return { title: 'Dashboard', subtitle: 'Admin workspace' }
+  return { title: t('dashboardShell.titleDashboard'), subtitle: t('dashboardShell.subtitleDashboard') }
 }
 
 function urlBase64ToUint8Array(base64String) {
@@ -104,6 +111,7 @@ function urlBase64ToUint8Array(base64String) {
 export default function DashboardShell({ children }) {
   const pathname = usePathname()
   const router = useRouter()
+  const { locale, setLocale, t } = useI18n()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [notificationMenuOpen, setNotificationMenuOpen] = useState(false)
   const [notifications, setNotifications] = useState([])
@@ -116,7 +124,8 @@ export default function DashboardShell({ children }) {
   const vapidPublicKeyRef = useRef(String(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || '').trim())
   const lastUnreadRef = useRef(0)
   const notificationMenuRef = useRef(null)
-  const meta = useMemo(() => sectionMeta(pathname), [pathname])
+  const meta = useMemo(() => sectionMeta(pathname, t), [pathname, t])
+  const navGroups = useMemo(() => createNavGroups(t), [t])
 
   const isActive = (href) => {
     if (href === '/dashboard') return pathname === href
@@ -132,13 +141,13 @@ export default function DashboardShell({ children }) {
         const res = await fetch('/api/admin/notifications', { cache: 'no-store' })
         const payload = await res.json().catch(() => ({}))
         if (!active) return
-        if (!res.ok) throw new Error(payload?.error || 'Failed to load notifications.')
+        if (!res.ok) throw new Error(payload?.error || t('dashboardShell.failedLoadNotifications'))
         const items = Array.isArray(payload?.items) ? payload.items : []
         setNotifications(items)
         setUnreadCount(Math.max(0, Number(payload?.unread_count || 0)))
       } catch (err) {
         if (!active) return
-        setNotificationError(err?.message || 'Failed to load notifications.')
+        setNotificationError(err?.message || t('dashboardShell.failedLoadNotifications'))
       } finally {
         if (active) setNotificationsLoading(false)
       }
@@ -149,7 +158,7 @@ export default function DashboardShell({ children }) {
       active = false
       clearInterval(timer)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -190,13 +199,13 @@ export default function DashboardShell({ children }) {
     if (Notification.permission !== 'granted') return
     if (document.visibilityState === 'visible') return
     try {
-      new Notification(top.title || 'New admin notification', {
+      new Notification(top.title || t('dashboardShell.newAdminNotification'), {
         body: String(top.message || '').slice(0, 160),
       })
     } catch {
       // ignore notification runtime errors
     }
-  }, [unreadCount, notifications])
+  }, [unreadCount, notifications, t])
 
   useEffect(() => {
     const onPointerDown = (event) => {
@@ -295,9 +304,7 @@ export default function DashboardShell({ children }) {
     if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return
     const vapidPublicKey = await resolveVapidPublicKey()
     if (!vapidPublicKey) {
-      window.alert(
-        'Push is not configured yet. Set NEXT_PUBLIC_VAPID_PUBLIC_KEY (or WEB_PUSH_VAPID_PUBLIC_KEY) in vercel/.env.local and restart dev server.'
-      )
+      window.alert(t('dashboardShell.pushNotConfigured'))
       return
     }
 
@@ -323,7 +330,7 @@ export default function DashboardShell({ children }) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ subscription, user_agent: navigator.userAgent }),
       })
-      if (!saveRes.ok) throw new Error('Failed to save push subscription.')
+      if (!saveRes.ok) throw new Error(t('dashboardShell.failedSavePushSubscription'))
       setPushEnabled(true)
     } catch {
       setPushEnabled(false)
@@ -377,7 +384,7 @@ export default function DashboardShell({ children }) {
         </div>
 
         <nav className={styles.navWrap}>
-          {NAV_GROUPS.map((group) => (
+          {navGroups.map((group) => (
             <section key={group.label} className={styles.navGroup}>
               <p className={styles.groupLabel}>{group.label}</p>
               <div className={styles.navList}>
@@ -400,7 +407,7 @@ export default function DashboardShell({ children }) {
         <div className={styles.sidebarFooter}>
           <Link href='/' className={styles.viewerLink}>
             <MonitorPlay size={16} aria-hidden='true' />
-            <span>Open Client View</span>
+            <span>{t('dashboardShell.openClientView')}</span>
           </Link>
         </div>
       </aside>
@@ -409,7 +416,7 @@ export default function DashboardShell({ children }) {
         <button
           className={styles.overlay}
           onClick={() => setMobileOpen(false)}
-          aria-label='Close sidebar'
+          aria-label={t('dashboardShell.closeSidebar')}
         />
       ) : null}
 
@@ -421,19 +428,32 @@ export default function DashboardShell({ children }) {
               className={styles.mobileMenuBtn}
               onClick={() => setMobileOpen((v) => !v)}
             >
-              <CircleUserRound size={16} aria-hidden='true' />
-              Menu
+              {mobileOpen ? <X size={16} aria-hidden='true' /> : <Menu size={16} aria-hidden='true' />}
+              {t('common.menu')}
             </button>
-            <p className={styles.headerKicker}>Dashboard</p>
+            <p className={styles.headerKicker}>{t('common.dashboard')}</p>
             <h2 className={styles.headerTitle}>{meta.title}</h2>
             <p className={styles.headerSubtitle}>{meta.subtitle}</p>
           </div>
           <div className={styles.headerRight}>
+            <button
+              type='button'
+              className={`${styles.iconBtn} ${styles.languageBtn}`}
+              aria-label={`${t('dashboardShell.language')}: ${locale.toUpperCase()}`}
+              onClick={() => {
+                const selectedLocale = nextLocale(locale)
+                setLocale(selectedLocale)
+                router.refresh()
+              }}
+            >
+              <Languages size={16} aria-hidden='true' />
+              <span>{locale === 'bn' ? 'বাংলা' : 'EN'}</span>
+            </button>
             <div className={styles.notificationMenuWrap} ref={notificationMenuRef}>
               <button
                 type='button'
                 className={styles.iconBtn}
-                aria-label='Admin notifications'
+                aria-label={t('dashboardShell.adminNotifications')}
                 aria-haspopup='menu'
                 aria-expanded={notificationMenuOpen}
                 onClick={() => {
@@ -447,9 +467,9 @@ export default function DashboardShell({ children }) {
                 {unreadCount > 0 ? <span className={styles.badge}>{unreadCount > 99 ? '99+' : unreadCount}</span> : null}
               </button>
               {notificationMenuOpen ? (
-                <div className={styles.notificationDropdown} role='menu' aria-label='Admin notifications'>
+                <div className={styles.notificationDropdown} role='menu' aria-label={t('dashboardShell.adminNotifications')}>
                 <div className={styles.notificationHeader}>
-                  <strong>Notifications</strong>
+                  <strong>{t('dashboardShell.notifications')}</strong>
                   <div className={styles.notificationHeaderActions}>
                     <button
                       type='button'
@@ -457,7 +477,7 @@ export default function DashboardShell({ children }) {
                       disabled={unreadCount <= 0}
                       onClick={() => markNotificationsRead({ markAll: true })}
                     >
-                      Mark all read
+                      {t('dashboardShell.markAllRead')}
                     </button>
                     <button
                       type='button'
@@ -465,15 +485,19 @@ export default function DashboardShell({ children }) {
                       disabled={!pushReady || pushBusy}
                       onClick={pushEnabled ? disablePushNotifications : enablePushNotifications}
                     >
-                      {pushBusy ? (pushEnabled ? 'Disabling...' : 'Enabling...') : pushEnabled ? 'Disable Push' : 'Enable Push'}
+                      {pushBusy
+                        ? (pushEnabled ? t('dashboardShell.disabling') : t('dashboardShell.enabling'))
+                        : pushEnabled
+                          ? t('dashboardShell.disablePush')
+                          : t('dashboardShell.enablePush')}
                     </button>
                   </div>
                 </div>
                   <div className={styles.notificationList}>
-                    {notificationsLoading ? <p className={styles.notificationState}>Loading...</p> : null}
+                    {notificationsLoading ? <p className={styles.notificationState}>{t('common.loading')}</p> : null}
                     {notificationError && !notificationsLoading ? <p className={styles.notificationState}>{notificationError}</p> : null}
                     {!notificationsLoading && !notificationError && !notifications.length ? (
-                      <p className={styles.notificationState}>No notifications yet.</p>
+                      <p className={styles.notificationState}>{t('dashboardShell.noNotifications')}</p>
                     ) : null}
                     {!notificationsLoading && !notificationError
                       ? notifications.map((item) => (
@@ -485,14 +509,14 @@ export default function DashboardShell({ children }) {
                             onClick={() => onNotificationClick(item)}
                           >
                             <div className={styles.notificationItemTop}>
-                              <span className={styles.notificationItemTitle}>{item.title || 'Notification'}</span>
+                              <span className={styles.notificationItemTitle}>{item.title || t('dashboardShell.notifications')}</span>
                               {!item.is_read ? <span className={styles.notificationDot} aria-hidden='true' /> : null}
                             </div>
                             <span className={styles.notificationItemMeta}>
                               {item.message || '-'}
                             </span>
                             <span className={styles.notificationItemMeta}>
-                              {item.created_at ? new Date(item.created_at).toLocaleString() : 'Recently'}
+                              {item.created_at ? new Date(item.created_at).toLocaleString() : t('common.unknown')}
                             </span>
                           </button>
                         ))
@@ -504,7 +528,7 @@ export default function DashboardShell({ children }) {
             <form action='/api/auth/logout' method='post'>
               <button type='submit' className={styles.logoutBtn}>
                 <LogOut size={16} aria-hidden='true' />
-                <span>Logout</span>
+                <span>{t('common.logout')}</span>
               </button>
             </form>
           </div>

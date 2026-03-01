@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "../../../../../lib/adminApi";
 import { getSupabaseAdmin } from "../../../../../lib/supabaseAdmin";
+import { sendClientPush } from "../../../../../lib/clientPushNotifications";
 
 const TABLE = "admin_announcements";
 
@@ -25,6 +26,10 @@ function stripHtml(html) {
     .replace(/<[^>]+>/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function truncate(text, len = 180) {
+  return String(text || "").slice(0, Math.max(1, Number(len || 180)));
 }
 
 function normalizePosition(value) {
@@ -57,17 +62,22 @@ export async function PATCH(request, { params }) {
 
   const body = await request.json().catch(() => ({}));
   const patch = {};
+  let announcementTitle = "";
+  let announcementBody = "";
 
   if (Object.prototype.hasOwnProperty.call(body, "title")) {
     const title = cleanText(body.title);
     if (title.length < 3) return NextResponse.json({ error: "Title must be at least 3 characters." }, { status: 400 });
     patch.title = title;
+    announcementTitle = title;
   }
 
   if (Object.prototype.hasOwnProperty.call(body, "content_html")) {
     const contentHtml = String(body.content_html || "");
-    if (!stripHtml(contentHtml)) return NextResponse.json({ error: "Article content is required." }, { status: 400 });
+    const plain = stripHtml(contentHtml);
+    if (!plain) return NextResponse.json({ error: "Article content is required." }, { status: 400 });
     patch.content_html = contentHtml;
+    announcementBody = plain;
   }
 
   if (Object.prototype.hasOwnProperty.call(body, "is_pinned")) {
@@ -106,6 +116,20 @@ export async function PATCH(request, { params }) {
     .single();
 
   if (error) return NextResponse.json({ error: formatDbError(error, "Failed to update announcement.") }, { status: 500 });
+
+  if (Object.prototype.hasOwnProperty.call(body, "is_published") && patch.is_published === true) {
+    const title = announcementTitle || String(data?.title || "Announcement");
+    const message = truncate(announcementBody || stripHtml(data?.content_html || ""), 180);
+    await sendClientPush({
+      title,
+      message,
+      payload: {
+        kind: "announcement",
+        announcement_id: String(data?.id || id),
+        target_url: "/",
+      },
+    });
+  }
   return NextResponse.json({ ok: true, item: mapRow(data) });
 }
 

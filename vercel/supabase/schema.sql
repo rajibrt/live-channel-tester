@@ -166,6 +166,18 @@ create table if not exists public.admin_push_subscriptions (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.client_push_subscriptions (
+  id bigint generated always as identity primary key,
+  user_id uuid not null references public.client_users(user_id) on delete cascade,
+  endpoint text not null unique,
+  p256dh text not null,
+  auth text not null,
+  user_agent text not null default '',
+  is_active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists public.client_state (
   user_id uuid primary key references public.client_users(user_id) on delete cascade,
   favorites jsonb not null default '[]'::jsonb,
@@ -301,6 +313,7 @@ create index if not exists admin_announcements_pinned_idx on public.admin_announ
 create index if not exists admin_notifications_created_idx on public.admin_notifications(created_at desc);
 create index if not exists admin_notifications_read_idx on public.admin_notifications(is_read, created_at desc);
 create index if not exists admin_push_subscriptions_admin_idx on public.admin_push_subscriptions(admin_user_id, is_active);
+create index if not exists client_push_subscriptions_user_idx on public.client_push_subscriptions(user_id, is_active);
 
 alter table public.playlists enable row level security;
 alter table public.channels enable row level security;
@@ -319,6 +332,7 @@ alter table public.admin_announcements enable row level security;
 alter table public.admin_settings enable row level security;
 alter table public.admin_notifications enable row level security;
 alter table public.admin_push_subscriptions enable row level security;
+alter table public.client_push_subscriptions enable row level security;
 
 drop policy if exists deny_all_playlists on public.playlists;
 create policy deny_all_playlists on public.playlists for all using (false) with check (false);
@@ -354,3 +368,5 @@ drop policy if exists deny_all_admin_notifications on public.admin_notifications
 create policy deny_all_admin_notifications on public.admin_notifications for all using (false) with check (false);
 drop policy if exists deny_all_admin_push_subscriptions on public.admin_push_subscriptions;
 create policy deny_all_admin_push_subscriptions on public.admin_push_subscriptions for all using (false) with check (false);
+drop policy if exists deny_all_client_push_subscriptions on public.client_push_subscriptions;
+create policy deny_all_client_push_subscriptions on public.client_push_subscriptions for all using (false) with check (false);

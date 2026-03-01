@@ -4,8 +4,10 @@ import { getCurrentClient } from "../../lib/clientAuth";
 import { redirect } from "next/navigation";
 import PasswordField from "../../components/auth/PasswordField";
 import FacebookHashHandler from "./FacebookHashHandler";
+import { getDictionaryForRequest } from "../../lib/i18n/server";
 
 export default async function ClientLoginPage({ searchParams }) {
+  const { t } = await getDictionaryForRequest();
   const current = await getCurrentClient();
   if (current) redirect("/");
 
@@ -15,14 +17,14 @@ export default async function ClientLoginPage({ searchParams }) {
   const pending = String(params?.pending || "").trim() === "1";
   const errorMessage =
     errorCode === "inactive"
-      ? "Your account is inactive. Please contact support."
+      ? t("auth.clientInactive")
       : errorCode === "facebook_start"
-        ? "Could not start Facebook sign-in. Please try again."
+        ? t("auth.facebookStartFailed")
         : errorCode === "facebook_callback"
-          ? "Facebook sign-in failed. Please try again."
+          ? t("auth.facebookCallbackFailed")
           : errorCode === "facebook_profile"
-            ? "Facebook sign-in succeeded, but profile setup failed."
-            : "Login failed. Please check your credentials and try again.";
+            ? t("auth.facebookProfileFailed")
+            : t("auth.loginFailed");
 
   return (
     <main className={styles.page}>
@@ -31,19 +33,19 @@ export default async function ClientLoginPage({ searchParams }) {
         <div className={styles.visualBrand}>
           <Image
             src="/logo.png"
-            alt="WEBTV BD logo"
+            alt={t("auth.webtvLogoAlt")}
             width={416}
             height={130}
             className={styles.visualBrandLogoFull}
             priority
           />
-          <p className={styles.visualBrandSlogan}>TV Beyond Borders</p>
+          <p className={styles.visualBrandSlogan}>{t("auth.tvBeyondBorders")}</p>
         </div>
         <div className={styles.visualCopy}>
-          <p className={styles.visualTag}>Client Access</p>
-          <h1 className={styles.visualTitle}>StreamTV Viewer Portal</h1>
+          <p className={styles.visualTag}>{t("auth.clientAccess")}</p>
+          <h1 className={styles.visualTitle}>{t("auth.viewerPortal")}</h1>
           <p className={styles.visualText}>
-            Login is required to view channels. Your favorites, recent history, and viewing activity are synced securely.
+            {t("auth.clientPortalDesc")}
           </p>
         </div>
       </section>
@@ -51,9 +53,9 @@ export default async function ClientLoginPage({ searchParams }) {
       <section className={styles.formPane}>
         <div className={styles.formShell}>
           <FacebookHashHandler />
-          <p className={styles.formTag}>Sign In</p>
-          <h2 className={styles.formTitle}>Client Login</h2>
-          <p className={styles.formText}>Use email or registered mobile last 11 digits with password.</p>
+          <p className={styles.formTag}>{t("auth.signIn")}</p>
+          <h2 className={styles.formTitle}>{t("auth.clientLogin")}</h2>
+          <p className={styles.formText}>{t("auth.clientLoginDesc")}</p>
 
           {hasError ? (
             <p className={`${styles.note} ${styles.errorNote}`} role="alert">
@@ -62,18 +64,18 @@ export default async function ClientLoginPage({ searchParams }) {
           ) : null}
           {pending ? (
             <p className={styles.note} role="status">
-              Your profile is waiting for admin approval. Channel playback is locked until approval.
+              {t("auth.profilePendingApproval")}
             </p>
           ) : null}
 
           <form method="post" action="/api/client/auth/login" className={styles.form} autoComplete="off">
             <label className={styles.field}>
-              <span>Email or Mobile (last 11 digits)</span>
+              <span>{t("auth.emailOrMobile")}</span>
               <input
                 name="identifier"
                 type="text"
                 required
-                placeholder="client@example.com or 01XXXXXXXXX"
+                placeholder={t("auth.clientIdentifierPlaceholder")}
                 autoComplete="off"
                 autoCapitalize="off"
                 autoCorrect="off"
@@ -81,19 +83,26 @@ export default async function ClientLoginPage({ searchParams }) {
               />
             </label>
 
-            <PasswordField styles={styles} autoComplete="off" />
+            <PasswordField
+              styles={styles}
+              autoComplete="off"
+              label={t("settings.password")}
+              placeholder={t("auth.passwordPlaceholder")}
+              showLabel={t("settings.showPassword")}
+              hideLabel={t("settings.hidePassword")}
+            />
 
-            <button type="submit" className={styles.submit}>Sign In</button>
+            <button type="submit" className={styles.submit}>{t("auth.signIn")}</button>
           </form>
 
-          <p className={styles.divider}>or continue with</p>
+          <p className={styles.divider}>{t("auth.orContinueWithLower")}</p>
           <a href="/api/client/auth/facebook/start" className={`${styles.socialBtn} ${styles.facebookBtn}`}>
             <span className={styles.socialIcon} aria-hidden="true">
               <svg viewBox="0 0 24 24" focusable="false">
                 <path d="M14 8h3V4h-3c-2.8 0-5 2.2-5 5v3H6v4h3v4h4v-4h3.1l.9-4H13V9c0-.6.4-1 1-1z" />
               </svg>
             </span>
-            <span>Continue with Facebook</span>
+            <span>{t("auth.continueWithFacebook")}</span>
           </a>
         </div>
       </section>

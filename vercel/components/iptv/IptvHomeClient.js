@@ -8,6 +8,7 @@ import VideoPlayer from "./VideoPlayer";
 import CookieConsentBanner from "./CookieConsentBanner";
 import styles from "./iptv.module.css";
 import { usePersistentArray } from "./usePersistentArray";
+import { buildWatchPath } from "../../lib/channelSlug";
 
 const LAST_CHANNEL_KEY = "iptv:v1:last-channel-id";
 const DEVICE_KEY_STORAGE = "iptv:v1:device-key";
@@ -29,6 +30,7 @@ export default function IptvHomeClient({
   initialCategories = [],
   initialClientState = {},
   currentClient = {},
+  initialSelectedChannelId = "",
 }) {
   const initialTheme = String(initialClientState?.theme || "").trim().toLowerCase();
   const [isDark, setIsDark] = useState(() => {
@@ -278,6 +280,7 @@ export default function IptvHomeClient({
 
   const allChannels = Array.isArray(initialChannels) ? initialChannels : [];
   const allCategories = Array.isArray(initialCategories) ? initialCategories : [];
+  const routeSelectedChannelId = normalizeChannelId(initialSelectedChannelId);
   const categoriesWithCount = useMemo(() => {
     const countByCategoryId = new Map();
     for (const channel of allChannels) {
@@ -292,32 +295,48 @@ export default function IptvHomeClient({
   }, [allChannels, allCategories]);
 
   useEffect(() => {
-    if (cookieConsent !== "accepted") return;
     if (hasRestoredChannel) return;
     if (!allChannels.length) return;
 
-    try {
-      const seeded = String(initialClientState?.lastChannelId || "").trim();
-      const savedId = seeded || String(window.localStorage.getItem(LAST_CHANNEL_KEY) || "").trim();
-      if (savedId) {
-        const restored = allChannels.find((item) => String(item.id) === savedId);
-        if (restored) {
-          setSelectedChannel(restored);
-          setMode("all");
-          setSelectedCategory(String(restored.categoryId || "").trim() || null);
-          setRecent((prev) => {
-            const restoredId = normalizeChannelId(restored.id);
-            const next = [restoredId, ...prev.filter((id) => normalizeChannelId(id) !== restoredId)];
-            return next.slice(0, 30);
-          });
+    let restored = null;
+    if (routeSelectedChannelId) {
+      restored = allChannels.find((item) => normalizeChannelId(item?.id) === routeSelectedChannelId) || null;
+    }
+
+    if (!restored && cookieConsent === "accepted") {
+      try {
+        const seeded = String(initialClientState?.lastChannelId || "").trim();
+        const savedId = seeded || String(window.localStorage.getItem(LAST_CHANNEL_KEY) || "").trim();
+        if (savedId) {
+          restored = allChannels.find((item) => String(item.id) === savedId) || null;
         }
+      } catch {
+        // ignore localStorage read issues
       }
-    } catch {
-      // ignore localStorage read issues
+    }
+
+    if (restored) {
+      setSelectedChannel(restored);
+      setMode("all");
+      setSelectedCategory(String(restored.categoryId || "").trim() || null);
+      if (cookieConsent === "accepted") {
+        setRecent((prev) => {
+          const restoredId = normalizeChannelId(restored.id);
+          const next = [restoredId, ...prev.filter((id) => normalizeChannelId(id) !== restoredId)];
+          return next.slice(0, 30);
+        });
+      }
     }
 
     setHasRestoredChannel(true);
-  }, [allChannels, cookieConsent, hasRestoredChannel, setRecent, initialClientState?.lastChannelId]);
+  }, [
+    allChannels,
+    cookieConsent,
+    hasRestoredChannel,
+    initialClientState?.lastChannelId,
+    routeSelectedChannelId,
+    setRecent,
+  ]);
 
   useEffect(() => {
     if (cookieConsent !== "accepted") return;
@@ -339,6 +358,16 @@ export default function IptvHomeClient({
       // ignore localStorage write issues
     }
   }, [cookieConsent, setRecent]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const selectedId = normalizeChannelId(selectedChannel?.id);
+    if (!selectedId) return;
+
+    const nextPath = buildWatchPath({ id: selectedId, name: selectedChannel?.name || "" });
+    if (!nextPath || window.location.pathname === nextPath) return;
+    window.history.replaceState(window.history.state, "", nextPath);
+  }, [selectedChannel?.id, selectedChannel?.name]);
 
   useEffect(() => {
     if (!hasRestoredChannel && cookieConsent === "accepted") return;

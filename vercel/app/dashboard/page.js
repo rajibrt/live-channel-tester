@@ -101,19 +101,19 @@ export default async function DashboardPage() {
 
       <section className={`${styles.stats} ${styles.statsCompact4}`}>
         <article className={styles.statCard}>
-          <p>Total Sessions (24h)</p>
-          <strong>{Number(reports?.sessions_24h || 0)}</strong>
-          <small className={styles.metaMuted}>Last 7 days: {Number(reports?.sessions_7d || 0)}</small>
+          <p>Total Sessions</p>
+          <strong>{Number(reports?.total_sessions || 0)}</strong>
+          <small className={styles.metaMuted}>Last 24h: {Number(reports?.sessions_24h || 0)}</small>
         </article>
         <article className={styles.statCard}>
-          <p>New Devices (24h)</p>
-          <strong>{Number(reports?.new_devices_24h || 0)}</strong>
-          <small className={styles.metaMuted}>Known devices: {Number(reports?.known_devices_24h || 0)}</small>
+          <p>Total Users</p>
+          <strong>{Number(reports?.total_users || 0)}</strong>
+          <small className={styles.metaMuted}>New users (7d): {Number(reports?.new_users_7d || 0)}</small>
         </article>
         <article className={styles.statCard}>
-          <p>Active Users (24h)</p>
-          <strong>{Number(reports?.active_users_24h || 0)}</strong>
-          <small className={styles.metaMuted}>Returning (7d): {Number(reports?.returning_viewers_7d || 0)}</small>
+          <p>Total Watch Sessions</p>
+          <strong>{Number(reports?.total_watch_sessions || 0)}</strong>
+          <small className={styles.metaMuted}>Last 24h: {Number(reports?.watch_sessions_24h || 0)}</small>
         </article>
         <article className={styles.statCard}>
           <p>Client Approval</p>
@@ -126,23 +126,23 @@ export default async function DashboardPage() {
         <article className={styles.statCard}>
           <p>Watch Time (24h)</p>
           <strong>{formatDuration(reports?.watch_seconds_24h)}</strong>
-          <small className={styles.metaMuted}>Sessions: {Number(reports?.watch_sessions_24h || 0)}</small>
+          <small className={styles.metaMuted}>Active users (24h): {Number(reports?.active_users_24h || 0)}</small>
+        </article>
+        <article className={styles.statCard}>
+          <p>Total Playback Attempts</p>
+          <strong>{Number(reports?.total_playback_attempts || 0)}</strong>
+          <small className={styles.metaMuted}>Last 7 days: {Number(reports?.playback_attempts_7d || 0)}</small>
+        </article>
+        <article className={styles.statCard}>
+          <p>Total Playback Failures</p>
+          <strong>{Number(reports?.total_playback_failures || 0)}</strong>
+          <small className={styles.metaMuted}>Last 24h: {Number(reports?.playback_failures_24h || 0)}</small>
         </article>
         <article className={styles.statCard}>
           <p>Avg Session (24h)</p>
           <strong>{formatDuration(reports?.avg_watch_seconds_per_session_24h)}</strong>
-          <small className={styles.metaMuted}>Unique channels: {Number(reports?.unique_channels_24h || 0)}</small>
-        </article>
-        <article className={styles.statCard}>
-          <p>New Users (7d)</p>
-          <strong>{Number(reports?.new_users_7d || 0)}</strong>
-          <small className={styles.metaMuted}>Known devices (24h): {Number(reports?.known_devices_24h || 0)}</small>
-        </article>
-        <article className={styles.statCard}>
-          <p>Playback Failures</p>
-          <strong>{Number(reports?.playback_failures_24h || 0)} (24h)</strong>
           <small className={styles.metaMuted}>
-            Last 7 days: {Number(reports?.playback_failures_7d || 0)} / Attempts: {Number(reports?.playback_attempts_7d || 0)}
+            Unique channels: {Number(reports?.unique_channels_24h || 0)}
           </small>
         </article>
       </section>

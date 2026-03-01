@@ -1,9 +1,22 @@
 import "./globals.css";
 import Script from "next/script";
+import { cookies } from "next/headers";
+import { LanguageProvider } from "../components/i18n/LanguageProvider";
+import { DEFAULT_LOCALE, SUPPORTED_LOCALES } from "../lib/i18n/dictionaries";
+import { getBaseUrl } from "../lib/siteUrl";
 
+const baseUrl = getBaseUrl();
 export const metadata = {
   title: "WEBTV BD || TV Beyond Borders",
-  description: "WEBTV BD streaming platform",
+  description: "WEBTV BD live streaming platform for channels, categories, and on-demand viewer access.",
+  metadataBase: new URL(baseUrl),
+  openGraph: {
+    type: "website",
+    url: baseUrl,
+    title: "WEBTV BD || TV Beyond Borders",
+    description: "Watch live channels on WEBTV BD.",
+    images: [{ url: "/android-chrome-512x512.png", width: 512, height: 512, alt: "WEBTV BD" }],
+  },
   icons: {
     icon: [
       { url: "/favicon.ico" },
@@ -15,7 +28,10 @@ export const metadata = {
   manifest: "/site.webmanifest",
 };
 
-export default function RootLayout({ children }) {
+export default async function RootLayout({ children }) {
+  const cookieStore = await cookies();
+  const cookieLocale = String(cookieStore.get("lang")?.value || "").trim().toLowerCase();
+  const initialLocale = SUPPORTED_LOCALES.includes(cookieLocale) ? cookieLocale : DEFAULT_LOCALE;
   const themeInitScript = `
     (function () {
       try {
@@ -32,12 +48,14 @@ export default function RootLayout({ children }) {
   `;
 
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang={initialLocale} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body>
-        {children}
+        <LanguageProvider initialLocale={initialLocale}>
+          {children}
+        </LanguageProvider>
         <Script id="statcounter-config" strategy="afterInteractive">
           {`
             window.sc_project = 12383019;

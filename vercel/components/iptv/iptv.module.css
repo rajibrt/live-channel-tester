@@ -133,6 +133,48 @@
   border: 1px solid var(--ring);
 }
 
+.pushBtnActive {
+  color: color-mix(in oklab, var(--chart-2) 92%, var(--foreground));
+  border: 1px solid color-mix(in oklab, var(--chart-2) 52%, var(--border));
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--chart-2) 20%, transparent);
+  background: color-mix(in oklab, var(--chart-2) 16%, var(--muted));
+}
+
+.pushBtnInactive {
+  color: color-mix(in oklab, var(--muted-foreground) 92%, var(--foreground));
+  border: 1px solid color-mix(in oklab, var(--destructive) 38%, var(--border));
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--destructive) 12%, transparent);
+  background: color-mix(in oklab, var(--destructive) 8%, var(--muted));
+}
+
+.pushStateDot {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  right: 4px;
+  bottom: 4px;
+  border: 1px solid color-mix(in oklab, var(--background) 70%, var(--border));
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--card) 50%, transparent);
+}
+
+.pushStateDotOn {
+  background: #22c55e;
+}
+
+.pushStateDotOff {
+  background: #ef4444;
+}
+
+.pushHeaderBtn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-right: 20px;
+  font-weight: 600;
+}
+
 .tvControl {
   display: grid;
 }
@@ -534,6 +576,103 @@
 
 .announcementTickerMobile {
   display: none;
+}
+
+.mobileActionPrompt {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: max(14px, env(safe-area-inset-bottom, 0px) + 10px);
+  z-index: 72;
+  border: 1px solid color-mix(in oklab, #f59e0b 62%, var(--border));
+  border-radius: 12px;
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in oklab, #f59e0b 28%, var(--card)) 0%,
+      color-mix(in oklab, #fb7185 18%, var(--card)) 46%,
+      color-mix(in oklab, #0f172a 92%, var(--card)) 100%
+    );
+  box-shadow:
+    0 14px 36px color-mix(in oklab, #f59e0b 24%, transparent),
+    0 8px 20px color-mix(in oklab, #fb7185 16%, transparent);
+  padding: 10px;
+  display: none;
+  gap: 8px;
+  animation: installPromptPulse 2.2s ease-in-out infinite;
+}
+
+.mobileActionPromptText {
+  display: grid;
+  gap: 2px;
+}
+
+.mobileActionPromptText strong {
+  font-size: 13px;
+  color: color-mix(in oklab, #fff 94%, var(--foreground));
+  letter-spacing: 0.01em;
+}
+
+.mobileActionPromptText span {
+  color: color-mix(in oklab, #fff 82%, var(--muted-foreground));
+  font-size: 12px;
+}
+
+.mobileActionPromptActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mobilePromptBtn,
+.mobilePromptGhostBtn {
+  border-radius: 9px;
+  padding: 7px 10px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mobilePromptBtn {
+  border: 0;
+  color: var(--primary-foreground);
+  background: linear-gradient(135deg, #ff006a 0%, #ff3d00 100%);
+  box-shadow: 0 6px 16px color-mix(in oklab, #ff006a 40%, transparent);
+}
+
+.mobilePromptGhostBtn {
+  border: 1px solid color-mix(in oklab, #ffffff 34%, var(--border));
+  color: color-mix(in oklab, #fff 94%, var(--foreground));
+  background: color-mix(in oklab, #0f172a 68%, var(--card));
+}
+
+@keyframes installPromptPulse {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-1px);
+  }
+}
+
+.pushInlineError {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: max(14px, env(safe-area-inset-bottom, 0px) + 10px);
+  z-index: 73;
+  margin: 0;
+  border-radius: 10px;
+  border: 1px solid color-mix(in oklab, var(--destructive) 52%, var(--border));
+  background: color-mix(in oklab, var(--destructive) 12%, var(--card));
+  color: color-mix(in oklab, var(--destructive) 82%, var(--foreground));
+  font-size: 12px;
+  padding: 8px 10px;
 }
 
 .announcementTickerTrack {
@@ -1001,6 +1140,44 @@
   overflow: hidden;
   text-overflow: ellipsis;
   flex: 1;
+}
+
+.fullscreenChannelInfo {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  gap: 8px;
+  flex: 1;
+}
+
+.fullscreenChannelLogo {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in oklab, var(--border) 86%, transparent);
+  background: color-mix(in oklab, var(--background) 88%, var(--card));
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+
+.fullscreenChannelLogoFallback {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: color-mix(in oklab, var(--foreground) 82%, transparent);
+  text-transform: uppercase;
+}
+
+.fullscreenChannelLogoImg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .fullscreenChannelActions {
@@ -2002,6 +2179,17 @@
   .brandText {
     font-size: 17px;
     max-width: 130px;
+  }
+
+  .mobileActionPrompt {
+    display: grid;
+    left: 8px;
+    right: 8px;
+  }
+
+  .pushInlineError {
+    left: 8px;
+    right: 8px;
   }
 
   .channelInfo {

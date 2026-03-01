@@ -916,7 +916,25 @@ export default function VideoPlayer({
                     className={`${styles.fullscreenListBtn} ${channel?.id === item.id ? styles.fullscreenListBtnActive : ""}`}
                     onClick={() => onSelectChannel?.(item)}
                   >
-                    <span className={styles.fullscreenChannelName}>{item.name}</span>
+                    <span className={styles.fullscreenChannelInfo}>
+                      <span className={styles.fullscreenChannelLogo} aria-hidden="true">
+                        <span className={styles.fullscreenChannelLogoFallback}>
+                          {String(item?.logo || item?.name || "TV").slice(0, 2).toUpperCase()}
+                        </span>
+                        {item?.logoUrl ? (
+                          <img
+                            src={item.logoUrl}
+                            alt=""
+                            className={styles.fullscreenChannelLogoImg}
+                            loading="lazy"
+                            onError={(event) => {
+                              event.currentTarget.style.display = "none";
+                            }}
+                          />
+                        ) : null}
+                      </span>
+                      <span className={styles.fullscreenChannelName}>{item.name}</span>
+                    </span>
                     <span className={styles.fullscreenChannelActions}>
                       <button
                         type="button"

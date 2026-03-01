@@ -1,42 +1,56 @@
+import Image from "next/image";
 import styles from "./page.module.css";
 import PasswordField from "../../components/auth/PasswordField";
+import { getDictionaryForRequest } from "../../lib/i18n/server";
 
 export default async function LoginPage({ searchParams }) {
+  const { t } = await getDictionaryForRequest();
   const params = await searchParams;
   const hasError = Boolean(params?.error);
   const resetState = String(params?.reset || "").trim().toLowerCase();
   const hasResetInfo = resetState === "sent" || resetState === "updated" || resetState === "invalid";
   const resetMessage =
     resetState === "sent"
-      ? "If the email exists, a password reset link has been sent."
+      ? t("auth.ifEmailExistsResetSent")
       : resetState === "updated"
-        ? "Password updated. Please sign in with your new password."
+        ? t("auth.passwordUpdated")
         : resetState === "invalid"
-          ? "Reset link is invalid or expired. Request a new one."
+          ? t("auth.resetInvalid")
           : "";
 
   return (
     <main className={styles.page}>
       <section className={styles.visualPane}>
         <div className={styles.visualGlow} />
+        <div className={styles.visualBrand}>
+          <Image
+            src="/logo.png"
+            alt={t("auth.webtvLogoAlt")}
+            width={416}
+            height={130}
+            className={styles.visualBrandLogoFull}
+            priority
+          />
+          <p className={styles.visualBrandSlogan}>{t("auth.tvBeyondBorders")}</p>
+        </div>
         <div className={styles.visualCopy}>
-          <p className={styles.visualTag}>Welcome Back</p>
-          <h1 className={styles.visualTitle}>M3U Admin Console</h1>
+          <p className={styles.visualTag}>{t("auth.welcomeBack")}</p>
+          <h1 className={styles.visualTitle}>{t("auth.adminConsoleTitle")}</h1>
           <p className={styles.visualText}>
-            Securely manage playlists, channels, and permanent token URLs from one panel.
+            {t("auth.adminConsoleDesc")}
           </p>
         </div>
       </section>
 
       <section className={styles.formPane}>
         <div className={styles.formShell}>
-          <p className={styles.formTag}>Sign In</p>
-          <h2 className={styles.formTitle}>Access Dashboard</h2>
-          <p className={styles.formText}>Use your admin credentials to continue.</p>
+          <p className={styles.formTag}>{t("auth.signIn")}</p>
+          <h2 className={styles.formTitle}>{t("auth.accessDashboard")}</h2>
+          <p className={styles.formText}>{t("auth.useAdminCredentials")}</p>
 
           {hasError ? (
             <p className={`${styles.note} ${styles.errorNote}`} role="alert">
-              Login failed. Please check your credentials and try again.
+              {t("auth.loginFailed")}
             </p>
           ) : null}
           {hasResetInfo ? (
@@ -47,41 +61,47 @@ export default async function LoginPage({ searchParams }) {
 
           <form method="post" action="/api/auth/login" className={styles.form}>
             <label className={styles.field}>
-              <span>Email Address</span>
-              <input name="email" type="email" required placeholder="you@example.com" />
+              <span>{t("auth.emailAddress")}</span>
+              <input name="email" type="email" required placeholder={t("auth.emailPlaceholder")} />
             </label>
 
-            <PasswordField styles={styles} />
+            <PasswordField
+              styles={styles}
+              label={t("settings.password")}
+              placeholder={t("auth.passwordPlaceholder")}
+              showLabel={t("settings.showPassword")}
+              hideLabel={t("settings.hidePassword")}
+            />
 
             <div className={styles.row}>
               <label className={styles.checkbox}>
                 <input type="checkbox" name="remember" />
-                <span>Remember me</span>
+                <span>{t("auth.rememberMe")}</span>
               </label>
-              <a href="#admin-reset-form" className={styles.link}>Forgot password?</a>
+              <a href="#forgot-password-modal" className={styles.link}>{t("auth.forgotPassword")}</a>
             </div>
 
-            <button type="submit" className={styles.submit}>Sign In</button>
+            <button type="submit" className={styles.submit}>{t("auth.signIn")}</button>
           </form>
 
-          <div className={styles.divider}>Or continue with</div>
-          <div className={styles.socials}>
-            <button type="button" className={styles.socialBtn}>Google</button>
-            <button type="button" className={styles.socialBtn}>Facebook</button>
-          </div>
-
-          <p className={styles.note}>
-            Access is restricted to users listed in <code>admin_users</code>.
-          </p>
-          <form id="admin-reset-form" method="post" action="/api/auth/forgot-password" className={styles.resetForm}>
-            <label className={styles.field}>
-              <span>Reset admin password via email</span>
-              <input name="email" type="email" required placeholder="you@example.com" />
-            </label>
-            <button type="submit" className={styles.resetBtn}>Send Reset Link</button>
-          </form>
         </div>
       </section>
+      <div id="forgot-password-modal" className={styles.modalWrap} aria-hidden="true">
+        <a href="#" className={styles.modalBackdrop} aria-label={t("common.close")} />
+        <div className={styles.modalCard} role="dialog" aria-modal="true" aria-labelledby="forgot-password-title">
+          <div className={styles.modalHeader}>
+            <h3 id="forgot-password-title" className={styles.modalTitle}>{t("auth.forgotPassword")}</h3>
+            <a href="#" className={styles.modalClose} aria-label={t("common.close")}>×</a>
+          </div>
+          <form method="post" action="/api/auth/forgot-password" className={styles.resetForm}>
+            <label className={styles.field}>
+              <span>{t("auth.resetAdminPassword")}</span>
+              <input name="email" type="email" required placeholder={t("auth.emailPlaceholder")} />
+            </label>
+            <button type="submit" className={styles.resetBtn}>{t("auth.sendResetLink")}</button>
+          </form>
+        </div>
+      </div>
     </main>
   );
 }

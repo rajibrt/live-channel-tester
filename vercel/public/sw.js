@@ -14,15 +14,15 @@ self.addEventListener("push", (event) => {
     payload = {};
   }
 
-  const title = String(payload?.title || "WEBTV BD Admin");
-  const body = String(payload?.body || "New admin notification");
+  const title = String(payload?.title || "WEBTV BD");
+  const body = String(payload?.body || "New notification");
   const data = payload?.data && typeof payload.data === "object" ? payload.data : {};
   const options = {
     body,
     data,
     icon: "/android-chrome-192x192.png",
     badge: "/favicon-32x32.png",
-    tag: "admin-notification",
+    tag: String(data?.tag || payload?.tag || "webtv-notification"),
   };
 
   event.waitUntil(self.registration.showNotification(title, options));
@@ -30,12 +30,16 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const targetUrl = "/dashboard/clients";
+  const targetUrl = String(event.notification?.data?.target_url || "/dashboard");
+  const origin = self.location?.origin || "";
 
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientsArr) => {
       for (const client of clientsArr) {
-        if (client.url.includes("/dashboard")) {
+        if (origin && client.url.startsWith(origin)) {
+          if (targetUrl && typeof client.navigate === "function") {
+            client.navigate(targetUrl).catch(() => {});
+          }
           return client.focus();
         }
       }
