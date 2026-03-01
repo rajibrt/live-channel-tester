@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "../../../../../lib/adminApi";
+import { loadEmailSettings, sendClientWelcomeEmail } from "../../../../../lib/emailDelivery";
 import { getSupabaseAdmin } from "../../../../../lib/supabaseAdmin";
 
 function normalizeEmail(value) {
@@ -23,8 +24,17 @@ export async function PATCH(request, { params }) {
 
   const body = await request.json().catch(() => ({}));
   const admin = getSupabaseAdmin();
+  const { data: existing, error: existingErr } = await admin
+    .from("client_users")
+    .select("user_id,email,full_name,mobile_number,is_active,approval_status,approved_at,auth_provider,created_at")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (existingErr) return NextResponse.json({ error: existingErr.message || "Failed to load user." }, { status: 500 });
+  if (!existing?.user_id) return NextResponse.json({ error: "User not found." }, { status: 404 });
 
   const patches = {};
+  const previousApproval = String(existing?.approval_status || "approved").trim().toLowerCase();
   if (typeof body?.is_active === "boolean") patches.is_active = body.is_active;
   if (typeof body?.full_name === "string") patches.full_name = body.full_name.trim();
   if (typeof body?.approval_status === "string") {
@@ -34,8 +44,10 @@ export async function PATCH(request, { params }) {
     }
     patches.approval_status = next;
     if (next === "approved") {
-      patches.approved_at = new Date().toISOString();
-      patches.approved_by_admin = auth.current.user.id;
+      if (previousApproval !== "approved" || !existing?.approved_at) {
+        patches.approved_at = new Date().toISOString();
+        patches.approved_by_admin = auth.current.user.id;
+      }
     } else {
       patches.approved_at = null;
       patches.approved_by_admin = null;
@@ -88,7 +100,34 @@ export async function PATCH(request, { params }) {
     if (error) return NextResponse.json({ error: error.message || "Failed to update user" }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true });
+  const nextApproval = String(patches?.approval_status || previousApproval || "approved").trim().toLowerCase();
+  const becameApproved = previousApproval !== "approved" && nextApproval === "approved";
+  let welcome_email = { sent: false, skipped: true, reason: "Not triggered." };
+
+  if (becameApproved) {
+    try {
+      const settings = await loadEmailSettings(admin);
+      const result = await sendClientWelcomeEmail({
+        settings,
+        forceSend: false,
+        clientUser: {
+          ...existing,
+          ...patches,
+          user_id: userId,
+          approval_status: "approved",
+        },
+      });
+      welcome_email = result;
+    } catch (err) {
+      welcome_email = {
+        sent: false,
+        skipped: false,
+        error: err?.message || "Failed to send welcome email.",
+      };
+    }
+  }
+
+  return NextResponse.json({ ok: true, welcome_email });
 }
 
 export async function DELETE(_request, { params }) {

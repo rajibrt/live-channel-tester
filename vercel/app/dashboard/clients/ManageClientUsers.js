@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Eye, EyeOff, History, Pencil, Plus, Trash2 } from "lucide-react";
+import { Eye, EyeOff, History, Mail, Pencil, Plus, Trash2 } from "lucide-react";
 import styles from "../page.module.css";
 import {
   AlertDialog,
@@ -151,6 +151,7 @@ export default function ManageClientUsers({ initialItems = [] }) {
   const [historyUserLabel, setHistoryUserLabel] = useState("");
   const [viewOpen, setViewOpen] = useState(false);
   const [viewUser, setViewUser] = useState(null);
+  const [welcomeBusyId, setWelcomeBusyId] = useState("");
   const lastOpenedUserRef = useRef("");
 
   function cycleStatusFilter() {
@@ -333,7 +334,16 @@ export default function ManageClientUsers({ initialItems = [] }) {
       ]);
       setForm(EMPTY_FORM);
       setShowPassword(false);
-      setMessage("Client user created.");
+      const emailResult = payload?.welcome_email && typeof payload.welcome_email === "object" ? payload.welcome_email : null;
+      if (emailResult?.sent) {
+        setMessage("Client user created. Welcome email sent.");
+      } else if (emailResult?.error) {
+        setMessage(`Client user created. Welcome email failed: ${emailResult.error}`);
+      } else if (emailResult?.reason && String(emailResult.reason || "") !== "Not triggered.") {
+        setMessage(`Client user created. Welcome email skipped: ${emailResult.reason}`);
+      } else {
+        setMessage("Client user created.");
+      }
       setCreateOpen(false);
     } catch (err) {
       setError(err?.message || "Failed to create user.");
@@ -390,7 +400,16 @@ export default function ManageClientUsers({ initialItems = [] }) {
         )
       );
       setShowEditPassword(false);
-      setMessage("Client user updated.");
+      const emailResult = payload?.welcome_email && typeof payload.welcome_email === "object" ? payload.welcome_email : null;
+      if (emailResult?.sent) {
+        setMessage("Client user updated. Welcome email sent.");
+      } else if (emailResult?.error) {
+        setMessage(`Client user updated. Welcome email failed: ${emailResult.error}`);
+      } else if (emailResult?.reason && String(emailResult.reason || "") !== "Not triggered.") {
+        setMessage(`Client user updated. Welcome email skipped: ${emailResult.reason}`);
+      } else {
+        setMessage("Client user updated.");
+      }
       setEditOpen(false);
     } catch (err) {
       setError(err?.message || "Failed to update user.");
@@ -443,6 +462,27 @@ export default function ManageClientUsers({ initialItems = [] }) {
       setError(err?.message || "Failed to delete inactive user.");
     } finally {
       setBusyId("");
+    }
+  }
+
+  async function sendWelcomeFromModal() {
+    const userId = String(viewUser?.user_id || "").trim();
+    if (!userId) return;
+
+    setWelcomeBusyId(userId);
+    setError("");
+    setMessage("");
+    try {
+      const res = await fetch(`/api/admin/client-users/${userId}/welcome-email`, {
+        method: "POST",
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload?.error || "Failed to send welcome email.");
+      setMessage(payload?.message || "Welcome email sent.");
+    } catch (err) {
+      setError(err?.message || "Failed to send welcome email.");
+    } finally {
+      setWelcomeBusyId("");
     }
   }
 
@@ -810,6 +850,22 @@ export default function ManageClientUsers({ initialItems = [] }) {
             <AlertDialogCancel asChild>
               <Button type="button" variant="outline" className={`${styles.secondaryBtn} ${styles.modalActionBtn}`}>Close</Button>
             </AlertDialogCancel>
+            {String(viewUser?.approval_status || "approved").toLowerCase() === "approved" ? (
+              <Button
+                type="button"
+                variant="outline"
+                className={`${styles.secondaryBtn} ${styles.modalActionBtn}`}
+                disabled={
+                  welcomeBusyId === String(viewUser?.user_id || "") ||
+                  !String(viewUser?.email || "").includes("@") ||
+                  String(viewUser?.email || "").toLowerCase().endsWith(".local")
+                }
+                onClick={sendWelcomeFromModal}
+              >
+                <Mail size={14} />
+                <span>{welcomeBusyId === String(viewUser?.user_id || "") ? "Sending..." : "Send Welcome Email"}</span>
+              </Button>
+            ) : null}
             <Button
               type="button"
               className={`${styles.primaryBtn} ${styles.modalActionBtn} ${styles.modalEditBtn}`}

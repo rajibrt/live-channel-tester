@@ -283,6 +283,11 @@
   cursor: not-allowed;
 }
 
+.notificationPushEnabledBtn {
+  border-color: color-mix(in oklab, #29c36a 52%, var(--border));
+  background: color-mix(in oklab, #29c36a 18%, var(--card));
+}
+
 .notificationList {
   max-height: min(58vh, 420px);
   overflow: auto;

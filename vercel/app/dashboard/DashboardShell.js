@@ -12,6 +12,7 @@ import {
   LogOut,
   Megaphone,
   MonitorPlay,
+  Settings,
   Tv,
   Users,
 } from 'lucide-react'
@@ -34,6 +35,7 @@ const NAV_GROUPS = [
     label: 'Operations',
     items: [
       { href: '/dashboard/local-check', label: 'Local Check', icon: Activity },
+      { href: '/dashboard/settings', label: 'Settings', icon: Settings },
     ],
   },
   {
@@ -74,6 +76,12 @@ function sectionMeta(pathname) {
       subtitle: 'Run route-aware stream health verification',
     }
   }
+  if (pathname.startsWith('/dashboard/settings')) {
+    return {
+      title: 'Settings',
+      subtitle: 'Configure email delivery and welcome message templates',
+    }
+  }
   if (pathname.startsWith('/dashboard/clients')) {
     return {
       title: 'Client Users',
@@ -103,6 +111,8 @@ export default function DashboardShell({ children }) {
   const [unreadCount, setUnreadCount] = useState(0)
   const [pushBusy, setPushBusy] = useState(false)
   const [pushReady, setPushReady] = useState(false)
+  const [pushEnabled, setPushEnabled] = useState(false)
+  const vapidPublicKeyRef = useRef(String(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || '').trim())
   const lastUnreadRef = useRef(0)
   const notificationMenuRef = useRef(null)
   const meta = useMemo(() => sectionMeta(pathname), [pathname])
@@ -144,12 +154,14 @@ export default function DashboardShell({ children }) {
     if (typeof window === 'undefined') return
     const canPush = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window
     setPushReady(canPush)
+    setPushEnabled(false)
     if (!canPush) return
 
     const registerServiceWorker = async () => {
       try {
         const registration = await navigator.serviceWorker.register('/sw.js')
         const existing = await registration.pushManager.getSubscription()
+        setPushEnabled(Boolean(existing))
         if (existing) {
           await fetch('/api/admin/push-subscriptions', {
             method: 'POST',
@@ -262,12 +274,29 @@ export default function DashboardShell({ children }) {
     router.push(`/dashboard/clients?${params.toString()}`)
   }
 
+  const resolveVapidPublicKey = async () => {
+    const existing = String(vapidPublicKeyRef.current || '').trim()
+    if (existing) return existing
+    try {
+      const res = await fetch('/api/admin/push-config', { cache: 'no-store' })
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) return ''
+      const key = String(payload?.public_key || '').trim()
+      if (key) vapidPublicKeyRef.current = key
+      return key
+    } catch {
+      return ''
+    }
+  }
+
   const enablePushNotifications = async () => {
     if (typeof window === 'undefined') return
     if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return
-    const vapidPublicKey = String(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || '').trim()
+    const vapidPublicKey = await resolveVapidPublicKey()
     if (!vapidPublicKey) {
-      window.alert('Push is not configured yet. Missing NEXT_PUBLIC_VAPID_PUBLIC_KEY.')
+      window.alert(
+        'Push is not configured yet. Set NEXT_PUBLIC_VAPID_PUBLIC_KEY (or WEB_PUSH_VAPID_PUBLIC_KEY) in vercel/.env.local and restart dev server.'
+      )
       return
     }
 
@@ -288,13 +317,46 @@ export default function DashboardShell({ children }) {
         })
       }
 
-      await fetch('/api/admin/push-subscriptions', {
+      const saveRes = await fetch('/api/admin/push-subscriptions', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ subscription, user_agent: navigator.userAgent }),
       })
+      if (!saveRes.ok) throw new Error('Failed to save push subscription.')
+      setPushEnabled(true)
     } catch {
+      setPushEnabled(false)
       // ignore push setup errors
+    } finally {
+      setPushBusy(false)
+    }
+  }
+
+  const disablePushNotifications = async () => {
+    if (typeof window === 'undefined') return
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return
+
+    setPushBusy(true)
+    try {
+      const registration = await navigator.serviceWorker.register('/sw.js')
+      const subscription = await registration.pushManager.getSubscription()
+      if (!subscription) {
+        setPushEnabled(false)
+        return
+      }
+
+      const endpoint = String(subscription.endpoint || '').trim()
+      await subscription.unsubscribe().catch(() => {})
+      if (endpoint) {
+        await fetch('/api/admin/push-subscriptions', {
+          method: 'DELETE',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ endpoint }),
+        }).catch(() => {})
+      }
+      setPushEnabled(false)
+    } catch {
+      // ignore push disable errors
     } finally {
       setPushBusy(false)
     }
@@ -398,11 +460,11 @@ export default function DashboardShell({ children }) {
                     </button>
                     <button
                       type='button'
-                      className={styles.notificationMarkAllBtn}
+                      className={`${styles.notificationMarkAllBtn} ${pushEnabled ? styles.notificationPushEnabledBtn : ''}`}
                       disabled={!pushReady || pushBusy}
-                      onClick={enablePushNotifications}
+                      onClick={pushEnabled ? disablePushNotifications : enablePushNotifications}
                     >
-                      {pushBusy ? 'Enabling...' : 'Enable Push'}
+                      {pushBusy ? (pushEnabled ? 'Disabling...' : 'Enabling...') : pushEnabled ? 'Disable Push' : 'Enable Push'}
                     </button>
                   </div>
                 </div>

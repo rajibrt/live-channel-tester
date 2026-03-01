@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "../../../../lib/adminApi";
+import { loadEmailSettings, sendClientWelcomeEmail } from "../../../../lib/emailDelivery";
 import { getSupabaseAdmin } from "../../../../lib/supabaseAdmin";
 
 function normalizeEmail(value) {
@@ -149,8 +150,31 @@ export async function POST(request) {
     { onConflict: "user_id" }
   );
 
+  let welcome_email = { sent: false, skipped: true, reason: "Not triggered." };
+  try {
+    const settings = await loadEmailSettings(admin);
+    const result = await sendClientWelcomeEmail({
+      settings,
+      forceSend: false,
+      clientUser: {
+        user_id: userId,
+        email: loginEmail,
+        full_name: fullName,
+        mobile_number: mobileNumber,
+        approval_status: "approved",
+        approved_at: now,
+        auth_provider: "admin_created",
+        created_at: now,
+      },
+    });
+    welcome_email = result;
+  } catch (err) {
+    welcome_email = { sent: false, skipped: false, error: err?.message || "Failed to send welcome email." };
+  }
+
   return NextResponse.json({
     ok: true,
+    welcome_email,
     item: {
       user_id: userId,
       email: loginEmail,

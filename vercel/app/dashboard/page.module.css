@@ -656,6 +656,22 @@
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
+.field textarea {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 11px 12px;
+  font: inherit;
+  color: var(--foreground);
+  background: var(--card);
+  outline: none;
+  resize: vertical;
+  min-height: 96px;
+}
+
 .field select {
   width: 100%;
   min-width: 0;
@@ -676,6 +692,11 @@
 }
 
 .field select:focus {
+  border-color: var(--ring);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 24%, transparent);
+}
+
+.field textarea:focus {
   border-color: var(--ring);
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 24%, transparent);
 }
