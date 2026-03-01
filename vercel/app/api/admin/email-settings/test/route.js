@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "../../../../../lib/adminApi";
-import { buildTestEmail, loadEmailSettings, sendSmtpEmail } from "../../../../../lib/emailDelivery";
+import { buildTestEmail, formatSmtpError, loadEmailSettings, sendSmtpEmail } from "../../../../../lib/emailDelivery";
 
 export async function POST(request) {
   const auth = await requireAdminApi();
@@ -33,6 +33,12 @@ export async function POST(request) {
 
     return NextResponse.json({ ok: true, to: testPayload.to });
   } catch (err) {
-    return NextResponse.json({ error: err?.message || "Failed to send test email." }, { status: 500 });
+    let settings = {};
+    try {
+      settings = await loadEmailSettings();
+    } catch {
+      settings = {};
+    }
+    return NextResponse.json({ error: formatSmtpError(err, settings) }, { status: 500 });
   }
 }

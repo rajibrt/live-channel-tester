@@ -237,6 +237,25 @@ export async function sendSmtpEmail({ settings, to, subject, html, text, verify 
   return { messageId: String(info?.messageId || "") };
 }
 
+export function formatSmtpError(error, settings = {}) {
+  const msg = String(error?.message || "SMTP request failed.");
+  const code = String(error?.code || "");
+  const host = String(settings?.smtp_host || "").trim();
+  const port = Number(settings?.smtp_port || 0) || 0;
+  const secure = Boolean(settings?.smtp_secure);
+
+  if (code === "ETIMEDOUT" || code === "ESOCKET") {
+    return `SMTP connection timeout. Could not reach ${host || "smtp host"}:${port || "?"}. Check host/port/firewall and ensure this host is a real mail server (not Cloudflare proxied).`;
+  }
+  if (code === "ECONNREFUSED") {
+    return `SMTP connection refused by ${host || "smtp host"}:${port || "?"}. Check port/security (${secure ? "SSL/TLS enabled" : "STARTTLS/plain"}) and server access rules.`;
+  }
+  if (code === "EAUTH") {
+    return "SMTP authentication failed. Check SMTP username/password and from email.";
+  }
+  return msg;
+}
+
 export function buildWelcomeEmail({ clientUser, settings }) {
   const cfg = normalizeEmailSettings(settings || {});
   const brand = cfg.brand_name || "WEBTVBD";
@@ -357,4 +376,3 @@ export function buildTestEmail({ settings, recipient }) {
     .join("\n");
   return { to, subject, html, text };
 }
-
