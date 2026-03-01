@@ -4,6 +4,16 @@ import PasswordField from "../../components/auth/PasswordField";
 export default async function LoginPage({ searchParams }) {
   const params = await searchParams;
   const hasError = Boolean(params?.error);
+  const resetState = String(params?.reset || "").trim().toLowerCase();
+  const hasResetInfo = resetState === "sent" || resetState === "updated" || resetState === "invalid";
+  const resetMessage =
+    resetState === "sent"
+      ? "If the email exists, a password reset link has been sent."
+      : resetState === "updated"
+        ? "Password updated. Please sign in with your new password."
+        : resetState === "invalid"
+          ? "Reset link is invalid or expired. Request a new one."
+          : "";
 
   return (
     <main className={styles.page}>
@@ -29,6 +39,11 @@ export default async function LoginPage({ searchParams }) {
               Login failed. Please check your credentials and try again.
             </p>
           ) : null}
+          {hasResetInfo ? (
+            <p className={`${styles.note} ${resetState === "invalid" ? styles.errorNote : styles.successNote}`} role="status">
+              {resetMessage}
+            </p>
+          ) : null}
 
           <form method="post" action="/api/auth/login" className={styles.form}>
             <label className={styles.field}>
@@ -43,7 +58,7 @@ export default async function LoginPage({ searchParams }) {
                 <input type="checkbox" name="remember" />
                 <span>Remember me</span>
               </label>
-              <a href="#" className={styles.link}>Forgot password?</a>
+              <a href="#admin-reset-form" className={styles.link}>Forgot password?</a>
             </div>
 
             <button type="submit" className={styles.submit}>Sign In</button>
@@ -58,6 +73,13 @@ export default async function LoginPage({ searchParams }) {
           <p className={styles.note}>
             Access is restricted to users listed in <code>admin_users</code>.
           </p>
+          <form id="admin-reset-form" method="post" action="/api/auth/forgot-password" className={styles.resetForm}>
+            <label className={styles.field}>
+              <span>Reset admin password via email</span>
+              <input name="email" type="email" required placeholder="you@example.com" />
+            </label>
+            <button type="submit" className={styles.resetBtn}>Send Reset Link</button>
+          </form>
         </div>
       </section>
     </main>
