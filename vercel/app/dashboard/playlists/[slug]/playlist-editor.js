@@ -110,6 +110,7 @@ function cloneChannels(channels) {
           originalLogo: c.logo_url || "",
           originalStreamUrl: c.stream_url || "",
           originalIncludeOnHome: c.include_on_home !== false,
+          originalStatus: String(c.status || "LIVE").toUpperCase(),
         });
       });
   });
@@ -502,7 +503,8 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
         Number(c.order || 0) !== Number(c.originalOrder || 0) ||
         (c.logo_url || "") !== (c.originalLogo || "") ||
         (c.stream_url || "") !== (c.originalStreamUrl || "") ||
-        (c.include_on_home !== false) !== (c.originalIncludeOnHome !== false);
+        (c.include_on_home !== false) !== (c.originalIncludeOnHome !== false) ||
+        String(c.status || "LIVE").toUpperCase() !== String(c.originalStatus || "LIVE").toUpperCase();
 
       if (channelStatusFilter === "LIVE" && status !== "LIVE") return false;
       if (channelStatusFilter === "DEAD" && status === "LIVE") return false;
@@ -814,6 +816,7 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
         logo_url: c.logo_url || "",
         stream_url: c.stream_url || "",
         include_on_home: c.include_on_home !== false,
+        status: String(c.status || "LIVE").toUpperCase() === "DEAD" ? "DEAD" : "LIVE",
         position: idx + 1,
       }));
 
@@ -839,7 +842,8 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
       Number(c.order || 0) !== Number(c.originalOrder || 0) ||
       (c.logo_url || "") !== (c.originalLogo || "") ||
       (c.stream_url || "") !== (c.originalStreamUrl || "") ||
-      (c.include_on_home !== false) !== (c.originalIncludeOnHome !== false);
+      (c.include_on_home !== false) !== (c.originalIncludeOnHome !== false) ||
+      String(c.status || "LIVE").toUpperCase() !== String(c.originalStatus || "LIVE").toUpperCase();
     return changedMeta;
   }).length;
   const groupOrderChanged =
@@ -1144,10 +1148,21 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
         enableSorting: false,
         cell: ({ row }) => {
           const c = row.original;
+          const isDead = String(c.status || "LIVE").toUpperCase() === "DEAD";
+          const nextStatus = isDead ? "LIVE" : "DEAD";
           return (
             <div className={styles.miniActions}>
               <button type="button" className={styles.iconBtn} onClick={() => moveChannel(c.id, "up")}>↑</button>
               <button type="button" className={styles.iconBtn} onClick={() => moveChannel(c.id, "down")}>↓</button>
+              <button
+                type="button"
+                className={`${styles.stateToggleBtn} ${isDead ? styles.stateInactiveBtn : styles.stateActiveBtn}`}
+                title={isDead ? "Set channel active" : "Set channel inactive"}
+                aria-label={isDead ? "Set channel active" : "Set channel inactive"}
+                onClick={() => changeChannel(c.id, { status: nextStatus })}
+              >
+                {isDead ? "Inactive" : "Active"}
+              </button>
               <button
                 type="button"
                 className={styles.iconBtn}
@@ -1572,6 +1587,8 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
                       ? styles.colLogo
                       : header.column.id === "stream_url"
                       ? styles.colStream
+                      : header.column.id === "home"
+                      ? styles.colHome
                       : header.column.id === "actions"
                       ? styles.colActions
                       : header.column.id === "preview"
@@ -1602,6 +1619,8 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
                       ? styles.colLogo
                       : cell.column.id === "stream_url"
                       ? styles.colStream
+                      : cell.column.id === "home"
+                      ? styles.colHome
                       : cell.column.id === "actions"
                       ? styles.colActions
                       : cell.column.id === "preview"

@@ -29,6 +29,7 @@ function toChannelUpdatePayload(channel, now, includeOnHome) {
     category: String(channel.category || "").trim(),
     logo_url: String(channel.logo_url || "").trim(),
     stream_url: normalizeStreamUrl(channel.stream_url),
+    status: String(channel.status || "LIVE").toUpperCase() === "DEAD" ? "DEAD" : "LIVE",
     updated_at: now,
   };
   if (includeOnHome) payload.include_on_home = channel.include_on_home !== false;
