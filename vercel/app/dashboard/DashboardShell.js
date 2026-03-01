@@ -33,14 +33,15 @@ const NAV_GROUPS = [
   },
   {
     label: 'Operations',
-    items: [
-      { href: '/dashboard/local-check', label: 'Local Check', icon: Activity },
-      { href: '/dashboard/settings', label: 'Settings', icon: Settings },
-    ],
+    items: [{ href: '/dashboard/local-check', label: 'Local Check', icon: Activity }],
   },
   {
     label: 'Access',
     items: [{ href: '/dashboard/clients', label: 'Clients', icon: Users }],
+  },
+  {
+    label: 'System',
+    items: [{ href: '/dashboard/settings', label: 'Settings', icon: Settings }],
   },
 ]
 
@@ -79,7 +80,7 @@ function sectionMeta(pathname) {
   if (pathname.startsWith('/dashboard/settings')) {
     return {
       title: 'Settings',
-      subtitle: 'Configure email delivery and welcome message templates',
+      subtitle: 'Configure email delivery, welcome templates, and approval request alerts',
     }
   }
   if (pathname.startsWith('/dashboard/clients')) {

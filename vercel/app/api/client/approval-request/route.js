@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireClientApi } from "../../../../lib/clientApi";
+import { formatSmtpError, loadEmailSettings, sendApprovalRequestAdminEmail } from "../../../../lib/emailDelivery";
 import { getSupabaseAdmin } from "../../../../lib/supabaseAdmin";
 
 function normalizeMobile(value) {
@@ -88,9 +89,38 @@ export async function POST(request) {
     },
   });
 
+  let emailNotification = { sent: false, skipped: true, reason: "Not attempted." };
+  try {
+    const emailSettings = await loadEmailSettings(admin);
+    emailNotification = await sendApprovalRequestAdminEmail({
+      requestUser: {
+        user_id: current.user.id,
+        full_name: fullName,
+        email,
+        mobile_number: mobile.raw,
+        auth_provider: current?.client?.auth_provider || "password",
+        requested_at: nowIso,
+      },
+      settings: emailSettings,
+    });
+  } catch (err) {
+    let settings = {};
+    try {
+      settings = await loadEmailSettings(admin);
+    } catch {
+      settings = {};
+    }
+    emailNotification = {
+      sent: false,
+      skipped: false,
+      error: formatSmtpError(err, settings),
+    };
+  }
+
   return NextResponse.json({
     ok: true,
     messenger_url: "https://www.facebook.com/messages/t/WEBTVBD",
     message_text: messageText,
+    email_notification: emailNotification,
   });
 }

@@ -95,6 +95,11 @@ export function getDefaultEmailSettings() {
     logo_url: "",
     welcome_subject: "Your WEBTVBD account has been approved",
     welcome_message: "Welcome to WEBTVBD. Your account is now active and ready to use.",
+    approval_request_auto_send: true,
+    approval_request_recipient: "",
+    approval_request_subject: "New approval request from {{full_name}}",
+    approval_request_message:
+      "A client has submitted an approval request. Please review the details below and take action from the dashboard.",
     test_recipient: "",
   };
 }
@@ -121,6 +126,12 @@ export function normalizeEmailSettings(valueJson) {
     logo_url: toUrl(raw.logo_url || defaults.logo_url),
     welcome_subject: toCleanString(raw.welcome_subject || defaults.welcome_subject, 220) || defaults.welcome_subject,
     welcome_message: toCleanString(raw.welcome_message || defaults.welcome_message, 1000) || defaults.welcome_message,
+    approval_request_auto_send: toBool(raw.approval_request_auto_send, defaults.approval_request_auto_send),
+    approval_request_recipient: normalizeEmail(raw.approval_request_recipient || defaults.approval_request_recipient),
+    approval_request_subject:
+      toCleanString(raw.approval_request_subject || defaults.approval_request_subject, 220) || defaults.approval_request_subject,
+    approval_request_message:
+      toCleanString(raw.approval_request_message || defaults.approval_request_message, 2000) || defaults.approval_request_message,
     test_recipient: normalizeEmail(raw.test_recipient || defaults.test_recipient),
   };
 }
@@ -134,6 +145,13 @@ function resolveLogoUrl(settings) {
   if (settings.logo_url) return settings.logo_url;
   if (!settings.site_url) return "";
   return `${settings.site_url.replace(/\/+$/, "")}/logo.png`;
+}
+
+function fillTemplate(message, vars = {}) {
+  return String(message || "").replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, key) => {
+    const val = vars[key];
+    return val == null ? "" : String(val);
+  });
 }
 
 function validateSmtpConfig(settings) {
@@ -355,6 +373,112 @@ export async function sendClientWelcomeEmail({ clientUser, settings, forceSend =
     return { sent: false, skipped: true, reason: "Client email is missing or not deliverable." };
   }
   const { subject, html, text } = buildWelcomeEmail({ clientUser, settings: cfg });
+  const res = await sendSmtpEmail({ settings: cfg, to: recipient, subject, html, text });
+  return { sent: true, skipped: false, to: recipient, message_id: res.messageId };
+}
+
+export function buildApprovalRequestAdminEmail({ requestUser, settings }) {
+  const cfg = normalizeEmailSettings(settings || {});
+  const brand = cfg.brand_name || "WEBTVBD";
+  const siteUrl = cfg.site_url || "";
+  const logoUrl = resolveLogoUrl(cfg);
+  const user = requestUser && typeof requestUser === "object" ? requestUser : {};
+  const fullName = toCleanString(user.full_name || "", 200) || "Unknown Client";
+  const email = normalizeEmail(user.email || "");
+  const mobile = toCleanString(user.mobile_number || "", 80) || "-";
+  const userId = toCleanString(user.user_id || "", 120) || "-";
+  const provider = toCleanString(user.auth_provider || "password", 80) || "password";
+  const requestedAt = asDateLabel(user.requested_at);
+  const approvalLink = siteUrl ? `${siteUrl.replace(/\/+$/, "")}/dashboard/clients` : "";
+
+  const templateVars = {
+    brand,
+    full_name: fullName,
+    email: email || "-",
+    mobile_number: mobile,
+    user_id: userId,
+    auth_provider: provider,
+    requested_at: requestedAt,
+    site_url: siteUrl || "-",
+  };
+  const subjectTemplate = cfg.approval_request_subject || "New approval request from {{full_name}}";
+  const bodyTemplate =
+    cfg.approval_request_message ||
+    "A client has submitted an approval request. Please review the details below and take action from the dashboard.";
+  const subject = fillTemplate(subjectTemplate, templateVars).trim() || `New approval request from ${fullName}`;
+  const introText = fillTemplate(bodyTemplate, templateVars).trim();
+
+  const details = [
+    ["Full Name", fullName],
+    ["Email", email || "-"],
+    ["Mobile", mobile],
+    ["Provider", provider],
+    ["User ID", userId],
+    ["Requested At", requestedAt],
+  ];
+  const detailsHtml = details
+    .map(
+      ([k, v]) => `<tr>
+        <th style="padding:10px 12px;border-bottom:1px solid #e3e9f7;text-align:left;font-size:13px;line-height:1.35;color:#324868;width:36%;vertical-align:top;">${escapeHtml(k)}</th>
+        <td style="padding:10px 12px;border-bottom:1px solid #e3e9f7;font-size:14px;line-height:1.45;color:#10213d;word-break:break-word;overflow-wrap:anywhere;">${escapeHtml(v)}</td>
+      </tr>`
+    )
+    .join("");
+
+  const html = `<!doctype html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body style="margin:0;padding:0;background:#edf2fb;font-family:Arial,sans-serif;color:#14243d;">
+    <div style="padding:16px;">
+      <div style="max-width:680px;width:100%;margin:0 auto;background:#fff;border:1px solid #d7e0f4;border-radius:16px;padding:20px;">
+        <div style="margin:0 0 14px;padding:14px;border-radius:12px;background:linear-gradient(135deg,#f6f9ff,#ecf2ff);border:1px solid #e5ecff;">
+          ${logoUrl ? `<div style="padding:0 0 10px;"><img src="${escapeHtml(logoUrl)}" alt="${escapeHtml(brand)}" style="height:38px;max-width:220px;object-fit:contain;display:block;" /></div>` : `<div style="padding:0 0 8px;font-size:18px;font-weight:700;color:#11223b;">${escapeHtml(brand)}</div>`}
+          <h2 style="margin:0;font-size:28px;line-height:1.2;color:#0d2a52;">Approval Request Received</h2>
+        </div>
+        <p style="margin:0 0 10px;font-size:15px;line-height:1.6;color:#1d3355;">${escapeHtml(introText)}</p>
+        <table style="width:100%;border-collapse:separate;border-spacing:0;background:#f9fbff;border:1px solid #e3e9f7;border-radius:12px;overflow:hidden;">${detailsHtml}</table>
+        ${
+          approvalLink
+            ? `<p style="margin:16px 0 0;"><a href="${escapeHtml(approvalLink)}" style="display:inline-block;padding:11px 16px;background:linear-gradient(135deg,#0f4fcc,#2162df);color:#fff;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px;line-height:1;">Review in Dashboard</a></p>`
+            : ""
+        }
+      </div>
+    </div>
+  </body>
+</html>`;
+
+  const text = [
+    `${brand} - Approval Request`,
+    "",
+    introText,
+    "",
+    `Full Name: ${fullName}`,
+    `Email: ${email || "-"}`,
+    `Mobile: ${mobile}`,
+    `Provider: ${provider}`,
+    `User ID: ${userId}`,
+    `Requested At: ${requestedAt}`,
+    approvalLink ? `Review in dashboard: ${approvalLink}` : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  return { subject, html, text };
+}
+
+export async function sendApprovalRequestAdminEmail({ requestUser, settings, forceSend = false }) {
+  const cfg = normalizeEmailSettings(settings || {});
+  if (!forceSend && !cfg.approval_request_auto_send) {
+    return { sent: false, skipped: true, reason: "Approval request email notification is disabled." };
+  }
+  const recipient = normalizeEmail(cfg.approval_request_recipient || "");
+  if (!isDeliverableEmail(recipient)) {
+    return { sent: false, skipped: true, reason: "Approval request recipient email is missing or invalid." };
+  }
+
+  const { subject, html, text } = buildApprovalRequestAdminEmail({ requestUser, settings: cfg });
   const res = await sendSmtpEmail({ settings: cfg, to: recipient, subject, html, text });
   return { sent: true, skipped: false, to: recipient, message_id: res.messageId };
 }
