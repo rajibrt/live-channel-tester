@@ -6,6 +6,10 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(self.clients.claim());
 });
 
+self.addEventListener("fetch", () => {
+  // Keep a fetch handler so Chromium treats this as an installable PWA.
+});
+
 self.addEventListener("push", (event) => {
   let payload = {};
   try {

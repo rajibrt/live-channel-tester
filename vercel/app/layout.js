@@ -46,11 +46,29 @@ export default async function RootLayout({ children }) {
       }
     })();
   `;
+  const pwaInstallBridgeScript = `
+    (function () {
+      try {
+        window.__pwaDeferredInstallPrompt = window.__pwaDeferredInstallPrompt || null;
+        window.addEventListener("beforeinstallprompt", function (event) {
+          event.preventDefault();
+          window.__pwaDeferredInstallPrompt = event;
+          window.dispatchEvent(new Event("pwa-install-available"));
+        });
+        window.addEventListener("appinstalled", function () {
+          window.__pwaDeferredInstallPrompt = null;
+        });
+      } catch (_) {
+        // no-op
+      }
+    })();
+  `;
 
   return (
     <html lang={initialLocale} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+        <script dangerouslySetInnerHTML={{ __html: pwaInstallBridgeScript }} />
       </head>
       <body>
         <LanguageProvider initialLocale={initialLocale}>
