@@ -1,10 +1,13 @@
 FROM node:20-alpine AS deps
 WORKDIR /app
+ENV NODE_ENV=development
+ENV NPM_CONFIG_PRODUCTION=false
 COPY package*.json ./
-RUN npm install --legacy-peer-deps
+RUN npm install --legacy-peer-deps --include=dev
 
 FROM node:20-alpine AS builder
 WORKDIR /app
+ENV NODE_ENV=development
 ENV NEXT_TELEMETRY_DISABLED=1
 ARG APP_BUILD_VERSION=""
 ENV APP_BUILD_VERSION=${APP_BUILD_VERSION}
