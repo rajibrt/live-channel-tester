@@ -21,6 +21,7 @@ import {
 import styles from './dashboard-shell.module.css'
 import { useI18n } from '../../components/i18n/LanguageProvider'
 
+const SW_URL = '/sw.js?v=20260302-2'
 const nextLocale = (locale) => (locale === 'bn' ? 'en' : 'bn')
 
 function createNavGroups(t) {
@@ -169,7 +170,7 @@ export default function DashboardShell({ children }) {
 
     const registerServiceWorker = async () => {
       try {
-        const registration = await navigator.serviceWorker.register('/sw.js')
+        const registration = await navigator.serviceWorker.register(SW_URL)
         const existing = await registration.pushManager.getSubscription()
         setPushEnabled(Boolean(existing))
         if (existing) {
@@ -316,7 +317,7 @@ export default function DashboardShell({ children }) {
         return
       }
 
-      const registration = await navigator.serviceWorker.register('/sw.js')
+      const registration = await navigator.serviceWorker.register(SW_URL)
       let subscription = await registration.pushManager.getSubscription()
       if (!subscription) {
         subscription = await registration.pushManager.subscribe({
@@ -346,7 +347,7 @@ export default function DashboardShell({ children }) {
 
     setPushBusy(true)
     try {
-      const registration = await navigator.serviceWorker.register('/sw.js')
+      const registration = await navigator.serviceWorker.register(SW_URL)
       const subscription = await registration.pushManager.getSubscription()
       if (!subscription) {
         setPushEnabled(false)

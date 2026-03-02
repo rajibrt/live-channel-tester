@@ -49,6 +49,12 @@ export default async function RootLayout({ children }) {
   const pwaInstallBridgeScript = `
     (function () {
       try {
+        var swUrl = "/sw.js?v=20260302-2";
+        if ("serviceWorker" in navigator) {
+          window.addEventListener("load", function () {
+            navigator.serviceWorker.register(swUrl).catch(function () {});
+          });
+        }
         window.__pwaDeferredInstallPrompt = window.__pwaDeferredInstallPrompt || null;
         window.addEventListener("beforeinstallprompt", function (event) {
           event.preventDefault();

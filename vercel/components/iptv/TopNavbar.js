@@ -14,6 +14,8 @@ import {
 import { Icon } from './icons'
 import styles from './iptv.module.css'
 
+const SW_URL = '/sw.js?v=20260302-2'
+
 function urlBase64ToUint8Array(base64String) {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
@@ -421,6 +423,12 @@ export default function TopNavbar({
 
   useEffect(() => {
     if (typeof window === 'undefined') return
+    if (!('serviceWorker' in navigator)) return
+    navigator.serviceWorker.register(SW_URL).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
     const canPush =
       'serviceWorker' in navigator &&
       'PushManager' in window &&
@@ -431,7 +439,7 @@ export default function TopNavbar({
 
     const initPush = async () => {
       try {
-        const registration = await navigator.serviceWorker.register('/sw.js')
+        const registration = await navigator.serviceWorker.register(SW_URL)
         const existing = await registration.pushManager.getSubscription()
         setPushEnabled(Boolean(existing))
         if (existing) {
@@ -503,7 +511,7 @@ export default function TopNavbar({
         return
       }
 
-      const registration = await navigator.serviceWorker.register('/sw.js')
+      const registration = await navigator.serviceWorker.register(SW_URL)
       let subscription = await registration.pushManager.getSubscription()
       if (!subscription) {
         subscription = await registration.pushManager.subscribe({
@@ -533,7 +541,7 @@ export default function TopNavbar({
     setPushBusy(true)
     setPushError('')
     try {
-      const registration = await navigator.serviceWorker.register('/sw.js')
+      const registration = await navigator.serviceWorker.register(SW_URL)
       const subscription = await registration.pushManager.getSubscription()
       if (!subscription) {
         setPushEnabled(false)
