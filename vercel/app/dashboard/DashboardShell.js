@@ -21,7 +21,8 @@ import {
 import styles from './dashboard-shell.module.css'
 import { useI18n } from '../../components/i18n/LanguageProvider'
 
-const SW_URL = '/sw.js?v=20260302-2'
+const BUILD_VERSION = String(process.env.NEXT_PUBLIC_BUILD_VERSION || 'dev').trim() || 'dev'
+const SW_URL = `/sw.js?v=${encodeURIComponent(BUILD_VERSION)}`
 const nextLocale = (locale) => (locale === 'bn' ? 'en' : 'bn')
 
 function createNavGroups(t) {

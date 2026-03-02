@@ -14,7 +14,8 @@ import {
 import { Icon } from './icons'
 import styles from './iptv.module.css'
 
-const SW_URL = '/sw.js?v=20260302-2'
+const BUILD_VERSION = String(process.env.NEXT_PUBLIC_BUILD_VERSION || 'dev').trim() || 'dev'
+const SW_URL = `/sw.js?v=${encodeURIComponent(BUILD_VERSION)}`
 const ANDROID_APP_URL = String(process.env.NEXT_PUBLIC_ANDROID_APP_URL || '').trim()
 
 function urlBase64ToUint8Array(base64String) {

@@ -6,6 +6,7 @@ import { DEFAULT_LOCALE, SUPPORTED_LOCALES } from "../lib/i18n/dictionaries";
 import { getBaseUrl } from "../lib/siteUrl";
 
 const baseUrl = getBaseUrl();
+const buildVersion = String(process.env.NEXT_PUBLIC_BUILD_VERSION || "dev").trim() || "dev";
 export const metadata = {
   title: "WEBTVBD || TV Beyond Borders",
   description: "WEBTVBD live streaming platform for channels, categories, and on-demand viewer access.",
@@ -49,7 +50,7 @@ export default async function RootLayout({ children }) {
   const pwaInstallBridgeScript = `
     (function () {
       try {
-        var swUrl = "/sw.js?v=20260302-2";
+        var swUrl = "/sw.js?v=${encodeURIComponent(buildVersion)}";
         if ("serviceWorker" in navigator) {
           window.addEventListener("load", function () {
             navigator.serviceWorker.register(swUrl).catch(function () {});
