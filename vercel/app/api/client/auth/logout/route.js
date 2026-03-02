@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 import { CLIENT_SESSION_COOKIE, getCurrentClient } from "../../../../../lib/clientAuth";
+import { getBaseUrl } from "../../../../../lib/siteUrl";
 import { getSupabaseAdmin } from "../../../../../lib/supabaseAdmin";
 
 export async function POST(request) {
+  const baseUrl = getBaseUrl();
+
   const current = await getCurrentClient();
   if (current?.user?.id) {
     const admin = getSupabaseAdmin();
@@ -13,7 +16,7 @@ export async function POST(request) {
     });
   }
 
-  const res = NextResponse.redirect(new URL("/client-login", request.url), { status: 302 });
+  const res = NextResponse.redirect(new URL("/client-login", `${baseUrl}/`), { status: 302 });
   res.cookies.set(CLIENT_SESSION_COOKIE, "", {
     path: "/",
     httpOnly: true,
