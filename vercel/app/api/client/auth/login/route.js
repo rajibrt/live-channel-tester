@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { CLIENT_SESSION_COOKIE } from "../../../../../lib/clientAuth";
+import { getSessionCookieDomain } from "../../../../../lib/cookieDomain";
 import { buildClientMetaFromRequest } from "../../../../../lib/requestClientMeta";
 import { getBaseUrl } from "../../../../../lib/siteUrl";
 import { getSupabaseAdmin, getSupabaseAnonConfig } from "../../../../../lib/supabaseAdmin";
@@ -18,6 +19,7 @@ function normalizeMobileKey(value) {
 
 export async function POST(request) {
   const baseUrl = getBaseUrl();
+  const cookieDomain = getSessionCookieDomain();
   const toRedirectUrl = (path) => new URL(path, `${baseUrl}/`);
 
   const form = await request.formData();
@@ -77,6 +79,7 @@ export async function POST(request) {
   const res = NextResponse.redirect(toRedirectUrl(nextPath), { status: 302 });
   const sessionToken = createSessionToken({ sub: data.user.id, typ: "client" }, SESSION_MAX_AGE);
   res.cookies.set(CLIENT_SESSION_COOKIE, sessionToken, {
+    ...(cookieDomain ? { domain: cookieDomain } : {}),
     path: "/",
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",

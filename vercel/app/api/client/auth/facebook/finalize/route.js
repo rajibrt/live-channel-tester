@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { CLIENT_SESSION_COOKIE } from "../../../../../../lib/clientAuth";
+import { getSessionCookieDomain } from "../../../../../../lib/cookieDomain";
 import { upsertFacebookClientLogin } from "../../../../../../lib/facebookClientAuth";
 import { buildClientMetaFromRequest } from "../../../../../../lib/requestClientMeta";
 import { getSupabaseAnonConfig } from "../../../../../../lib/supabaseAdmin";
 import { createSessionToken, SESSION_MAX_AGE } from "../../../../../../lib/sessionToken";
 
 export async function POST(request) {
+  const cookieDomain = getSessionCookieDomain();
+
   try {
     const body = await request.json().catch(() => ({}));
     const accessToken = String(body?.access_token || "").trim();
@@ -39,6 +42,7 @@ export async function POST(request) {
     const res = NextResponse.json({ ok: true, redirect_to: redirectTo });
     const sessionToken = createSessionToken({ sub: loginResult.userId, typ: "client" }, SESSION_MAX_AGE);
     res.cookies.set(CLIENT_SESSION_COOKIE, sessionToken, {
+      ...(cookieDomain ? { domain: cookieDomain } : {}),
       path: "/",
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",

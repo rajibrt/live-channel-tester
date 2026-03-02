@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { CLIENT_SESSION_COOKIE } from "../../../../../../lib/clientAuth";
+import { getSessionCookieDomain } from "../../../../../../lib/cookieDomain";
 import { upsertFacebookClientLogin } from "../../../../../../lib/facebookClientAuth";
 import { buildClientMetaFromRequest } from "../../../../../../lib/requestClientMeta";
 import { getBaseUrl } from "../../../../../../lib/siteUrl";
@@ -9,6 +10,7 @@ import { createSessionToken, SESSION_MAX_AGE } from "../../../../../../lib/sessi
 
 export async function GET(request) {
   const baseUrl = getBaseUrl();
+  const cookieDomain = getSessionCookieDomain();
   const toRedirectUrl = (path) => new URL(path, `${baseUrl}/`);
 
   const reqUrl = new URL(request.url);
@@ -46,6 +48,7 @@ export async function GET(request) {
     const res = NextResponse.redirect(redirectUrl, { status: 302 });
     const sessionToken = createSessionToken({ sub: loginResult.userId, typ: "client" }, SESSION_MAX_AGE);
     res.cookies.set(CLIENT_SESSION_COOKIE, sessionToken, {
+      ...(cookieDomain ? { domain: cookieDomain } : {}),
       path: "/",
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
