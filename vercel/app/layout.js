@@ -7,15 +7,15 @@ import { getBaseUrl } from "../lib/siteUrl";
 
 const baseUrl = getBaseUrl();
 export const metadata = {
-  title: "WEBTV BD || TV Beyond Borders",
-  description: "WEBTV BD live streaming platform for channels, categories, and on-demand viewer access.",
+  title: "WEBTVBD || TV Beyond Borders",
+  description: "WEBTVBD live streaming platform for channels, categories, and on-demand viewer access.",
   metadataBase: new URL(baseUrl),
   openGraph: {
     type: "website",
     url: baseUrl,
-    title: "WEBTV BD || TV Beyond Borders",
-    description: "Watch live channels on WEBTV BD.",
-    images: [{ url: "/android-chrome-512x512.png", width: 512, height: 512, alt: "WEBTV BD" }],
+    title: "WEBTVBD || TV Beyond Borders",
+    description: "Watch live channels on WEBTVBD.",
+    images: [{ url: "/android-chrome-512x512.png", width: 512, height: 512, alt: "WEBTVBD" }],
   },
   icons: {
     icon: [
@@ -55,6 +55,14 @@ export default async function RootLayout({ children }) {
             navigator.serviceWorker.register(swUrl).catch(function () {});
           });
         }
+        var ua = String(navigator.userAgent || "").toLowerCase();
+        if (ua.indexOf("webtvbdapp") !== -1) return;
+        var isAppLaunch = false;
+        try {
+          var params = new URL(window.location.href).searchParams;
+          isAppLaunch = params.get("app") === "1";
+        } catch (_) {}
+        if (isAppLaunch) return;
         window.__pwaDeferredInstallPrompt = window.__pwaDeferredInstallPrompt || null;
         window.addEventListener("beforeinstallprompt", function (event) {
           event.preventDefault();

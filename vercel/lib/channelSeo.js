@@ -24,8 +24,8 @@ export function buildChannelSeoMeta(channel) {
   const path = buildWatchPath({ id: channel?.id, name });
   const canonicalUrl = toAbsoluteUrl(path);
   const logoUrl = toAbsoluteUrl(channel?.logo_url || "/android-chrome-512x512.png");
-  const title = `Watch ${name} Live | WEBTV BD`;
-  const description = `Stream ${name} live on WEBTV BD. Category: ${category}. Watch channels online on mobile, desktop, and smart TV.`;
+  const title = `Watch ${name} Live | WEBTVBD`;
+  const description = `Stream ${name} live on WEBTVBD. Category: ${category}. Watch channels online on mobile, desktop, and smart TV.`;
 
   return {
     title,

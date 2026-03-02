@@ -16,7 +16,7 @@ export async function generateMetadata({ params }) {
   const channel = await getChannelById(id);
   if (!channel) {
     return {
-      title: "Channel Not Found | WEBTV BD",
+      title: "Channel Not Found | WEBTVBD",
       description: "The requested channel is not available.",
       robots: { index: false, follow: false },
     };
@@ -56,7 +56,7 @@ function PublicChannelLanding({ channel }) {
     isAccessibleForFree: true,
     publisher: {
       "@type": "Organization",
-      name: "WEBTV BD",
+      name: "WEBTVBD",
       url: getBaseUrl(),
     },
   };
@@ -87,7 +87,7 @@ function PublicChannelLanding({ channel }) {
       >
         <h1 style={{ margin: 0, fontSize: "clamp(1.5rem, 4vw, 2rem)" }}>{String(channel?.name || "Channel")}</h1>
         <p style={{ margin: 0, color: "var(--muted-foreground)" }}>
-          Category: {String(channel?.category || "Live TV")} | Live stream available on WEBTV BD.
+          Category: {String(channel?.category || "Live TV")} | Live stream available on WEBTVBD.
         </p>
         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
           <Link

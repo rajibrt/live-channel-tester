@@ -81,8 +81,25 @@ export default function VideoPlayer({
     if (typeof document === "undefined") return false;
     return (
       document.fullscreenElement === shellRef.current ||
-      document.webkitFullscreenElement === shellRef.current
+      document.webkitFullscreenElement === shellRef.current ||
+      document.fullscreenElement === videoRef.current ||
+      document.webkitFullscreenElement === videoRef.current
     );
+  };
+
+  const requestFullscreenWithHiddenNav = async (element) => {
+    if (!element?.requestFullscreen) return false;
+    try {
+      await element.requestFullscreen({ navigationUI: "hide" });
+      return true;
+    } catch {
+      try {
+        await element.requestFullscreen();
+        return true;
+      } catch {
+        return false;
+      }
+    }
   };
 
   const requestPlayerFullscreen = async () => {
@@ -92,7 +109,11 @@ export default function VideoPlayer({
     if (isFullscreenActive()) return true;
     try {
       if (shell.requestFullscreen) {
-        await shell.requestFullscreen();
+        const entered = await requestFullscreenWithHiddenNav(shell);
+        if (!entered) return false;
+        if (window?.screen?.orientation?.lock) {
+          window.screen.orientation.lock("landscape").catch(() => {});
+        }
         return true;
       }
       if (video.webkitEnterFullscreen) {
@@ -110,6 +131,9 @@ export default function VideoPlayer({
     try {
       if (document.fullscreenElement && document.exitFullscreen) {
         await document.exitFullscreen();
+        if (window?.screen?.orientation?.unlock) {
+          window.screen.orientation.unlock();
+        }
         return true;
       }
     } catch {
@@ -561,10 +585,16 @@ export default function VideoPlayer({
 
   useEffect(() => {
     const onFullscreenChange = () => {
-      const active = document.fullscreenElement === shellRef.current;
+      const active =
+        document.fullscreenElement === shellRef.current || document.fullscreenElement === videoRef.current;
       setIsFullscreen(active);
       if (active) showPanels({ keepVisible: false, focusSelected: true });
-      else setShowFsPanels(false);
+      else {
+        setShowFsPanels(false);
+        if (window?.screen?.orientation?.unlock) {
+          window.screen.orientation.unlock();
+        }
+      }
     };
 
     document.addEventListener("fullscreenchange", onFullscreenChange);

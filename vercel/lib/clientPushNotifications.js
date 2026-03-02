@@ -54,7 +54,7 @@ export async function sendClientPush({
 
   const data = payload && typeof payload === "object" ? payload : {};
   const body = JSON.stringify({
-    title: String(title || "WEBTV BD"),
+    title: String(title || "WEBTVBD"),
     body: String(message || "").slice(0, 220),
     data,
   });

@@ -2,3 +2,9 @@
 .next
 node_modules
 .env.local
+www
+keystore/
+*.jks
+*.keystore
+android/keystore.properties
+android/.idea/

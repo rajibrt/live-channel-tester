@@ -989,10 +989,29 @@
   box-shadow: var(--shadow-2xl);
 }
 
+.videoShell:fullscreen,
+.videoShell:-webkit-full-screen {
+  width: 100vw;
+  height: 100dvh;
+  max-width: 100vw;
+  max-height: 100dvh;
+  aspect-ratio: auto;
+  border-radius: 0;
+  margin: 0;
+  padding: 0;
+  background: #000;
+}
+
 .videoElement {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.videoShell:fullscreen .videoElement,
+.videoShell:-webkit-full-screen .videoElement {
+  width: 100vw;
+  height: 100dvh;
 }
 
 .videoElementContain {

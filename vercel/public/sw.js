@@ -18,7 +18,7 @@ self.addEventListener("push", (event) => {
     payload = {};
   }
 
-  const title = String(payload?.title || "WEBTV BD");
+  const title = String(payload?.title || "WEBTVBD");
   const body = String(payload?.body || "New notification");
   const data = payload?.data && typeof payload.data === "object" ? payload.data : {};
   const options = {

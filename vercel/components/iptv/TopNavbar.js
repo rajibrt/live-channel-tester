@@ -15,6 +15,7 @@ import { Icon } from './icons'
 import styles from './iptv.module.css'
 
 const SW_URL = '/sw.js?v=20260302-2'
+const ANDROID_APP_URL = String(process.env.NEXT_PUBLIC_ANDROID_APP_URL || '').trim()
 
 function urlBase64ToUint8Array(base64String) {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
@@ -77,6 +78,71 @@ function getAndroidInstallHelpMessage(windowRef) {
     return "এই browser-এ 'Install app' নাও থাকতে পারে। Google Chrome app দিয়ে webtvbd.com খুলে menu থেকে 'Install app' দিন।"
   }
   return "এই মুহূর্তে browser install prompt detect করছে না। Chrome এ page reload করে 20-30 সেকেন্ড পরে আবার menu চেক করুন, তারপরও না এলে site data clear করে আবার চেষ্টা করুন।"
+}
+
+function isValidInstallUrl(value) {
+  if (!value) return false
+  try {
+    const url = new URL(value)
+    return url.protocol === 'https:' || url.protocol === 'http:'
+  } catch {
+    return false
+  }
+}
+
+function isNativeAppRuntime(windowRef) {
+  try {
+    const cap = windowRef?.Capacitor
+    const ua = String(windowRef?.navigator?.userAgent || '').toLowerCase()
+    const isAndroid = /android/.test(ua)
+    const fromAppQuery = (() => {
+      try {
+        const params = new URL(windowRef.location.href).searchParams
+        return params.get('app') === '1'
+      } catch {
+        return false
+      }
+    })()
+    const persistedFlag = (() => {
+      try {
+        return windowRef.localStorage.getItem('webtvbd:native-runtime') === '1'
+      } catch {
+        return false
+      }
+    })()
+    const hasCapacitorUaTag = ua.includes('webtvbdapp')
+    const isLikelyAndroidWebView =
+      isAndroid && (/;\s*wv\)/.test(ua) || /version\/4\.0/.test(ua))
+    if (fromAppQuery) {
+      try {
+        windowRef.localStorage.setItem('webtvbd:native-runtime', '1')
+      } catch {
+        // ignore localStorage errors
+      }
+    }
+    if (fromAppQuery || persistedFlag || hasCapacitorUaTag || isLikelyAndroidWebView)
+      return true
+    if (!cap) return false
+    if (typeof cap.isNativePlatform === 'function' && cap.isNativePlatform()) return true
+    if (typeof cap.getPlatform === 'function') {
+      const platform = String(cap.getPlatform() || '').toLowerCase()
+      if (platform === 'android' || platform === 'ios') return true
+    }
+    return false
+  } catch {
+    return false
+  }
+}
+
+function isBrowserInstallContext(windowRef) {
+  try {
+    const isBrowserDisplayMode = Boolean(
+      windowRef.matchMedia?.('(display-mode: browser)')?.matches,
+    )
+    return isBrowserDisplayMode && !isNativeAppRuntime(windowRef)
+  } catch {
+    return false
+  }
 }
 
 function AnnouncementTicker({
@@ -247,6 +313,8 @@ export default function TopNavbar({
   const [deferredInstallPrompt, setDeferredInstallPrompt] = useState(null)
   const [isIosInstallHint, setIsIosInstallHint] = useState(false)
   const [isAndroidInstallHint, setIsAndroidInstallHint] = useState(false)
+  const [isNativeRuntime, setIsNativeRuntime] = useState(false)
+  const [isBrowserInstallCtx, setIsBrowserInstallCtx] = useState(false)
   const [pushReady, setPushReady] = useState(false)
   const [pushEnabled, setPushEnabled] = useState(false)
   const [pushBusy, setPushBusy] = useState(false)
@@ -354,6 +422,17 @@ export default function TopNavbar({
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined
+    const nativeRuntime = isNativeAppRuntime(window)
+    const browserInstallCtx = isBrowserInstallContext(window)
+    setIsNativeRuntime(nativeRuntime)
+    setIsBrowserInstallCtx(browserInstallCtx)
+    if (nativeRuntime || !browserInstallCtx) {
+      setIsIosInstallHint(false)
+      setIsAndroidInstallHint(false)
+      setDeferredInstallPrompt(null)
+      setShowInstallCta(false)
+      return undefined
+    }
     const nav = window.navigator
     const ua = String(nav?.userAgent || '').toLowerCase()
     const isIos = /iphone|ipad|ipod/.test(ua)
@@ -406,7 +485,31 @@ export default function TopNavbar({
   }, [])
 
   useEffect(() => {
+    if (typeof window === 'undefined') return undefined
+    let checks = 0
+    const timer = window.setInterval(() => {
+      checks += 1
+      const nativeRuntime = isNativeAppRuntime(window)
+      const browserInstallCtx = isBrowserInstallContext(window)
+      setIsNativeRuntime(nativeRuntime)
+      setIsBrowserInstallCtx(browserInstallCtx)
+      if (nativeRuntime || !browserInstallCtx) {
+        setIsIosInstallHint(false)
+        setIsAndroidInstallHint(false)
+        setDeferredInstallPrompt(null)
+        setShowInstallCta(false)
+      }
+      if (checks >= 10) window.clearInterval(timer)
+    }, 1000)
+    return () => window.clearInterval(timer)
+  }, [])
+
+  useEffect(() => {
     if (typeof window === 'undefined') return
+    if (isNativeRuntime || !isBrowserInstallCtx) {
+      setShowInstallCta(false)
+      return
+    }
     const shouldShow = Boolean(
       deferredInstallPrompt || isIosInstallHint || isAndroidInstallHint,
     )
@@ -419,7 +522,7 @@ export default function TopNavbar({
       window,
     )
     setShowInstallCta(!dismissed)
-  }, [deferredInstallPrompt, isIosInstallHint, isAndroidInstallHint])
+  }, [deferredInstallPrompt, isIosInstallHint, isAndroidInstallHint, isNativeRuntime, isBrowserInstallCtx])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -610,6 +713,7 @@ export default function TopNavbar({
   }
 
   async function triggerInstallPrompt() {
+    if (isNativeRuntime || !isBrowserInstallCtx) return
     if (deferredInstallPrompt?.prompt) {
       try {
         await deferredInstallPrompt.prompt()
@@ -632,6 +736,10 @@ export default function TopNavbar({
       return
     }
     if (isAndroidInstallHint) {
+      if (isValidInstallUrl(ANDROID_APP_URL)) {
+        window.location.href = ANDROID_APP_URL
+        return
+      }
       window.alert(getAndroidInstallHelpMessage(window))
     }
   }
@@ -697,6 +805,20 @@ export default function TopNavbar({
     }
   }
 
+  const canDownloadAndroidApp =
+    !isNativeRuntime &&
+    isBrowserInstallCtx &&
+    isAndroidInstallHint &&
+    !deferredInstallPrompt?.prompt &&
+    isValidInstallUrl(ANDROID_APP_URL)
+  const installTitle = canDownloadAndroidApp
+    ? 'Install WEBTVBD Android App'
+    : 'Install WEBTVBD App'
+  const installSubtitle = canDownloadAndroidApp
+    ? 'Browser prompt না এলে Android app directly install করুন।'
+    : 'Get quick access from your mobile home screen.'
+  const installButtonLabel = canDownloadAndroidApp ? 'Download App' : 'Install'
+
   return (
     <header
       className={`${styles.topNavbar} ${isDark ? styles.darkGlass : styles.lightGlass}`}
@@ -715,11 +837,11 @@ export default function TopNavbar({
           <div className={styles.brandLogo}>
             <img
               src='/favicon-32x32.png'
-              alt='WEBTV BD'
+              alt='WEBTVBD'
               className={styles.brandLogoImg}
             />
           </div>
-          <h1 className={styles.brandText}>WEBTV BD</h1>
+          <h1 className={styles.brandText}>WEBTVBD</h1>
         </div>
       </div>
 
@@ -761,7 +883,9 @@ export default function TopNavbar({
         >
           <Icon name='MonitorPlay' size={18} />
         </Button>
-        {deferredInstallPrompt || isIosInstallHint || isAndroidInstallHint ? (
+        {!isNativeRuntime &&
+        isBrowserInstallCtx &&
+        (deferredInstallPrompt || isIosInstallHint || isAndroidInstallHint) ? (
           <Button
             type='button'
             variant='ghost'
@@ -1102,15 +1226,15 @@ export default function TopNavbar({
         tickerIconText={tickerIconText}
         onSelectItem={setActiveTickerArticle}
       />
-      {showInstallCta ? (
+      {showInstallCta && !isNativeRuntime && isBrowserInstallCtx ? (
         <div
           className={styles.mobileActionPrompt}
           role='status'
           aria-live='polite'
         >
           <div className={styles.mobileActionPromptText}>
-            <strong>Install WEBTVBD App</strong>
-            <span>Get quick access from your mobile home screen.</span>
+            <strong>{installTitle}</strong>
+            <span>{installSubtitle}</span>
           </div>
           <div className={styles.mobileActionPromptActions}>
             <button
@@ -1119,7 +1243,7 @@ export default function TopNavbar({
               onClick={triggerInstallPrompt}
             >
               <Icon name='Download' size={14} />
-              Install
+              {installButtonLabel}
             </button>
             <button
               type='button'

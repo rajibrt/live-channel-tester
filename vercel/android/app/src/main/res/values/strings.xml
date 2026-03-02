@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">WEBTVBD</string>
+    <string name="title_activity_main">WEBTVBD</string>
+    <string name="package_name">com.webtvbd.app</string>
+    <string name="custom_url_scheme">com.webtvbd.app</string>
+</resources>
