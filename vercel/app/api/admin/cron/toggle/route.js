@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "../../../../../lib/adminApi";
+import { getBaseUrl } from "../../../../../lib/siteUrl";
 import { getSupabaseAdmin } from "../../../../../lib/supabaseAdmin";
 
 function parseBoolean(value, fallback = true) {
@@ -9,6 +10,8 @@ function parseBoolean(value, fallback = true) {
 }
 
 export async function POST(request) {
+  const baseUrl = getBaseUrl();
+  const toRedirectUrl = (path) => new URL(path, `${baseUrl}/`);
   const auth = await requireAdminApi();
   if (!auth.ok) return auth.response;
 
@@ -47,7 +50,7 @@ export async function POST(request) {
       return NextResponse.json({ ok: true, is_enabled: enabled });
     }
 
-    return NextResponse.redirect(new URL("/dashboard", request.url), { status: 302 });
+    return NextResponse.redirect(toRedirectUrl("/dashboard"), { status: 302 });
   } catch (error) {
     return NextResponse.json(
       { error: error?.message || "Failed to toggle cron status." },
@@ -55,4 +58,3 @@ export async function POST(request) {
     );
   }
 }
-
