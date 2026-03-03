@@ -21,25 +21,27 @@ Required production env values:
 
 Also keep existing app envs already used in production (`PUBLIC_PLAYLIST_BASE_URL`, push keys, cron values, etc.).
 
-## Every Release (Step-by-step)
+## Every Release (ধারাবাহিক ধাপ)
 
-## 1) Code change + local verify
+নীচের ধাপগুলো **প্রতিবার** follow করুন (code change -> git push -> image push -> Dokploy deploy):
 
-From repo root:
+## 1) কোড পরিবর্তন শেষ করে local build check
+
+Repo root:
 
 ```bash
 git status
 ```
 
-From `vercel/`:
+`vercel/` folder:
 
 ```bash
 npm run build
 ```
 
-## 2) Commit and push
+## 2) Git commit + push
 
-From repo root:
+Repo root:
 
 ```bash
 git add .
@@ -47,9 +49,9 @@ git commit -m "your message"
 git push origin master
 ```
 
-## 3) Build and push multi-arch Docker image (IMPORTANT)
+## 3) Multi-arch image build + push (`latest`)
 
-From `vercel/`:
+`vercel/` folder:
 
 ```bash
 docker buildx create --use --name dokploybuilder || true
@@ -61,7 +63,17 @@ docker buildx build \
   .
 ```
 
-## 4) Verify image platform + digest
+### One-line Release Command (buildx + push + verify)
+
+From repo root:
+
+```bash
+cd vercel && docker buildx create --use --name dokploybuilder >/dev/null 2>&1 || true && docker buildx build --platform linux/amd64,linux/arm64 -f Dockerfile -t rajibrt/webtvbd:latest --push . && docker buildx imagetools inspect rajibrt/webtvbd:latest && docker pull rajibrt/webtvbd:latest && docker image inspect rajibrt/webtvbd:latest --format '{{index .RepoDigests 0}}'
+```
+
+তারপর Dokploy UI থেকে deploy দিন (`Deploy` / `Rebuild`)।
+
+## 4) Image platform + digest verify
 
 ```bash
 docker buildx imagetools inspect rajibrt/webtvbd:latest
@@ -74,7 +86,7 @@ Confirm:
 - both platforms exist: `linux/amd64` and `linux/arm64`
 - digest is visible and updated
 
-## 5) Deploy in Dokploy
+## 5) Dokploy deploy
 
 - Keep image as `rajibrt/webtvbd:latest`
 - Click `Deploy` (or `Rebuild`)
@@ -82,7 +94,7 @@ Confirm:
 
 In deployment logs, verify pulled digest matches what you saw locally (`RepoDigest`).
 
-## 6) Post-deploy smoke test
+## 6) Deploy এর পরে smoke test
 
 - Open `https://webtvbd.com/login`
 - Open dashboard login and sign in
