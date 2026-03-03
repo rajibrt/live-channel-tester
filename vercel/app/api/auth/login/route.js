@@ -2,22 +2,24 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { ADMIN_SESSION_COOKIE } from '../../../../lib/auth'
 import { createSessionToken, SESSION_MAX_AGE } from "../../../../lib/sessionToken";
-import { getBaseUrl } from "../../../../lib/siteUrl";
 import {
   getSupabaseAdmin,
   getSupabaseAnonConfig,
 } from '../../../../lib/supabaseAdmin'
 
+function redirectRelative(path) {
+  return new NextResponse(null, {
+    status: 302,
+    headers: { Location: path },
+  });
+}
+
 export async function POST(request) {
-  const baseUrl = getBaseUrl();
-  const toRedirectUrl = (path) => new URL(path, `${baseUrl}/`);
   const form = await request.formData()
   const email = String(form.get('email') || '').trim()
   const password = String(form.get('password') || '')
   if (!email || !password) {
-    return NextResponse.redirect(toRedirectUrl('/login?error=invalid'), {
-      status: 302,
-    })
+    return redirectRelative('/login?error=invalid')
   }
 
   const { url, anon } = getSupabaseAnonConfig()
@@ -27,9 +29,7 @@ export async function POST(request) {
     password,
   })
   if (error || !data?.session?.access_token || !data?.user) {
-    return NextResponse.redirect(toRedirectUrl('/login?error=invalid'), {
-      status: 302,
-    })
+    return redirectRelative('/login?error=invalid')
   }
 
   const admin = getSupabaseAdmin()
@@ -40,14 +40,10 @@ export async function POST(request) {
     .eq('is_active', true)
     .single()
   if (!row) {
-    return NextResponse.redirect(toRedirectUrl('/login?error=invalid'), {
-      status: 302,
-    })
+    return redirectRelative('/login?error=invalid')
   }
 
-  const res = NextResponse.redirect(toRedirectUrl('/dashboard'), {
-    status: 302,
-  })
+  const res = redirectRelative('/dashboard')
   const sessionToken = createSessionToken({ sub: data.user.id, typ: "admin" }, SESSION_MAX_AGE);
   res.cookies.set(ADMIN_SESSION_COOKIE, sessionToken, {
     path: '/',
