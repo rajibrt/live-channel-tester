@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, Copy, LogOut } from 'lucide-react'
 
 function normalizeMessengerUrl(rawUrl) {
@@ -35,7 +35,7 @@ function toMobileMessengerUrl(rawUrl) {
       parts[0] &&
       !['profile.php', 'pages'].includes(parts[0].toLowerCase())
     ) {
-      return `https://m.me/${parts[0]}`
+      return `https://m.facebook.com/messages/t/${parts[0]}`
     }
     return normalized
   } catch {
@@ -43,9 +43,9 @@ function toMobileMessengerUrl(rawUrl) {
   }
 }
 
-function isMobileDevice() {
-  if (typeof navigator === 'undefined') return false
-  return /android|iphone|ipad|ipod|mobile/i.test(String(navigator.userAgent || ''))
+function isSmallScreenNow() {
+  if (typeof window === 'undefined') return false
+  return window.matchMedia('(max-width: 820px)').matches
 }
 
 const DEFAULT_FB_INBOX_URL = normalizeMessengerUrl(
@@ -67,6 +67,7 @@ export default function PendingApprovalCard({
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [messengerUrl, setMessengerUrl] = useState(DEFAULT_FB_INBOX_URL)
+  const [isSmallScreen, setIsSmallScreen] = useState(false)
   const [toast, setToast] = useState({
     open: false,
     type: 'success',
@@ -75,7 +76,18 @@ export default function PendingApprovalCard({
   })
   const toastTimerRef = useRef(null)
 
+  useEffect(() => {
+    const update = () => setIsSmallScreen(isSmallScreenNow())
+    update()
+    window.addEventListener('resize', update)
+    return () => window.removeEventListener('resize', update)
+  }, [])
+
   const canSubmit = useMemo(() => toDigits(mobile).length >= 11, [mobile])
+  const actionMessengerUrl = useMemo(
+    () => (isSmallScreen ? toMobileMessengerUrl(messengerUrl) : normalizeMessengerUrl(messengerUrl)),
+    [isSmallScreen, messengerUrl],
+  )
 
   async function onSubmit(event) {
     event.preventDefault()
@@ -100,9 +112,7 @@ export default function PendingApprovalCard({
       const rawInboxUrl = normalizeMessengerUrl(
         payload?.messenger_url || DEFAULT_FB_INBOX_URL,
       )
-      const nextUrl = isMobileDevice()
-        ? toMobileMessengerUrl(rawInboxUrl)
-        : rawInboxUrl
+      const nextUrl = rawInboxUrl
       const messageText = String(payload?.message_text || '').trim()
       setMessengerUrl(nextUrl)
       setApprovalMessage(messageText)
@@ -340,7 +350,7 @@ export default function PendingApprovalCard({
         }}
       >
         <a
-          href={messengerUrl}
+          href={actionMessengerUrl}
           target='_blank'
           rel='noopener noreferrer'
           style={{
