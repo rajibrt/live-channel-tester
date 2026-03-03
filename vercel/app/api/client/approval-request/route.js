@@ -3,6 +3,17 @@ import { requireClientApi } from "../../../../lib/clientApi";
 import { formatSmtpError, loadEmailSettings, sendApprovalRequestAdminEmail } from "../../../../lib/emailDelivery";
 import { getSupabaseAdmin } from "../../../../lib/supabaseAdmin";
 
+function resolveFacebookInboxUrl() {
+  const raw = String(
+    process.env.FACEBOOK_INBOX_URL ||
+      process.env.NEXT_PUBLIC_FACEBOOK_INBOX_URL ||
+      "https://www.facebook.com/webtvbd"
+  ).trim();
+  if (!raw) return "https://www.facebook.com/webtvbd";
+  if (/^https?:\/\//i.test(raw)) return raw;
+  return `https://${raw.replace(/^\/+/, "")}`;
+}
+
 function normalizeMobile(value) {
   const raw = String(value || "").trim();
   const digits = raw.replace(/\D/g, "");
@@ -119,7 +130,7 @@ export async function POST(request) {
 
   return NextResponse.json({
     ok: true,
-    messenger_url: "https://www.facebook.com/messages/t/WEBTVBD",
+    messenger_url: resolveFacebookInboxUrl(),
     message_text: messageText,
     email_notification: emailNotification,
   });
