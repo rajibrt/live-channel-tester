@@ -7,33 +7,11 @@ function resolveFacebookInboxUrl() {
   const raw = String(
     process.env.FACEBOOK_INBOX_URL ||
       process.env.NEXT_PUBLIC_FACEBOOK_INBOX_URL ||
-      "https://m.me/webtvbd"
+      "https://www.facebook.com/messages/t/WEBTVBD"
   ).trim();
-  if (!raw) return "https://m.me/webtvbd";
-
-  const normalized = /^https?:\/\//i.test(raw) ? raw : `https://${raw.replace(/^\/+/, "")}`;
-  try {
-    const url = new URL(normalized);
-    const host = String(url.hostname || "").toLowerCase();
-    const parts = String(url.pathname || "")
-      .split("/")
-      .filter(Boolean);
-
-    if (host.includes("facebook.com") && parts[0] === "messages" && parts[1] === "t" && parts[2]) {
-      return `https://m.me/${parts[2]}`;
-    }
-    if (
-      host.includes("facebook.com") &&
-      parts.length === 1 &&
-      parts[0] &&
-      !["profile.php", "pages"].includes(parts[0].toLowerCase())
-    ) {
-      return `https://m.me/${parts[0]}`;
-    }
-    return normalized;
-  } catch {
-    return normalized;
-  }
+  if (!raw) return "https://www.facebook.com/messages/t/WEBTVBD";
+  if (/^https?:\/\//i.test(raw)) return raw;
+  return `https://${raw.replace(/^\/+/, "")}`;
 }
 
 function normalizeMobile(value) {

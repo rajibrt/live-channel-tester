@@ -5,10 +5,15 @@ import { AlertTriangle, Copy, LogOut } from 'lucide-react'
 
 function normalizeMessengerUrl(rawUrl) {
   const raw = String(rawUrl || '').trim()
-  if (!raw) return 'https://m.me/webtvbd'
+  if (!raw) return 'https://www.facebook.com/messages/t/WEBTVBD'
   const normalized = /^https?:\/\//i.test(raw)
     ? raw
     : `https://${raw.replace(/^\/+/, '')}`
+  return normalized
+}
+
+function toMobileMessengerUrl(rawUrl) {
+  const normalized = normalizeMessengerUrl(rawUrl)
   try {
     const url = new URL(normalized)
     const host = String(url.hostname || '').toLowerCase()
@@ -38,8 +43,14 @@ function normalizeMessengerUrl(rawUrl) {
   }
 }
 
+function isMobileDevice() {
+  if (typeof navigator === 'undefined') return false
+  return /android|iphone|ipad|ipod|mobile/i.test(String(navigator.userAgent || ''))
+}
+
 const DEFAULT_FB_INBOX_URL = normalizeMessengerUrl(
-  process.env.NEXT_PUBLIC_FACEBOOK_INBOX_URL || 'https://m.me/webtvbd',
+  process.env.NEXT_PUBLIC_FACEBOOK_INBOX_URL ||
+    'https://www.facebook.com/messages/t/WEBTVBD',
 )
 
 function toDigits(value) {
@@ -86,9 +97,12 @@ export default function PendingApprovalCard({
       if (!res.ok)
         throw new Error(payload?.error || 'রিকোয়েস্ট সাবমিট করা যায়নি।')
 
-      const nextUrl = normalizeMessengerUrl(
+      const rawInboxUrl = normalizeMessengerUrl(
         payload?.messenger_url || DEFAULT_FB_INBOX_URL,
       )
+      const nextUrl = isMobileDevice()
+        ? toMobileMessengerUrl(rawInboxUrl)
+        : rawInboxUrl
       const messageText = String(payload?.message_text || '').trim()
       setMessengerUrl(nextUrl)
       setApprovalMessage(messageText)
