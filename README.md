@@ -244,6 +244,13 @@ This patch is idempotent (safe to run multiple times).
 - Framework preset: `Next.js`
 - Keep Build/Install/Output defaults (no custom overrides)
 
+## Deploy (Dokploy, Docker Image)
+
+- Main guide: `vercel/docs/dokploy-deploy.md`
+- Release checklist (recommended): `vercel/docs/prod-deploy-checklist.md`
+
+Use multi-arch Docker build (`linux/amd64,linux/arm64`) before deploying `rajibrt/webtvbd:latest` in Dokploy.
+
 Public playlist URL format:
 
 `https://your-app.vercel.app/playlist/{token}.m3u`

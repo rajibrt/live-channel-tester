@@ -1,60 +1,63 @@
 # Dokploy Deployment (WEBTVBD)
 
-## 1) What is already prepared
+This project is deployed to Dokploy using a prebuilt Docker image.
 
-- Dockerized Next.js production build with `standalone` output.
-- Auto build versioning enabled in `next.config.mjs`.
-  - If `APP_BUILD_VERSION` is provided, that value is used.
-  - If not provided, every build gets an auto version like `2026-03-02T171000Z-abc1234`.
-- Service worker URL now uses `NEXT_PUBLIC_BUILD_VERSION`, so every build busts old SW cache automatically.
+Primary reference:
 
-## 2) Dokploy project settings
+- `vercel/docs/prod-deploy-checklist.md`
 
-- **Project type**: Dockerfile
-- **Root directory**: `vercel`
-- **Dockerfile path**: `Dockerfile`
-- **Port**: `3000`
-- **Start command**: leave default (Dockerfile `CMD` is set)
+## Current Deploy Mode
 
-## 3) Environment variables (Dokploy)
+- Provider: `Docker Image`
+- Image: `rajibrt/webtvbd:latest`
+- Internal/App Port: `3000`
+- Start command: **empty/default**
 
-Set the same values you use in production:
+## Critical Requirement
+
+Build and push image as multi-arch so Dokploy can pull on any node arch:
+
+```bash
+docker buildx build \
+  --platform linux/amd64,linux/arm64 \
+  -f Dockerfile \
+  -t rajibrt/webtvbd:latest \
+  --push \
+  .
+```
+
+If `linux/arm64` is missing, Dokploy may fail with:
+
+- `no matching manifest for linux/arm64/v8`
+
+## Required Env (minimum)
 
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `PUBLIC_PLAYLIST_BASE_URL`
-- `LOCAL_AGENT_BASE_URL`
-- `CRON_SECRET`
-- `CRON_CHECK_TIMEOUT_SEC`
-- `CRON_CHECK_CONCURRENCY`
-- `CRON_CHECK_LIMIT`
-- `NEXT_PUBLIC_VAPID_PUBLIC_KEY`
-- `WEB_PUSH_VAPID_PUBLIC_KEY`
-- `WEB_PUSH_VAPID_PRIVATE_KEY`
-- `WEB_PUSH_VAPID_SUBJECT`
-- `NEXT_PUBLIC_ANDROID_APP_URL`
+- `SITE_URL`
 - `NEXT_PUBLIC_SITE_URL`
 
-Optional:
+Keep all existing production envs that app features need (`PUBLIC_PLAYLIST_BASE_URL`, push keys, cron keys, etc.).
 
-- `APP_BUILD_VERSION` (if you want to manually control build version label)
+## Digest Verification
 
-## 4) Version bump per build
-
-No manual bump is required now.
-
-- Every Dokploy build gets a unique version automatically (timestamp + git sha fallback).
-- If your Dokploy supports custom build args, you can explicitly pass `APP_BUILD_VERSION`.
-
-## 5) Local test (optional)
-
-From `vercel/`:
+After push, check digest locally:
 
 ```bash
-npm run docker:build
-npm run docker:run
+docker pull rajibrt/webtvbd:latest
+docker image inspect rajibrt/webtvbd:latest --format '{{index .RepoDigests 0}}'
 ```
 
-Then open `http://localhost:3000`.
+In Dokploy deploy logs, confirm pulled digest matches.
+
+## Quick Debug Hints
+
+- `Bad Gateway (502)`:
+  - container likely exited
+  - check Start Command override and port `3000`
+
+- redirect issues:
+  - ensure latest image is deployed
+  - verify `SITE_URL` and `NEXT_PUBLIC_SITE_URL`
