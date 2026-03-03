@@ -3,9 +3,44 @@
 import { useMemo, useRef, useState } from 'react'
 import { AlertTriangle, Copy, LogOut } from 'lucide-react'
 
-const DEFAULT_FB_INBOX_URL = String(
-  process.env.NEXT_PUBLIC_FACEBOOK_INBOX_URL || 'https://www.facebook.com/webtvbd',
-).trim() || 'https://www.facebook.com/webtvbd'
+function normalizeMessengerUrl(rawUrl) {
+  const raw = String(rawUrl || '').trim()
+  if (!raw) return 'https://m.me/webtvbd'
+  const normalized = /^https?:\/\//i.test(raw)
+    ? raw
+    : `https://${raw.replace(/^\/+/, '')}`
+  try {
+    const url = new URL(normalized)
+    const host = String(url.hostname || '').toLowerCase()
+    const parts = String(url.pathname || '')
+      .split('/')
+      .filter(Boolean)
+
+    if (
+      host.includes('facebook.com') &&
+      parts[0] === 'messages' &&
+      parts[1] === 't' &&
+      parts[2]
+    ) {
+      return `https://m.me/${parts[2]}`
+    }
+    if (
+      host.includes('facebook.com') &&
+      parts.length === 1 &&
+      parts[0] &&
+      !['profile.php', 'pages'].includes(parts[0].toLowerCase())
+    ) {
+      return `https://m.me/${parts[0]}`
+    }
+    return normalized
+  } catch {
+    return normalized
+  }
+}
+
+const DEFAULT_FB_INBOX_URL = normalizeMessengerUrl(
+  process.env.NEXT_PUBLIC_FACEBOOK_INBOX_URL || 'https://m.me/webtvbd',
+)
 
 function toDigits(value) {
   return String(value || '').replace(/\D/g, '')
@@ -20,9 +55,7 @@ export default function PendingApprovalCard({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
-  const [messengerUrl, setMessengerUrl] = useState(
-    DEFAULT_FB_INBOX_URL,
-  )
+  const [messengerUrl, setMessengerUrl] = useState(DEFAULT_FB_INBOX_URL)
   const [toast, setToast] = useState({
     open: false,
     type: 'success',
@@ -53,7 +86,7 @@ export default function PendingApprovalCard({
       if (!res.ok)
         throw new Error(payload?.error || 'রিকোয়েস্ট সাবমিট করা যায়নি।')
 
-      const nextUrl = String(
+      const nextUrl = normalizeMessengerUrl(
         payload?.messenger_url || DEFAULT_FB_INBOX_URL,
       )
       const messageText = String(payload?.message_text || '').trim()
@@ -70,7 +103,7 @@ export default function PendingApprovalCard({
             type: 'success',
             title: 'মেসেজ কপি হয়েছে',
             description:
-              'নিচের WebTVBD Facebook Inbox বাটনে ক্লিক করে মেসেজটি পেস্ট করে পাঠান।',
+              'নিচের WEBTVBD Facebook Inbox বাটনে ক্লিক করে মেসেজটি পেস্ট করে পাঠান।',
           })
         } catch {
           setSuccess(
@@ -80,7 +113,7 @@ export default function PendingApprovalCard({
             type: 'error',
             title: 'অটো কপি হয়নি',
             description:
-              'নিচের টেক্সট থেকে মেসেজ কপি করে WebTVBD Facebook Inbox-এ পাঠান।',
+              'নিচের টেক্সট থেকে মেসেজ কপি করে WEBTVBD Facebook Inbox-এ পাঠান।',
           })
         }
       } else {
@@ -91,7 +124,7 @@ export default function PendingApprovalCard({
           type: 'error',
           title: 'অটো কপি হয়নি',
           description:
-            'নিচের টেক্সট থেকে মেসেজ কপি করে WebTVBD Facebook Inbox-এ পাঠান।',
+            'নিচের টেক্সট থেকে মেসেজ কপি করে WEBTVBD Facebook Inbox-এ পাঠান।',
         })
       }
     } catch (err) {
@@ -118,7 +151,7 @@ export default function PendingApprovalCard({
       showToast({
         type: 'success',
         title: 'মেসেজ কপি হয়েছে',
-        description: 'এখন WebTVBD Facebook Inbox-এ গিয়ে মেসেজটি পাঠান।',
+        description: 'এখন WEBTVBD Facebook Inbox-এ গিয়ে মেসেজটি পাঠান।',
       })
     } catch {
       setError('মেসেজ কপি করা যায়নি। আবার চেষ্টা করুন।')
@@ -161,7 +194,7 @@ export default function PendingApprovalCard({
         <ol style={{ margin: '8px 0 0 18px', padding: 0 }}>
           <li>আপনার একটিভ মোবাইল নম্বর লিখে `Submit` করুন।</li>
           <li>অটোমেটিক কপি হওয়া মেসেজটি রেখে দিন (প্রয়োজনে আবার কপি করুন)।</li>
-          <li>`WebTVBD Facebook Inbox` বাটনে ক্লিক করে ইনবক্স খুলুন।</li>
+          <li>`WEBTVBD Facebook Inbox` বাটনে ক্লিক করে ইনবক্স খুলুন।</li>
           <li>কপি করা মেসেজ ইনবক্সে পেস্ট করে পাঠান।</li>
         </ol>
       </div>
