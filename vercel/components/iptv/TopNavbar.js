@@ -284,6 +284,7 @@ function AnnouncementTicker({
 export default function TopNavbar({
   isDark,
   isTvMode,
+  showChannelMenu = true,
   onToggleTvMode,
   onToggleLeftSidebar,
   onToggleRightPanel,
@@ -864,15 +865,17 @@ export default function TopNavbar({
       </div>
 
       <div className={styles.topRight}>
-        <Button
-          type='button'
-          variant='ghost'
-          size='icon'
-          onClick={onToggleRightPanel}
-          className={`${styles.iconBtn} ${styles.mobileOnly}`}
-        >
-          <Icon name='Grid3x3' size={18} />
-        </Button>
+        {showChannelMenu ? (
+          <Button
+            type='button'
+            variant='ghost'
+            size='icon'
+            onClick={onToggleRightPanel}
+            className={`${styles.iconBtn} ${styles.mobileOnly}`}
+          >
+            <Icon name='Grid3x3' size={18} />
+          </Button>
+        ) : null}
         <Button
           type='button'
           variant='ghost'

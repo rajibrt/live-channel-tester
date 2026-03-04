@@ -12,6 +12,13 @@ const ALLOWED_EVENTS = new Set([
   "sidebar_toggle",
   "cookie_consent",
   "presence_ping",
+  "module_switch",
+  "movie_select",
+  "movie_playback_attempt",
+  "movie_playback_failed",
+  "movie_progress",
+  "movie_complete",
+  "movie_favorite_toggle",
 ]);
 
 export async function POST(request) {

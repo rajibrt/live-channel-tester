@@ -190,6 +190,10 @@ export default async function WatchChannelPage({ params }) {
     <IptvHomeClient
       initialChannels={boot.channels}
       initialCategories={boot.categories}
+      initialMovies={boot.movies}
+      initialMovieCategories={boot.movieCategories}
+      initialContinueWatching={boot.continueWatching}
+      moviesViewVariant="browse"
       initialClientState={boot.initialClientState}
       currentClient={{
         email: String(current.client.email || ""),

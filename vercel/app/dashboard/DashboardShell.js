@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Activity,
   Bell,
+  Film,
   Languages,
   LayoutDashboard,
   ListVideo,
@@ -36,6 +37,7 @@ function createNavGroups(t) {
       items: [
         { href: '/dashboard/playlists', label: t('dashboardShell.navPlaylists'), icon: ListVideo },
         { href: '/dashboard/channels', label: t('dashboardShell.navAddChannel'), icon: Tv },
+        { href: '/dashboard/movies', label: t('dashboardShell.navMovies'), icon: Film },
         { href: '/dashboard/announcements', label: t('dashboardShell.navAnnouncements'), icon: Megaphone },
       ],
     },
@@ -72,6 +74,12 @@ function sectionMeta(pathname, t) {
     return {
       title: t('dashboardShell.titleAddChannel'),
       subtitle: t('dashboardShell.subtitleAddChannel'),
+    }
+  }
+  if (pathname.startsWith('/dashboard/movies')) {
+    return {
+      title: t('dashboardShell.titleMovies'),
+      subtitle: t('dashboardShell.subtitleMovies'),
     }
   }
   if (pathname.startsWith('/dashboard/announcements')) {

@@ -75,6 +75,48 @@ begin
     execute 'drop policy if exists deny_all_client_activity_events on public.client_activity_events';
     execute 'create policy deny_all_client_activity_events on public.client_activity_events for all using (false) with check (false)';
   end if;
+
+  if to_regclass('public.movies') is not null then
+    execute 'alter table public.movies enable row level security';
+    execute 'drop policy if exists deny_all_movies on public.movies';
+    execute 'create policy deny_all_movies on public.movies for all using (false) with check (false)';
+  end if;
+
+  if to_regclass('public.movie_categories') is not null then
+    execute 'alter table public.movie_categories enable row level security';
+    execute 'drop policy if exists deny_all_movie_categories on public.movie_categories';
+    execute 'create policy deny_all_movie_categories on public.movie_categories for all using (false) with check (false)';
+  end if;
+
+  if to_regclass('public.movie_category_map') is not null then
+    execute 'alter table public.movie_category_map enable row level security';
+    execute 'drop policy if exists deny_all_movie_category_map on public.movie_category_map';
+    execute 'create policy deny_all_movie_category_map on public.movie_category_map for all using (false) with check (false)';
+  end if;
+
+  if to_regclass('public.movie_sources') is not null then
+    execute 'alter table public.movie_sources enable row level security';
+    execute 'drop policy if exists deny_all_movie_sources on public.movie_sources';
+    execute 'create policy deny_all_movie_sources on public.movie_sources for all using (false) with check (false)';
+  end if;
+
+  if to_regclass('public.movie_watch_progress') is not null then
+    execute 'alter table public.movie_watch_progress enable row level security';
+    execute 'drop policy if exists deny_all_movie_watch_progress on public.movie_watch_progress';
+    execute 'create policy deny_all_movie_watch_progress on public.movie_watch_progress for all using (false) with check (false)';
+  end if;
+
+  if to_regclass('public.movie_favorites') is not null then
+    execute 'alter table public.movie_favorites enable row level security';
+    execute 'drop policy if exists deny_all_movie_favorites on public.movie_favorites';
+    execute 'create policy deny_all_movie_favorites on public.movie_favorites for all using (false) with check (false)';
+  end if;
+
+  if to_regclass('public.movie_recent_history') is not null then
+    execute 'alter table public.movie_recent_history enable row level security';
+    execute 'drop policy if exists deny_all_movie_recent_history on public.movie_recent_history';
+    execute 'create policy deny_all_movie_recent_history on public.movie_recent_history for all using (false) with check (false)';
+  end if;
 end
 $$;
 
@@ -100,6 +142,13 @@ where c.relkind = 'r'
     'client_state',
     'client_recent_history',
     'client_favorites',
-    'client_activity_events'
+    'client_activity_events',
+    'movies',
+    'movie_categories',
+    'movie_category_map',
+    'movie_sources',
+    'movie_watch_progress',
+    'movie_favorites',
+    'movie_recent_history'
   )
 order by c.relname;

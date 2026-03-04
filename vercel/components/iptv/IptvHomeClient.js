@@ -9,8 +9,11 @@ import CookieConsentBanner from "./CookieConsentBanner";
 import styles from "./iptv.module.css";
 import { usePersistentArray } from "./usePersistentArray";
 import { buildWatchPath } from "../../lib/channelSlug";
+import MoviesView from "../movies/MoviesView";
 
 const LAST_CHANNEL_KEY = "iptv:v1:last-channel-id";
+const LAST_MODE_KEY = "iptv:v1:last-mode";
+const LAST_MOVIE_FILTER_KEY = "iptv:v1:last-movie-filter";
 const DEVICE_KEY_STORAGE = "iptv:v1:device-key";
 
 function normalizeChannelId(value) {
@@ -28,6 +31,12 @@ function toCategoryId(value) {
 export default function IptvHomeClient({
   initialChannels = [],
   initialCategories = [],
+  initialMovies = [],
+  initialMovieCategories = [],
+  initialContinueWatching = [],
+  moviesViewVariant = "browse",
+  initialHomeMode = "",
+  initialSelectedMovieSlug = "",
   initialClientState = {},
   currentClient = {},
   initialSelectedChannelId = "",
@@ -52,7 +61,63 @@ export default function IptvHomeClient({
   const [showRightPanel, setShowRightPanel] = useState(false);
   const [channelSearch, setChannelSearch] = useState("");
   const [categorySearch, setCategorySearch] = useState("");
+  const [homeMode, setHomeMode] = useState(() => {
+    const forcedMode = String(initialHomeMode || "").trim().toLowerCase();
+    if (forcedMode === "movies") return "movies";
+    if (forcedMode === "tv") return "tv";
+    if (String(initialSelectedChannelId || "").trim()) return "tv";
+    if (typeof window === "undefined") return "tv";
+    try {
+      const savedMode = String(window.localStorage.getItem(LAST_MODE_KEY) || "").trim().toLowerCase();
+      return savedMode === "movies" ? "movies" : "tv";
+    } catch {
+      return "tv";
+    }
+  });
   const [mode, setMode] = useState("all");
+  const [movieMode, setMovieMode] = useState(() => {
+    if (typeof window === "undefined") return "all";
+    try {
+      const raw = String(window.localStorage.getItem(LAST_MOVIE_FILTER_KEY) || "");
+      const parsed = raw ? JSON.parse(raw) : {};
+      const nextMode = String(parsed?.mode || "all").trim().toLowerCase();
+      return nextMode === "favorites" || nextMode === "recent" ? nextMode : "all";
+    } catch {
+      return "all";
+    }
+  });
+  const [selectedMovieCategory, setSelectedMovieCategory] = useState(() => {
+    if (typeof window === "undefined") return "";
+    try {
+      const raw = String(window.localStorage.getItem(LAST_MOVIE_FILTER_KEY) || "");
+      const parsed = raw ? JSON.parse(raw) : {};
+      return String(parsed?.category || "").trim().toLowerCase();
+    } catch {
+      return "";
+    }
+  });
+  const [selectedMovieGenre, setSelectedMovieGenre] = useState(() => {
+    if (typeof window === "undefined") return "";
+    try {
+      const raw = String(window.localStorage.getItem(LAST_MOVIE_FILTER_KEY) || "");
+      const parsed = raw ? JSON.parse(raw) : {};
+      return String(parsed?.genre || "").trim().toLowerCase();
+    } catch {
+      return "";
+    }
+  });
+  const [movieFilterView, setMovieFilterView] = useState(() => {
+    if (typeof window === "undefined") return "categories";
+    try {
+      const raw = String(window.localStorage.getItem(LAST_MOVIE_FILTER_KEY) || "");
+      const parsed = raw ? JSON.parse(raw) : {};
+      return String(parsed?.filter_view || "").trim().toLowerCase() === "genres" ? "genres" : "categories";
+    } catch {
+      return "categories";
+    }
+  });
+  const [movieViewMode, setMovieViewMode] = useState(() => (moviesViewVariant === "watch" ? "watch" : "browse"));
+  const [activeMovieSlug, setActiveMovieSlug] = useState(() => String(initialSelectedMovieSlug || "").trim().toLowerCase());
   const [cookieConsent, setCookieConsent] = useState(() => {
     const v = String(initialClientState?.cookiePrefs?.consent || "").toLowerCase();
     return v === "accepted" || v === "declined" ? v : "unknown";
@@ -113,6 +178,36 @@ export default function IptvHomeClient({
     };
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const path = String(window.location.pathname || "");
+    const params = new URLSearchParams(window.location.search || "");
+    const queryMode = String(params.get("mode") || "").toLowerCase();
+    const queryMovieMode = String(params.get("movie_mode") || "").toLowerCase();
+    const queryMovieCategory = String(params.get("movie_category") || "").trim().toLowerCase();
+    const queryMovieGenre = String(params.get("movie_genre") || "").trim().toLowerCase();
+    const queryMovieFilterView = String(params.get("movie_filter_view") || "").trim().toLowerCase();
+
+    if (path.startsWith("/movie/")) {
+      const slug = decodeURIComponent(path.replace(/^\/movie\//, "")).trim().toLowerCase();
+      if (slug) {
+        setHomeMode("movies");
+        setMovieViewMode("watch");
+        setActiveMovieSlug(slug);
+      }
+      return;
+    }
+
+    if (queryMode === "movies") {
+      setHomeMode("movies");
+      setMovieViewMode("browse");
+      setMovieMode(queryMovieMode === "favorites" || queryMovieMode === "recent" ? queryMovieMode : "all");
+      setSelectedMovieCategory(queryMovieCategory);
+      setSelectedMovieGenre(queryMovieGenre);
+      setMovieFilterView(queryMovieFilterView === "genres" ? "genres" : "categories");
+    }
+  }, []);
+
   const flushWatchHistory = useCallback((minimumSeconds = 5) => {
     const session = watchSessionRef.current;
     if (!session.channelId || !session.startedAt) return;
@@ -168,9 +263,14 @@ export default function IptvHomeClient({
   const isTvMode = isTvDevice || forceTvMode;
 
   useEffect(() => {
+    if (homeMode !== "tv") {
+      flushWatchHistory(1);
+      return;
+    }
+
     const sendPing = () => {
       trackActivity("presence_ping", {
-        route: "home",
+        route: homeMode === "movies" ? "home_movies" : "home_tv",
         channel_id: String(selectedChannel?.id || ""),
         channel_name: String(selectedChannel?.name || ""),
       });
@@ -178,7 +278,7 @@ export default function IptvHomeClient({
     sendPing();
     const timer = setInterval(sendPing, 30000);
     return () => clearInterval(timer);
-  }, [selectedChannel?.id, selectedChannel?.name]);
+  }, [selectedChannel?.id, selectedChannel?.name, homeMode, flushWatchHistory]);
 
   useEffect(() => {
     const nextChannelId = String(selectedChannel?.id || "").trim();
@@ -281,6 +381,7 @@ export default function IptvHomeClient({
   const allChannels = Array.isArray(initialChannels) ? initialChannels : [];
   const allCategories = Array.isArray(initialCategories) ? initialCategories : [];
   const routeSelectedChannelId = normalizeChannelId(initialSelectedChannelId);
+
   const categoriesWithCount = useMemo(() => {
     const countByCategoryId = new Map();
     for (const channel of allChannels) {
@@ -296,6 +397,10 @@ export default function IptvHomeClient({
 
   useEffect(() => {
     if (hasRestoredChannel) return;
+    if (homeMode !== "tv") {
+      setHasRestoredChannel(true);
+      return;
+    }
     if (!allChannels.length) return;
 
     let restored = null;
@@ -332,11 +437,101 @@ export default function IptvHomeClient({
   }, [
     allChannels,
     cookieConsent,
+    homeMode,
     hasRestoredChannel,
     initialClientState?.lastChannelId,
     routeSelectedChannelId,
     setRecent,
   ]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(LAST_MODE_KEY, homeMode === "movies" ? "movies" : "tv");
+    } catch {
+      // ignore localStorage write issues
+    }
+  }, [homeMode]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+    const isMobile = window.innerWidth < 1024;
+    const shouldLock = isMobile && (showLeftSidebar || showRightPanel);
+    if (!shouldLock) return;
+
+    const body = document.body;
+    const html = document.documentElement;
+    const prevBodyOverflow = body.style.overflow;
+    const prevHtmlOverflow = html.style.overflow;
+    const prevBodyOverscroll = body.style.overscrollBehavior;
+    const prevHtmlOverscroll = html.style.overscrollBehavior;
+
+    body.style.overflow = "hidden";
+    html.style.overflow = "hidden";
+    body.style.overscrollBehavior = "none";
+    html.style.overscrollBehavior = "none";
+
+    return () => {
+      body.style.overflow = prevBodyOverflow;
+      html.style.overflow = prevHtmlOverflow;
+      body.style.overscrollBehavior = prevBodyOverscroll;
+      html.style.overscrollBehavior = prevHtmlOverscroll;
+    };
+  }, [showLeftSidebar, showRightPanel]);
+
+  const buildMovieListUrl = useCallback((nextMode, nextCategory, nextGenre, nextFilterView) => {
+    const params = new URLSearchParams();
+    params.set("mode", "movies");
+    if (String(nextMode || "").toLowerCase() !== "all") params.set("movie_mode", String(nextMode || "").toLowerCase());
+    if (String(nextCategory || "").trim()) params.set("movie_category", String(nextCategory || "").trim().toLowerCase());
+    if (String(nextGenre || "").trim()) params.set("movie_genre", String(nextGenre || "").trim().toLowerCase());
+    if (String(nextFilterView || "").trim().toLowerCase() === "genres") params.set("movie_filter_view", "genres");
+    const qs = params.toString();
+    return qs ? `/?${qs}` : "/";
+  }, []);
+
+  const pushMovieListUrl = useCallback(
+    (nextMode, nextCategory, nextGenre, nextFilterView) => {
+      if (typeof window === "undefined") return;
+      const next = buildMovieListUrl(nextMode, nextCategory, nextGenre, nextFilterView);
+      if (window.location.pathname + window.location.search !== next) {
+        window.history.pushState(window.history.state, "", next);
+      }
+    },
+    [buildMovieListUrl]
+  );
+
+  const pushMovieWatchUrl = useCallback((slug) => {
+    if (typeof window === "undefined") return;
+    const normalizedSlug = String(slug || "").trim().toLowerCase();
+    if (!normalizedSlug) return;
+    const next = `/movie/${encodeURIComponent(normalizedSlug)}`;
+    if (window.location.pathname !== next) {
+      window.history.pushState(window.history.state, "", next);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (homeMode !== "movies" || movieViewMode !== "browse") return;
+    if (String(window.location.pathname || "").startsWith("/movie/")) return;
+    pushMovieListUrl(movieMode, selectedMovieCategory, selectedMovieGenre, movieFilterView);
+  }, [homeMode, movieViewMode, movieMode, selectedMovieCategory, selectedMovieGenre, movieFilterView, pushMovieListUrl]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const payload = {
+      mode: String(movieMode || "all").toLowerCase(),
+      category: String(selectedMovieCategory || "").toLowerCase(),
+      genre: String(selectedMovieGenre || "").toLowerCase(),
+      filter_view: movieFilterView === "genres" ? "genres" : "categories",
+    };
+    try {
+      window.localStorage.setItem(LAST_MOVIE_FILTER_KEY, JSON.stringify(payload));
+    } catch {
+      // ignore localStorage write issues
+    }
+  }, [movieMode, selectedMovieCategory, selectedMovieGenre, movieFilterView]);
 
   useEffect(() => {
     if (cookieConsent !== "accepted") return;
@@ -393,6 +588,52 @@ export default function IptvHomeClient({
 
   const recentSet = useMemo(() => new Set(recent), [recent]);
   const liveCount = useMemo(() => allChannels.filter((item) => item.isLive).length, [allChannels]);
+  const movieStats = useMemo(() => {
+    const list = Array.isArray(initialMovies) ? initialMovies : [];
+    return {
+      all: list.length,
+      favorites: list.filter((movie) => Boolean(movie?.isFavorite)).length,
+      recent: list.filter((movie) => Number(movie?.progress?.positionSeconds || 0) > 0).length,
+    };
+  }, [initialMovies]);
+  const movieCategoriesWithCount = useMemo(() => {
+    const list = Array.isArray(initialMovies) ? initialMovies : [];
+    const counts = new Map();
+    for (const movie of list) {
+      const slugs = Array.isArray(movie?.categorySlugs) ? movie.categorySlugs : [];
+      for (const slug of slugs) {
+        const key = String(slug || "").trim().toLowerCase();
+        if (!key) continue;
+        counts.set(key, (counts.get(key) || 0) + 1);
+      }
+    }
+    return (Array.isArray(initialMovieCategories) ? initialMovieCategories : []).map((category) => {
+      const slug = String(category?.slug || "").trim().toLowerCase();
+      return {
+        ...category,
+        slug,
+        count: Number(counts.get(slug) || 0),
+      };
+    });
+  }, [initialMovieCategories, initialMovies]);
+  const movieGenresWithCount = useMemo(() => {
+    const list = Array.isArray(initialMovies) ? initialMovies : [];
+    const byKey = new Map();
+    for (const movie of list) {
+      const genres = Array.isArray(movie?.imdbGenres) ? movie.imdbGenres : [];
+      for (const rawGenre of genres) {
+        const name = String(rawGenre || "").trim();
+        const key = name.toLowerCase();
+        if (!key) continue;
+        if (byKey.has(key)) {
+          byKey.get(key).count += 1;
+        } else {
+          byKey.set(key, { key, name, count: 1 });
+        }
+      }
+    }
+    return Array.from(byKey.values()).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+  }, [initialMovies]);
 
   const visibleChannels = useMemo(() => {
     let list = allChannels;
@@ -447,6 +688,7 @@ export default function IptvHomeClient({
   }, [visibleChannels, selectedChannel]);
 
   const handleSelectChannel = (channel) => {
+    setHomeMode("tv");
     setSelectedChannel(channel);
     if (cookieConsent === "accepted") {
       setRecent((prev) => {
@@ -481,6 +723,21 @@ export default function IptvHomeClient({
   const handleSidebarModeSelect = (nextMode) => {
     setMode(nextMode);
   };
+  const handleSidebarMovieModeSelect = (nextMode) => {
+    setHomeMode("movies");
+    setMovieViewMode("browse");
+    setMovieMode(nextMode);
+    const nextCategory = nextMode === "all" ? selectedMovieCategory : "";
+    const nextGenre = nextMode === "all" ? selectedMovieGenre : "";
+    if (nextMode !== "all") {
+      setSelectedMovieCategory("");
+      setSelectedMovieGenre("");
+    }
+    pushMovieListUrl(nextMode, nextCategory, nextGenre, movieFilterView);
+    if (typeof window !== "undefined" && window.innerWidth < 1024) {
+      setShowLeftSidebar(false);
+    }
+  };
 
   const handleToggleLeftSidebar = () => {
     if (typeof window !== "undefined" && window.innerWidth < 1024) {
@@ -513,6 +770,38 @@ export default function IptvHomeClient({
       setShowRightPanel(true);
     }
   };
+  const handleSidebarMovieCategorySelect = (categorySlug) => {
+    const nextCategory = String(categorySlug || "").trim().toLowerCase();
+    setHomeMode("movies");
+    setMovieViewMode("browse");
+    setMovieMode("all");
+    setMovieFilterView("categories");
+    setSelectedMovieCategory(nextCategory);
+    setSelectedMovieGenre("");
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("movie-force-pause"));
+    }
+    pushMovieListUrl("all", nextCategory, "", "categories");
+    if (typeof window !== "undefined" && window.innerWidth < 1024) {
+      setShowLeftSidebar(false);
+    }
+  };
+  const handleSidebarMovieGenreSelect = (genreKey) => {
+    const nextGenre = String(genreKey || "").trim().toLowerCase();
+    setHomeMode("movies");
+    setMovieViewMode("browse");
+    setMovieMode("all");
+    setMovieFilterView("genres");
+    setSelectedMovieCategory("");
+    setSelectedMovieGenre(nextGenre);
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("movie-force-pause"));
+    }
+    pushMovieListUrl("all", "", nextGenre, "genres");
+    if (typeof window !== "undefined" && window.innerWidth < 1024) {
+      setShowLeftSidebar(false);
+    }
+  };
 
   const debugStats = useMemo(
     () => ({
@@ -529,6 +818,7 @@ export default function IptvHomeClient({
       <TopNavbar
         isDark={isDark}
         isTvMode={isTvMode}
+        showChannelMenu={homeMode === "tv"}
         onToggleTheme={() => {
           setIsDark((prev) => !prev);
           trackActivity("theme_change", { to: isDark ? "light" : "dark" });
@@ -548,10 +838,41 @@ export default function IptvHomeClient({
         <div className={`${styles.drawerLeft} ${showLeftSidebar ? styles.drawerLeftOpen : ""}`}>
           <LeftSidebar
             categories={categoriesWithCount}
+            movieCategories={movieCategoriesWithCount}
+            movieGenres={movieGenresWithCount}
             selectedCategory={selectedCategory}
+            selectedMovieCategory={selectedMovieCategory}
+            selectedMovieGenre={selectedMovieGenre}
             mode={mode}
+            movieMode={movieMode}
+            movieFilterView={movieFilterView}
+            movieStats={movieStats}
+            homeMode={homeMode}
+            onSelectHomeMode={(nextMode) => {
+              const normalized = nextMode === "movies" ? "movies" : "tv";
+              setHomeMode(normalized);
+              if (normalized === "movies") setMovieViewMode("browse");
+              if (typeof window !== "undefined" && window.innerWidth < 1024) {
+                if (normalized === "tv" || normalized === "movies") {
+                  // On mobile keep category drawer open until user selects a category.
+                  setShowLeftSidebar(true);
+                  setShowRightPanel(false);
+                } else {
+                  setShowLeftSidebar(false);
+                  setShowRightPanel(false);
+                }
+              }
+              if (normalized === "movies") {
+                pushMovieListUrl(movieMode, selectedMovieCategory, selectedMovieGenre, movieFilterView);
+              }
+              trackActivity("module_switch", { to: normalized });
+            }}
             onSelectCategory={handleSidebarCategorySelect}
             onSelectMode={handleSidebarModeSelect}
+            onSelectMovieCategory={handleSidebarMovieCategorySelect}
+            onSelectMovieGenre={handleSidebarMovieGenreSelect}
+            onSelectMovieFilterView={setMovieFilterView}
+            onSelectMovieMode={handleSidebarMovieModeSelect}
             isDark={isDark}
             onClose={() => setShowLeftSidebar(false)}
             search={categorySearch}
@@ -572,50 +893,92 @@ export default function IptvHomeClient({
         )}
 
         <section className={styles.centerCol}>
-          <VideoPlayer
-            channel={selectedChannel}
-            isDark={isDark}
-            isFavorite={selectedChannel ? favorites.includes(normalizeChannelId(selectedChannel.id)) : false}
-            onToggleFavorite={toggleFavorite}
-            favorites={favorites}
-            onPrevChannel={() => handleChannelStep(-1)}
-            onNextChannel={() => handleChannelStep(1)}
-            hasChannelNav={visibleChannels.length > 1}
-            isTvMode={isTvMode}
-            categories={allCategories}
-            channels={visibleChannels}
-            selectedCategory={selectedCategory}
-            onSelectCategory={handleFullscreenCategorySelect}
-            onSelectChannel={handleSelectChannel}
-            onPlaybackAttempt={(payload) => {
-              trackActivity("playback_attempt", payload || {});
-            }}
-            onPlaybackFailure={(payload) => {
-              trackActivity("playback_failed", payload || {});
-            }}
-          />
-          <div className={`${styles.debugBadge} ${styles.debugBadgeMobile}`}>
-            <strong>Debug</strong>
-            <span>links: {debugStats.total}</span>
-            <span>live: {debugStats.live}</span>
-            <span>home: {debugStats.home}</span>
-            <span>categories: {debugStats.categories}</span>
-          </div>
+          {homeMode === "tv" ? (
+            <>
+              <VideoPlayer
+                channel={selectedChannel}
+                isDark={isDark}
+                isFavorite={selectedChannel ? favorites.includes(normalizeChannelId(selectedChannel.id)) : false}
+                onToggleFavorite={toggleFavorite}
+                favorites={favorites}
+                onPrevChannel={() => handleChannelStep(-1)}
+                onNextChannel={() => handleChannelStep(1)}
+                hasChannelNav={visibleChannels.length > 1}
+                isTvMode={isTvMode}
+                categories={allCategories}
+                channels={visibleChannels}
+                selectedCategory={selectedCategory}
+                onSelectCategory={handleFullscreenCategorySelect}
+                onSelectChannel={handleSelectChannel}
+                onPlaybackAttempt={(payload) => {
+                  trackActivity("playback_attempt", payload || {});
+                }}
+                onPlaybackFailure={(payload) => {
+                  trackActivity("playback_failed", payload || {});
+                }}
+              />
+              <div className={`${styles.debugBadge} ${styles.debugBadgeMobile}`}>
+                <strong>Debug</strong>
+                <span>links: {debugStats.total}</span>
+                <span>live: {debugStats.live}</span>
+                <span>home: {debugStats.home}</span>
+                <span>categories: {debugStats.categories}</span>
+              </div>
+            </>
+          ) : (
+            <MoviesView
+              variant={movieViewMode}
+              initialMovies={initialMovies}
+              movieCategories={initialMovieCategories}
+              initialContinueWatching={initialContinueWatching}
+              initialSelectedMovieSlug={activeMovieSlug || initialSelectedMovieSlug}
+              filterMode={movieMode}
+              filterCategorySlug={selectedMovieCategory}
+              filterGenreSlug={selectedMovieGenre}
+              showGenreFilters={movieFilterView === "genres"}
+              genreOptions={movieGenresWithCount}
+              onSelectGenreFilter={(genreKey) => {
+                const nextGenre = String(genreKey || "").trim().toLowerCase();
+                setMovieFilterView("genres");
+                setMovieMode("all");
+                setSelectedMovieCategory("");
+                setSelectedMovieGenre(nextGenre);
+                pushMovieListUrl("all", "", nextGenre, "genres");
+              }}
+              showInlineFilters={false}
+              onOpenMovieWatch={(slug) => {
+                const normalizedSlug = String(slug || "").trim().toLowerCase();
+                if (!normalizedSlug) return;
+                setHomeMode("movies");
+                setMovieViewMode("watch");
+                setActiveMovieSlug(normalizedSlug);
+                pushMovieWatchUrl(normalizedSlug);
+              }}
+              onBackToMovieList={() => {
+                setHomeMode("movies");
+                setMovieViewMode("browse");
+                pushMovieListUrl(movieMode, selectedMovieCategory, selectedMovieGenre, movieFilterView);
+              }}
+              onTrackActivity={trackActivity}
+            />
+          )}
         </section>
 
-        <div className={`${styles.drawerRight} ${showRightPanel ? styles.drawerRightOpen : ""}`}>
-          <RightPanel
-            channels={visibleChannels}
-            selectedChannel={selectedChannel}
-            onChannelSelect={handleSelectChannel}
-            search={channelSearch}
-            onSearch={setChannelSearch}
-            isDark={isDark}
-            onClose={() => setShowRightPanel(false)}
-            favorites={favorites}
-            onToggleFavorite={toggleFavorite}
-          />
-        </div>
+        {homeMode === "tv" ? (
+          <div className={`${styles.drawerRight} ${showRightPanel ? styles.drawerRightOpen : ""}`}>
+            <RightPanel
+              channels={visibleChannels}
+              selectedChannel={selectedChannel}
+              onChannelSelect={handleSelectChannel}
+              search={channelSearch}
+              onSearch={setChannelSearch}
+              isDark={isDark}
+              onClose={() => setShowRightPanel(false)}
+              favorites={favorites}
+              onToggleFavorite={toggleFavorite}
+            />
+          </div>
+        ) : null}
       </section>
       <CookieConsentBanner
         consent={cookieConsent}

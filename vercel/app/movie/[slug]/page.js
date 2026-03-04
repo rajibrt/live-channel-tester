@@ -1,11 +1,14 @@
-import IptvHomeClient from "../components/iptv/IptvHomeClient";
-import { requireClient } from "../lib/clientAuth";
-import PendingApprovalCard from "../components/client/PendingApprovalCard";
-import { getClientHomeData } from "../lib/clientHomeData";
+import IptvHomeClient from "../../../components/iptv/IptvHomeClient";
+import PendingApprovalCard from "../../../components/client/PendingApprovalCard";
+import { requireClient } from "../../../lib/clientAuth";
+import { getClientHomeData } from "../../../lib/clientHomeData";
 
 export const dynamic = "force-dynamic";
 
-export default async function HomePage() {
+export default async function MovieWatchPage({ params }) {
+  const resolved = await params;
+  const movieSlug = String(resolved?.slug || "").trim().toLowerCase();
+
   const current = await requireClient();
   const approvalStatus = String(current?.client?.approval_status || "approved").toLowerCase();
   const isApproved = approvalStatus === "approved";
@@ -50,7 +53,9 @@ export default async function HomePage() {
       initialMovies={boot.movies}
       initialMovieCategories={boot.movieCategories}
       initialContinueWatching={boot.continueWatching}
-      moviesViewVariant="browse"
+      moviesViewVariant="watch"
+      initialHomeMode="movies"
+      initialSelectedMovieSlug={movieSlug}
       initialClientState={boot.initialClientState}
       currentClient={{
         email: String(current.client.email || ""),

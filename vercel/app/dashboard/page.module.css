@@ -89,13 +89,19 @@
 }
 
 .ghostBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
   border: 1px solid var(--border);
   background: var(--card);
   color: var(--foreground);
-  border-radius: 12px;
-  padding: 10px 14px;
+  border-radius: 10px;
+  padding: 7px 11px;
   font: inherit;
   font-weight: 600;
+  font-size: 13px;
   cursor: pointer;
 }
 
@@ -882,13 +888,19 @@
 }
 
 .primaryBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
   border: 0;
-  border-radius: 12px;
-  padding: 11px 14px;
+  border-radius: 10px;
+  padding: 7px 11px;
   background: linear-gradient(135deg, var(--primary) 0%, color-mix(in oklab, var(--primary) 58%, var(--accent)) 100%);
   color: var(--primary-foreground);
   font: inherit;
   font-weight: 600;
+  font-size: 13px;
   cursor: pointer;
 }
 
@@ -1008,14 +1020,17 @@
 .primaryBtnCompact {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
   border: 0;
-  border-radius: 12px;
-  padding: 10px 14px;
+  border-radius: 10px;
+  padding: 7px 11px;
   background: linear-gradient(135deg, var(--primary) 0%, color-mix(in oklab, var(--primary) 58%, var(--accent)) 100%);
   color: var(--primary-foreground);
   font: inherit;
   font-weight: 600;
+  font-size: 13px;
   cursor: pointer;
 }
 
@@ -1023,17 +1038,28 @@
   filter: brightness(1.06);
 }
 
+.primaryBtnTight {
+  min-height: 36px;
+  padding: 7px 11px;
+  border-radius: 10px;
+  font-size: 13px;
+  gap: 6px;
+}
+
 .secondaryBtnCompact {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
   border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 10px 14px;
+  border-radius: 10px;
+  padding: 7px 11px;
   background: color-mix(in oklab, var(--card) 90%, var(--muted));
   color: var(--foreground);
   font: inherit;
   font-weight: 600;
+  font-size: 13px;
   cursor: pointer;
 }
 
@@ -2732,4 +2758,50 @@
 .field input[type="number"]::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
+}
+
+.success {
+  margin: 0;
+  color: #15803d;
+  font-weight: 600;
+}
+
+.error {
+  margin: 0;
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rowActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.deleteBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  border: 1px solid color-mix(in oklab, var(--destructive) 75%, var(--border));
+  border-radius: 10px;
+  background: color-mix(in oklab, var(--destructive) 16%, transparent);
+  color: color-mix(in oklab, var(--destructive) 86%, black 10%);
+  font: inherit;
+  font-weight: 600;
+  font-size: 13px;
+  padding: 7px 11px;
+  cursor: pointer;
+}
+
+.deleteBtn:hover {
+  filter: brightness(1.03);
 }

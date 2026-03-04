@@ -528,6 +528,7 @@
   padding-top: 64px;
   position: relative;
   min-height: calc(100vh - 64px);
+  align-items: flex-start;
 }
 
 .debugBadge {
@@ -795,6 +796,9 @@
   flex: 0 0 280px;
   position: relative;
   z-index: 30;
+  align-self: flex-start;
+  position: sticky;
+  top: 64px;
 }
 
 .rightPanel,
@@ -803,12 +807,15 @@
   border-right: 1px solid var(--border);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
+  overflow: hidden;
 }
 
 .rightPanel {
   width: 100%;
   border-left: 1px solid var(--border);
   border-right: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .leftSidebar {
@@ -878,7 +885,20 @@
 
 .sidebarList {
   padding: 0 16px 16px;
-  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  overflow-y: scroll;
+  align-content: start;
+  grid-auto-rows: max-content;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  scrollbar-gutter: stable;
+}
+
+.sidebarListCompact {
+  gap: 0;
+  padding-bottom: 10px;
 }
 
 .sidebarLabel {
@@ -887,6 +907,50 @@
   text-transform: uppercase;
   letter-spacing: 0.1em;
   opacity: 0.68;
+}
+
+.sidebarLabelCompact {
+  margin-top: 4px;
+  margin-bottom: 0;
+  margin-left: 8px;
+}
+
+.linkBtnCompact {
+  padding-top: 3px;
+  padding-bottom: 3px;
+  min-height: 28px;
+  border-radius: 10px;
+  gap: 8px;
+}
+
+.linkCountCompact {
+  min-width: 24px;
+  height: 20px;
+  padding: 0 6px;
+  font-size: 11px;
+}
+
+/* In Movies compact sidebar keep active/focus styling tight (no outer glow gap illusion). */
+.sidebarListCompact .linkBtnActive {
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--primary-foreground) 24%, transparent) !important;
+}
+
+.sidebarListCompact .linkBtn {
+  margin: 0;
+  transform: none !important;
+}
+
+.sidebarListCompact .linkBtnCompact + .linkBtnCompact {
+  margin-top: 2px;
+}
+
+.sidebarListCompact .sidebarLabelCompact + .linkBtnCompact {
+  margin-top: 2px;
+}
+
+.sidebarListCompact .linkBtn:focus-visible {
+  outline: 0;
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--ring) 48%, var(--border)) !important;
 }
 
 .linkBtn {
@@ -969,7 +1033,7 @@
 
 .centerCol {
   flex: 1;
-  overflow: auto;
+  overflow: visible;
   padding: 18px;
 }
 
@@ -1588,9 +1652,15 @@
 }
 
 .rightBody {
-  height: calc(100% - 144px);
-  overflow: auto;
+  flex: 1;
+  min-height: 0;
+  overflow-y: scroll;
+  overflow-x: hidden;
   padding: 12px;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  scrollbar-gutter: stable;
 }
 
 .channelGrid {
@@ -2059,9 +2129,14 @@
     position: fixed;
     top: 64px;
     bottom: 0;
+    height: calc(100dvh - 64px);
+    max-height: calc(100dvh - 64px);
     z-index: 120;
     transform: translateX(-100%);
     transition: transform 0.26s ease;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
   }
 
   .drawerRight {
@@ -2089,9 +2164,12 @@
   .leftSidebar,
   .rightPanel {
     height: 100%;
+    min-height: 0;
+    overflow: hidden;
   }
 
   .centerCol {
+    overflow: auto;
     padding: 12px;
   }
 
@@ -2343,4 +2421,25 @@
     padding: 7px 9px;
     gap: 6px;
   }
+}
+
+.homeModeSwitch {
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px 0;
+}
+
+.homeModeBtn {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--foreground);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.homeModeBtnActive {
+  border-color: color-mix(in oklab, var(--primary) 55%, var(--border));
+  background: color-mix(in oklab, var(--primary) 24%, transparent);
 }
