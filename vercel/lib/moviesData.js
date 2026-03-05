@@ -1,5 +1,5 @@
 import { getSupabaseAdmin } from "./supabaseAdmin";
-import { normalizeStreamUrl, toStreamProxyUrl } from "./streamUrl";
+import { normalizeStreamUrl } from "./streamUrl";
 import { deriveWatchState, isWatchedProgress, normalizeSeconds } from "./movieProgress";
 import { inferVideoQualityLabelFromUrl } from "./videoQuality";
 
@@ -45,7 +45,7 @@ function toMovieShape(movie, categoryRows, sourceRows, progressRow, isFavorite) 
 
   const firstSource = sortedSources[0] || null;
   const normalizedSource = normalizeStreamUrl(firstSource?.source_url || "");
-  const playbackUrl = normalizedSource ? toStreamProxyUrl(normalizedSource) : "";
+  const playbackUrl = normalizedSource || "";
 
   const watchState = deriveWatchState({
     positionSeconds,
