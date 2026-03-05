@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CheckCircle2, ChevronLeft, Heart, Pause, Play, RotateCcw } from "lucide-react";
+import { CheckCircle2, ChevronLeft, Heart, Pause, Play, RotateCcw, Rewind, FastForward } from "lucide-react";
 import styles from "./movies.module.css";
+import { toStreamTranscodeUrl } from "../../lib/streamUrl";
 
 function toSeconds(value) {
   const n = Number(value);
@@ -17,6 +18,27 @@ function formatClock(totalSeconds) {
   const s = safe % 60;
   if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
   return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function isTranscodePlaybackUrl(value) {
+  return String(value || "").includes("/api/stream-transcode?");
+}
+
+function withTranscodeStart(value, seconds) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  if (!isTranscodePlaybackUrl(raw)) return raw;
+  try {
+    const u = new URL(raw, typeof window === "undefined" ? "http://localhost" : window.location.origin);
+    u.searchParams.set("start", String(Math.max(0, toSeconds(seconds))));
+    if (u.origin === "http://localhost" && raw.startsWith("/")) {
+      return `${u.pathname}${u.search}`;
+    }
+    return u.toString();
+  } catch {
+    const sep = raw.includes("?") ? "&" : "?";
+    return `${raw}${sep}start=${encodeURIComponent(String(Math.max(0, toSeconds(seconds))))}`;
+  }
 }
 
 export default function MoviePlayer({
@@ -36,8 +58,15 @@ export default function MoviePlayer({
   const onProgressSavedRef = useRef(onProgressSaved);
   const onMarkedCompleteRef = useRef(onMarkedComplete);
   const onTrackActivityRef = useRef(onTrackActivity);
+  const transcodeOffsetRef = useRef(0);
+  const seekStartFromRef = useRef(null);
   const [statusText, setStatusText] = useState("Ready");
   const [isPaused, setIsPaused] = useState(false);
+  const [seekNonce, setSeekNonce] = useState(0);
+  const [playbackSeconds, setPlaybackSeconds] = useState(0);
+  const [fallbackPlaybackUrl, setFallbackPlaybackUrl] = useState("");
+  const [scrubValue, setScrubValue] = useState(null);
+  const fallbackTriedRef = useRef(false);
 
   useEffect(() => {
     onProgressSavedRef.current = onProgressSaved;
@@ -51,6 +80,50 @@ export default function MoviePlayer({
     onTrackActivityRef.current = onTrackActivity;
   }, [onTrackActivity]);
 
+  useEffect(() => {
+    fallbackTriedRef.current = false;
+    setFallbackPlaybackUrl("");
+    seekStartFromRef.current = null;
+    setSeekNonce(0);
+    setScrubValue(null);
+  }, [movie?.id]);
+
+  useEffect(() => {
+    const rawUrl = String(movie?.source?.rawUrl || "").trim();
+    if (!rawUrl) return undefined;
+    if (fallbackPlaybackUrl) return undefined;
+
+    let cancelled = false;
+    const controller = new AbortController();
+
+    const runProbe = async () => {
+      try {
+        const probeRes = await fetch(`/api/stream-probe?url=${encodeURIComponent(rawUrl)}`, {
+          method: "GET",
+          credentials: "include",
+          signal: controller.signal,
+          cache: "no-store",
+        });
+        if (!probeRes.ok) return;
+        const probe = await probeRes.json().catch(() => ({}));
+        if (cancelled) return;
+        if (probe?.should_transcode_audio) {
+          fallbackTriedRef.current = true;
+          setStatusText("Compatibility audio detected. Preparing playback...");
+          setFallbackPlaybackUrl(toStreamTranscodeUrl(rawUrl));
+        }
+      } catch {
+        // ignore probe failures and keep native playback
+      }
+    };
+
+    runProbe();
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [fallbackPlaybackUrl, movie?.id, movie?.source?.rawUrl]);
+
   const postProgress = useCallback(
     async (source) => {
       const id = String(movie?.id || "");
@@ -59,8 +132,10 @@ export default function MoviePlayer({
       if (!video) return;
 
       const payload = {
-        position_seconds: toSeconds(video.currentTime),
-        duration_seconds: toSeconds(video.duration),
+        position_seconds: toSeconds(video.currentTime) + toSeconds(transcodeOffsetRef.current),
+        duration_seconds: Number.isFinite(Number(video.duration))
+          ? toSeconds(video.duration) + toSeconds(transcodeOffsetRef.current)
+          : toSeconds(movie?.runtimeSeconds || movie?.progress?.durationSeconds || 0),
         source,
       };
 
@@ -69,23 +144,26 @@ export default function MoviePlayer({
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify(payload),
+          credentials: "include",
           keepalive: source === "pagehide" || source === "pause" || source === "seek",
         });
-        const data = await res.json().catch(() => ({}));
-        if (res.ok) {
-          onProgressSavedRef.current?.(id, {
-            positionSeconds: Number(data?.position_seconds || 0),
-            durationSeconds: Number(data?.duration_seconds || 0),
-            progressPercent: Number(data?.progress_percent || 0),
-            isCompleted: Boolean(data?.is_completed),
-            updatedAt: new Date().toISOString(),
-          });
+        if (!res.ok) {
+          console.warn(`movie progress save failed: HTTP ${res.status}`);
+          return;
         }
+        const data = await res.json().catch(() => ({}));
+        onProgressSavedRef.current?.(id, {
+          positionSeconds: Number(data?.position_seconds || 0),
+          durationSeconds: Number(data?.duration_seconds || 0),
+          progressPercent: Number(data?.progress_percent || 0),
+          isCompleted: Boolean(data?.is_completed),
+          updatedAt: new Date().toISOString(),
+        });
       } catch {
         // ignore save progress failures
       }
     },
-    [movie?.id]
+    [movie?.id, movie?.runtimeSeconds, movie?.progress?.durationSeconds]
   );
 
   const postComplete = useCallback(async () => {
@@ -95,6 +173,7 @@ export default function MoviePlayer({
       const res = await fetch(`/api/client/movies/${encodeURIComponent(id)}/complete`, {
         method: "POST",
         headers: { "content-type": "application/json" },
+        credentials: "include",
       });
       if (!res.ok) return;
       onMarkedCompleteRef.current?.(id);
@@ -104,6 +183,11 @@ export default function MoviePlayer({
     }
   }, [movie?.id]);
 
+  const queueTranscodeSeek = useCallback((seconds) => {
+    seekStartFromRef.current = Math.max(0, toSeconds(seconds));
+    setSeekNonce((prev) => prev + 1);
+  }, []);
+
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return undefined;
@@ -112,21 +196,28 @@ export default function MoviePlayer({
     video.removeAttribute("src");
     video.load();
 
-    if (!movie?.playbackUrl) {
+    const playbackUrl = String(fallbackPlaybackUrl || movie?.playbackUrl || "");
+    if (!playbackUrl) {
       setStatusText("Select a movie with a playable source.");
       return undefined;
     }
 
     setStatusText("Loading...");
-    video.src = movie.playbackUrl;
+    const isTranscoded = isTranscodePlaybackUrl(playbackUrl);
+    const fallbackStart = toSeconds(movie?.progress?.positionSeconds);
+    const requestedSeek = seekStartFromRef.current;
+    const requestedStart =
+      requestedSeek === null ? (startFrom === null ? fallbackStart : toSeconds(startFrom)) : toSeconds(requestedSeek);
+    const desiredStart = Math.max(0, requestedStart);
+    transcodeOffsetRef.current = isTranscoded ? desiredStart : 0;
+    video.src = isTranscoded ? withTranscodeStart(playbackUrl, desiredStart) : playbackUrl;
     video.load();
 
     const handleLoadedMetadata = () => {
-      const fallbackStart = toSeconds(movie?.progress?.positionSeconds);
-      const desiredStart = startFrom === null ? fallbackStart : toSeconds(startFrom);
-      if (desiredStart > 0 && Number.isFinite(video.duration)) {
+      if (!isTranscoded && desiredStart > 0 && Number.isFinite(video.duration)) {
         video.currentTime = Math.min(desiredStart, Math.max(0, Math.floor(video.duration) - 1));
       }
+      setPlaybackSeconds(transcodeOffsetRef.current);
       setStatusText("Playing");
       onTrackActivityRef.current?.("movie_playback_attempt", {
         movie_id: String(movie?.id || ""),
@@ -134,6 +225,7 @@ export default function MoviePlayer({
       });
       postProgress("start");
       video.play().catch(() => {});
+      seekStartFromRef.current = null;
     };
 
     const handlePause = () => {
@@ -144,11 +236,16 @@ export default function MoviePlayer({
 
     const handleSeeked = () => {
       postProgress("seek");
+      setPlaybackSeconds(toSeconds(video.currentTime) + toSeconds(transcodeOffsetRef.current));
     };
 
     const handlePlay = () => {
       setStatusText("Playing");
       setIsPaused(false);
+    };
+
+    const handleTimeUpdate = () => {
+      setPlaybackSeconds(toSeconds(video.currentTime) + toSeconds(transcodeOffsetRef.current));
     };
 
     const handleEnded = () => {
@@ -157,6 +254,16 @@ export default function MoviePlayer({
     };
 
     const handleError = () => {
+      const rawUrl = String(movie?.source?.rawUrl || "");
+      const canFallback = !fallbackTriedRef.current && !isTranscoded && rawUrl;
+      if (canFallback) {
+        fallbackTriedRef.current = true;
+        const currentAbs = toSeconds(video.currentTime) + toSeconds(transcodeOffsetRef.current);
+        setStatusText("Switching to compatibility audio...");
+        seekStartFromRef.current = currentAbs;
+        setFallbackPlaybackUrl(toStreamTranscodeUrl(rawUrl));
+        return;
+      }
       setStatusText("Playback failed");
       onTrackActivityRef.current?.("movie_playback_failed", {
         movie_id: String(movie?.id || ""),
@@ -169,6 +276,7 @@ export default function MoviePlayer({
     video.addEventListener("play", handlePlay);
     video.addEventListener("ended", handleEnded);
     video.addEventListener("error", handleError);
+    video.addEventListener("timeupdate", handleTimeUpdate);
     setIsPaused(video.paused);
 
     intervalRef.current = setInterval(() => {
@@ -200,21 +308,25 @@ export default function MoviePlayer({
       video.removeEventListener("play", handlePlay);
       video.removeEventListener("ended", handleEnded);
       video.removeEventListener("error", handleError);
+      video.removeEventListener("timeupdate", handleTimeUpdate);
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("pagehide", onPageHide);
       window.removeEventListener("beforeunload", onPageHide);
       window.removeEventListener("movie-force-pause", onForcePause);
     };
-  }, [movie?.id, movie?.playbackUrl, postComplete, postProgress, replayToken, startFrom]);
+  }, [fallbackPlaybackUrl, movie?.id, movie?.playbackUrl, movie?.source?.rawUrl, postComplete, postProgress, replayToken, seekNonce, startFrom]);
 
   const favoriteActive = Boolean(movie?.isFavorite);
   const hasPlayableMovie = Boolean(movie?.playbackUrl);
+  const isTranscodedPlayback = isTranscodePlaybackUrl(fallbackPlaybackUrl || movie?.playbackUrl);
   const showPlayAction = isPaused || !hasPlayableMovie;
-  const watchedSeconds = Number(movie?.progress?.positionSeconds || 0);
+  const watchedSeconds = Number(playbackSeconds || movie?.progress?.positionSeconds || 0);
   const durationSeconds = Number(movie?.progress?.durationSeconds || movie?.runtimeSeconds || 0);
   const watchedPercent = Number(movie?.progress?.progressPercent || 0);
   const watchTimeText = `${formatClock(watchedSeconds)} / ${formatClock(durationSeconds)}`;
   const watchProgressText = watchedPercent > 0 ? `${Math.round(watchedPercent)}% watched` : "Not started";
+  const scrubDuration = Math.max(0, toSeconds(durationSeconds || movie?.runtimeSeconds || 0));
+  const scrubCurrent = Math.min(scrubDuration || 0, Math.max(0, toSeconds(scrubValue == null ? watchedSeconds : scrubValue)));
   const handleTogglePlayPause = useCallback(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -231,6 +343,45 @@ export default function MoviePlayer({
     }
     video.pause();
   }, []);
+
+  const jumpBySeconds = useCallback(
+    (delta) => {
+      const video = videoRef.current;
+      if (!video) return;
+      const base = toSeconds(video.currentTime) + toSeconds(transcodeOffsetRef.current);
+      const target = Math.max(0, base + toSeconds(delta));
+      if (isTranscodedPlayback) {
+        queueTranscodeSeek(target);
+        return;
+      }
+      try {
+        video.currentTime = target;
+      } catch {
+        // ignore seek failures
+      }
+    },
+    [isTranscodedPlayback]
+  );
+
+  const jumpToSeconds = useCallback(
+    (targetSeconds) => {
+      const target = Math.max(0, toSeconds(targetSeconds));
+      const video = videoRef.current;
+      if (!video) return;
+      if (isTranscodedPlayback) {
+        queueTranscodeSeek(target);
+        setScrubValue(null);
+        return;
+      }
+      try {
+        video.currentTime = target;
+      } catch {
+        // ignore seek failures
+      }
+      setScrubValue(null);
+    },
+    [isTranscodedPlayback, queueTranscodeSeek]
+  );
 
   return (
     <section className={styles.playerWrap}>
@@ -259,6 +410,24 @@ export default function MoviePlayer({
           <button
             type="button"
             className={`${styles.movieNavBtn} ${styles.movieNavBtnInactive}`}
+            onClick={() => jumpBySeconds(-10)}
+            disabled={!hasPlayableMovie}
+          >
+            <Rewind size={15} />
+            <span className={styles.movieBtnText}>-10s</span>
+          </button>
+          <button
+            type="button"
+            className={`${styles.movieNavBtn} ${styles.movieNavBtnInactive}`}
+            onClick={() => jumpBySeconds(10)}
+            disabled={!hasPlayableMovie}
+          >
+            <FastForward size={15} />
+            <span className={styles.movieBtnText}>+10s</span>
+          </button>
+          <button
+            type="button"
+            className={`${styles.movieNavBtn} ${styles.movieNavBtnInactive}`}
             onClick={() => onMarkComplete?.(movie)}
           >
             <CheckCircle2 size={15} />
@@ -276,6 +445,24 @@ export default function MoviePlayer({
           </button>
         </div>
       </div>
+      {scrubDuration > 0 ? (
+        <div className={styles.playerInfoPanel} style={{ marginTop: 8 }}>
+          <input
+            type="range"
+            min={0}
+            max={scrubDuration}
+            step={1}
+            value={scrubCurrent}
+            onChange={(e) => setScrubValue(Number(e.target.value || 0))}
+            onMouseUp={(e) => jumpToSeconds(Number(e.currentTarget.value || 0))}
+            onTouchEnd={(e) => jumpToSeconds(Number(e.currentTarget.value || 0))}
+          />
+          <div className={styles.playerInfoTop}>
+            <span className={styles.playerInfoPill}>{formatClock(scrubCurrent)}</span>
+            <span className={styles.playerInfoPill}>{formatClock(scrubDuration)}</span>
+          </div>
+        </div>
+      ) : null}
       <div className={styles.playerInfoPanel}>
         <div className={styles.playerInfoTop}>
           <span className={styles.playerInfoPill}>{movie?.releaseYear || "Year N/A"}</span>
@@ -288,6 +475,9 @@ export default function MoviePlayer({
           <span className={styles.playerStatusValue}>{statusText}</span>
         </p>
         <p className={styles.playerHintText}>Resume starts when progress is at least 30s. Watched is 95%+.</p>
+        {isTranscodedPlayback ? (
+          <p className={styles.playerHintText}>Compatibility mode active (AAC fallback). Use -10s/+10s for reliable seeking.</p>
+        ) : null}
       </div>
     </section>
   );

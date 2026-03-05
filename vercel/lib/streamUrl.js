@@ -41,6 +41,27 @@ export function toStreamProxyUrl(value) {
   return `/api/stream-proxy?url=${encodeURIComponent(normalized)}`;
 }
 
+function hasTranscodeFallbackExtension(urlString) {
+  try {
+    const pathname = new URL(String(urlString || "")).pathname.toLowerCase();
+    return /\.(mkv|avi|flv|ts)(\?|$)/i.test(pathname);
+  } catch {
+    return false;
+  }
+}
+
+export function shouldUseAudioTranscode(value) {
+  const normalized = normalizeStreamUrl(value);
+  if (!normalized) return false;
+  return hasTranscodeFallbackExtension(normalized);
+}
+
+export function toStreamTranscodeUrl(value) {
+  const normalized = normalizeStreamUrl(value);
+  if (!normalized) return "";
+  return `/api/stream-transcode?url=${encodeURIComponent(normalized)}`;
+}
+
 export function resolveBrowserPlaybackUrl(value, protocol = "") {
   const normalized = normalizeStreamUrl(value);
   if (!normalized) return "";

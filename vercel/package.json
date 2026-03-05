@@ -16,7 +16,8 @@
     "android:run": "npx cap run android",
     "test:movies-core": "node scripts/test-movies-core.mjs",
     "test:imdb-parser": "node scripts/test-imdb-parser.mjs",
-    "verify:movies-api": "node scripts/verify-movies-api.mjs"
+    "verify:movies-api": "node scripts/verify-movies-api.mjs",
+    "import:apache-movies": "node scripts/import-apache-movies.mjs"
   },
   "dependencies": {
     "@radix-ui/react-alert-dialog": "^1.1.15",

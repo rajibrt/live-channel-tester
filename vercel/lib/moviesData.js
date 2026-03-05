@@ -1,5 +1,5 @@
 import { getSupabaseAdmin } from "./supabaseAdmin";
-import { normalizeStreamUrl } from "./streamUrl";
+import { normalizeStreamUrl, toStreamProxyUrl } from "./streamUrl";
 import { deriveWatchState, isWatchedProgress, normalizeSeconds } from "./movieProgress";
 import { inferVideoQualityLabelFromUrl } from "./videoQuality";
 
@@ -28,6 +28,50 @@ function toStringList(value) {
   return out;
 }
 
+function inferLanguagesFromCategories(categoryRows) {
+  const list = Array.isArray(categoryRows) ? categoryRows : [];
+  const known = [
+    "bangla",
+    "bengali",
+    "hindi",
+    "english",
+    "tamil",
+    "telugu",
+    "malayalam",
+    "kannada",
+    "punjabi",
+    "urdu",
+    "japanese",
+    "korean",
+    "chinese",
+    "arabic",
+    "spanish",
+    "french",
+    "german",
+    "turkish",
+    "thai",
+    "indonesian",
+  ];
+  const titleCase = (v) => v.charAt(0).toUpperCase() + v.slice(1);
+  const out = [];
+  const seen = new Set();
+  for (const row of list) {
+    const slug = normalizeCategorySlug(row?.slug || row?.name || "");
+    if (!slug) continue;
+    for (const lang of known) {
+      if (slug === lang || slug.includes(`-${lang}`) || slug.includes(`${lang}-`) || slug.includes(lang)) {
+        const label = titleCase(lang);
+        const key = label.toLowerCase();
+        if (seen.has(key)) break;
+        seen.add(key);
+        out.push(label);
+        break;
+      }
+    }
+  }
+  return out;
+}
+
 function toMovieShape(movie, categoryRows, sourceRows, progressRow, isFavorite) {
   const runtimeSeconds = normalizeSeconds(movie?.runtime_seconds);
   const positionSeconds = normalizeSeconds(progressRow?.position_seconds);
@@ -45,12 +89,16 @@ function toMovieShape(movie, categoryRows, sourceRows, progressRow, isFavorite) 
 
   const firstSource = sortedSources[0] || null;
   const normalizedSource = normalizeStreamUrl(firstSource?.source_url || "");
-  const playbackUrl = normalizedSource || "";
+  const playbackUrl = normalizedSource ? toStreamProxyUrl(normalizedSource) || normalizedSource : "";
 
   const watchState = deriveWatchState({
     positionSeconds,
     progressPercent: isCompleted ? 100 : clampedProgress,
   });
+
+  const dbLanguages = toStringList(movie?.imdb_languages);
+  const fallbackLanguages = inferLanguagesFromCategories(categoryRows);
+  const effectiveLanguages = toStringList([...dbLanguages, ...fallbackLanguages]);
 
   return {
     id: String(movie?.id || ""),
@@ -72,7 +120,7 @@ function toMovieShape(movie, categoryRows, sourceRows, progressRow, isFavorite) 
     imdbStars: toStringList(movie?.imdb_stars),
     imdbReleaseDate: text(movie?.imdb_release_date),
     imdbCountries: toStringList(movie?.imdb_countries),
-    imdbLanguages: toStringList(movie?.imdb_languages),
+    imdbLanguages: effectiveLanguages,
     videoQuality: text(movie?.video_quality) || inferVideoQualityLabelFromUrl(firstSource?.source_url || ""),
     categories: (Array.isArray(categoryRows) ? categoryRows : []).map((row) => ({
       id: String(row?.id || ""),
@@ -84,6 +132,7 @@ function toMovieShape(movie, categoryRows, sourceRows, progressRow, isFavorite) 
       ? {
           id: String(firstSource.id),
           label: text(firstSource.label) || "default",
+          rawUrl: normalizedSource,
           playbackUrl,
         }
       : null,

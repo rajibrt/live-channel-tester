@@ -439,6 +439,13 @@ create table if not exists public.movie_sources (
   updated_at timestamptz not null default now()
 );
 
+alter table public.movie_sources add column if not exists label text not null default 'default';
+alter table public.movie_sources add column if not exists source_url text not null default '';
+alter table public.movie_sources add column if not exists is_active boolean not null default true;
+alter table public.movie_sources add column if not exists sort_order integer not null default 0;
+alter table public.movie_sources add column if not exists created_at timestamptz not null default now();
+alter table public.movie_sources add column if not exists updated_at timestamptz not null default now();
+
 create table if not exists public.movie_watch_progress (
   user_id uuid not null references public.client_users(user_id) on delete cascade,
   movie_id bigint not null references public.movies(id) on delete cascade,
@@ -452,12 +459,22 @@ create table if not exists public.movie_watch_progress (
   primary key (user_id, movie_id)
 );
 
+alter table public.movie_watch_progress add column if not exists position_seconds integer not null default 0;
+alter table public.movie_watch_progress add column if not exists duration_seconds integer not null default 0;
+alter table public.movie_watch_progress add column if not exists progress_percent numeric(5,2) not null default 0;
+alter table public.movie_watch_progress add column if not exists is_completed boolean not null default false;
+alter table public.movie_watch_progress add column if not exists last_event text not null default 'progress';
+alter table public.movie_watch_progress add column if not exists updated_at timestamptz not null default now();
+alter table public.movie_watch_progress add column if not exists created_at timestamptz not null default now();
+
 create table if not exists public.movie_favorites (
   user_id uuid not null references public.client_users(user_id) on delete cascade,
   movie_id bigint not null references public.movies(id) on delete cascade,
   created_at timestamptz not null default now(),
   primary key (user_id, movie_id)
 );
+
+alter table public.movie_favorites add column if not exists created_at timestamptz not null default now();
 
 create table if not exists public.movie_recent_history (
   user_id uuid not null references public.client_users(user_id) on delete cascade,
@@ -469,6 +486,12 @@ create table if not exists public.movie_recent_history (
   updated_at timestamptz not null default now(),
   primary key (user_id, movie_id)
 );
+
+alter table public.movie_recent_history add column if not exists watched_at timestamptz not null default now();
+alter table public.movie_recent_history add column if not exists position_seconds integer not null default 0;
+alter table public.movie_recent_history add column if not exists source text not null default 'progress';
+alter table public.movie_recent_history add column if not exists created_at timestamptz not null default now();
+alter table public.movie_recent_history add column if not exists updated_at timestamptz not null default now();
 
 insert into public.movie_categories (slug, name, position)
 values

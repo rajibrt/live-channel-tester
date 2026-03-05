@@ -9,9 +9,13 @@ export default function LeftSidebar({
   categories,
   movieCategories = [],
   movieGenres = [],
+  movieLanguages = [],
+  movieYears = [],
   selectedCategory,
   selectedMovieCategory = "",
   selectedMovieGenre = "",
+  selectedMovieLanguage = "",
+  selectedMovieYear = "",
   mode,
   movieMode = "all",
   movieFilterView = "categories",
@@ -22,6 +26,8 @@ export default function LeftSidebar({
   onSelectMode,
   onSelectMovieCategory,
   onSelectMovieGenre,
+  onSelectMovieLanguage,
+  onSelectMovieYear,
   onSelectMovieFilterView,
   onSelectMovieMode,
   isDark,
@@ -37,6 +43,12 @@ export default function LeftSidebar({
   );
   const filteredMovieGenres = movieGenres.filter((genre) =>
     String(genre?.name || "").toLowerCase().includes(search.toLowerCase())
+  );
+  const filteredMovieLanguages = movieLanguages.filter((language) =>
+    String(language?.name || "").toLowerCase().includes(search.toLowerCase())
+  );
+  const filteredMovieYears = movieYears.filter((yearRow) =>
+    String(yearRow?.name || "").toLowerCase().includes(search.toLowerCase())
   );
   const movieAllCount = Number(movieStats?.all || 0);
   const movieFavoriteCount = Number(movieStats?.favorites || 0);
@@ -63,7 +75,7 @@ export default function LeftSidebar({
             placeholder={
               homeMode === "movies"
                 ? movieFilterView === "genres"
-                  ? "Search Genre"
+                  ? "Search Genre or Language"
                   : "Search Movie Category"
                 : "Search Category"
             }
@@ -171,10 +183,7 @@ export default function LeftSidebar({
               variant="ghost"
               size="sm"
               onClick={() => {
-                onSelectMovieMode?.("all");
-                onSelectMovieFilterView?.("categories");
                 onSelectMovieCategory?.("");
-                onSelectMovieGenre?.("");
               }}
               className={`justify-start ${rowClass} ${movieMode === "all" && !selectedMovieCategory ? styles.linkBtnActive : ""}`}
             >
@@ -188,9 +197,6 @@ export default function LeftSidebar({
               size="sm"
               onClick={() => {
                 onSelectMovieMode?.("favorites");
-                onSelectMovieFilterView?.("categories");
-                onSelectMovieCategory?.("");
-                onSelectMovieGenre?.("");
               }}
               className={`justify-start ${rowClass} ${movieMode === "favorites" ? styles.linkBtnActive : ""}`}
             >
@@ -204,9 +210,6 @@ export default function LeftSidebar({
               size="sm"
               onClick={() => {
                 onSelectMovieMode?.("recent");
-                onSelectMovieFilterView?.("categories");
-                onSelectMovieCategory?.("");
-                onSelectMovieGenre?.("");
               }}
               className={`justify-start ${rowClass} ${movieMode === "recent" ? styles.linkBtnActive : ""}`}
             >
@@ -222,8 +225,6 @@ export default function LeftSidebar({
                 variant="ghost"
                 size="sm"
                 onClick={() => {
-                  onSelectMovieMode?.("all");
-                  onSelectMovieFilterView?.("categories");
                   onSelectMovieCategory?.(String(category.slug || ""));
                 }}
                 className={`justify-start ${rowClass} ${movieMode === "all" && selectedMovieCategory === String(category.slug || "") ? styles.linkBtnActive : ""}`}
@@ -233,44 +234,57 @@ export default function LeftSidebar({
                 <span className={countClass}>{Number(category.count || 0)}</span>
               </Button>
             ))}
+            <h3 className={labelClass}>Language List</h3>
+            {filteredMovieLanguages.map((language) => (
+              <Button
+                key={language.key || language.name}
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  onSelectMovieLanguage?.(String(language.key || "").toLowerCase());
+                }}
+                className={`justify-start ${rowClass} ${movieMode === "all" && selectedMovieLanguage === String(language.key || "").toLowerCase() ? styles.linkBtnActive : ""}`}
+              >
+                <Icon name="Globe" size={16} />
+                <span className={styles.linkText}>{language.name}</span>
+                <span className={countClass}>{Number(language.count || 0)}</span>
+              </Button>
+            ))}
             <h3 className={labelClass}>Genres</h3>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                onSelectMovieMode?.("all");
-                onSelectMovieFilterView?.("genres");
-                onSelectMovieCategory?.("");
-                onSelectMovieGenre?.("");
-              }}
-              className={`justify-start ${rowClass} ${movieFilterView === "genres" ? styles.linkBtnActive : ""}`}
-            >
-              <Icon name="Tags" size={16} />
-              <span className={styles.linkText}>Genres</span>
-              <span className={countClass}>{filteredMovieGenres.length}</span>
-            </Button>
-            {movieFilterView === "genres" ? (
-              filteredMovieGenres.map((genre) => (
-                <Button
-                  key={genre.key || genre.name}
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    onSelectMovieMode?.("all");
-                    onSelectMovieFilterView?.("genres");
-                    onSelectMovieCategory?.("");
-                    onSelectMovieGenre?.(String(genre.key || "").toLowerCase());
-                  }}
-                  className={`justify-start ${rowClass} ${movieMode === "all" && selectedMovieGenre === String(genre.key || "").toLowerCase() ? styles.linkBtnActive : ""}`}
-                >
-                  <Icon name="Tags" size={16} />
-                  <span className={styles.linkText}>{genre.name}</span>
-                  <span className={countClass}>{Number(genre.count || 0)}</span>
-                </Button>
-              ))
-            ) : null}
+            {filteredMovieGenres.map((genre) => (
+              <Button
+                key={genre.key || genre.name}
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  onSelectMovieGenre?.(String(genre.key || "").toLowerCase());
+                }}
+                className={`justify-start ${rowClass} ${movieMode === "all" && selectedMovieGenre === String(genre.key || "").toLowerCase() ? styles.linkBtnActive : ""}`}
+              >
+                <Icon name="Tags" size={16} />
+                <span className={styles.linkText}>{genre.name}</span>
+                <span className={countClass}>{Number(genre.count || 0)}</span>
+              </Button>
+            ))}
+            <h3 className={labelClass}>Years</h3>
+            {filteredMovieYears.map((yearRow) => (
+              <Button
+                key={yearRow.key || yearRow.name}
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  onSelectMovieYear?.(String(yearRow.key || ""));
+                }}
+                className={`justify-start ${rowClass} ${movieMode === "all" && selectedMovieYear === String(yearRow.key || "") ? styles.linkBtnActive : ""}`}
+              >
+                <Icon name="Clock" size={16} />
+                <span className={styles.linkText}>{yearRow.name}</span>
+                <span className={countClass}>{Number(yearRow.count || 0)}</span>
+              </Button>
+            ))}
           </>
         )}
       </div>

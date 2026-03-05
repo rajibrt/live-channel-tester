@@ -33,6 +33,62 @@ function extractNameList(nodes) {
   );
 }
 
+function extractLocaleList(nodes) {
+  return uniqueStrings(
+    asList(nodes).map((node) => {
+      if (!node) return "";
+      if (typeof node === "string") return node;
+      return text(node?.name || node?.["@id"] || node?.url || "");
+    })
+  );
+}
+
+function extractLinkTextsByHrefPattern(html, pattern) {
+  const input = text(html);
+  if (!input) return [];
+  const out = [];
+  const re = /<a[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  let m;
+  while ((m = re.exec(input))) {
+    const href = text(m[1] || "");
+    if (!href || !pattern.test(href)) continue;
+    const label = text(String(m[2] || "").replace(/<[^>]+>/g, " "));
+    if (!label) continue;
+    out.push(label);
+  }
+  return uniqueStrings(out);
+}
+
+function decodeEscapedUnicode(value) {
+  const raw = text(value);
+  if (!raw) return "";
+  return raw
+    .replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+    .replace(/\\\//g, "/")
+    .replace(/\\"/g, '"')
+    .replace(/\\n/g, " ")
+    .replace(/\\t/g, " ")
+    .trim();
+}
+
+function extractSpokenLanguagesFromJson(html) {
+  const input = text(html);
+  if (!input) return [];
+  const out = [];
+  const blockRe = /"spokenLanguages"\s*:\s*\[([\s\S]*?)\]/gi;
+  let block;
+  while ((block = blockRe.exec(input))) {
+    const segment = String(block[1] || "");
+    const textRe = /"text"\s*:\s*"([^"]+)"/gi;
+    let m;
+    while ((m = textRe.exec(segment))) {
+      const val = decodeEscapedUnicode(m[1] || "");
+      if (val) out.push(val);
+    }
+  }
+  return uniqueStrings(out);
+}
+
 function isoDurationToSeconds(iso) {
   const raw = text(iso);
   if (!raw) return 0;
@@ -106,10 +162,15 @@ export function parseImdbMovieHtml(html, imdbId) {
   const runtimeSeconds = isoDurationToSeconds(movie.duration);
   const image = movie.image;
   const imageList = asList(image).map((v) => (typeof v === "string" ? v : text(v?.url))).filter(Boolean);
+  const imageUrls = uniqueStrings(imageList);
   const posterUrl = text(imageList[0] || "");
   const backdropUrl = text(imageList[1] || imageList[0] || "");
   const ratingValue = parseNumeric(movie?.aggregateRating?.ratingValue, null);
   const ratingCount = parseNumeric(movie?.aggregateRating?.ratingCount, null);
+
+  const fallbackLanguages = extractLinkTextsByHrefPattern(html, /(?:\?|&)primary_language=|(?:\?|&)language=|\/language\//i);
+  const fallbackCountries = extractLinkTextsByHrefPattern(html, /(?:\?|&)country_of_origin=/i);
+  const jsonSpokenLanguages = extractSpokenLanguagesFromJson(html);
 
   return {
     imdb_id: id,
@@ -120,6 +181,7 @@ export function parseImdbMovieHtml(html, imdbId) {
     runtime_seconds: runtimeSeconds,
     poster_url: posterUrl,
     backdrop_url: backdropUrl,
+    image_urls: imageUrls,
     imdb_rating: ratingValue,
     imdb_votes: Number.isInteger(ratingCount) && ratingCount > 0 ? ratingCount : null,
     content_rating: text(movie.contentRating),
@@ -128,8 +190,11 @@ export function parseImdbMovieHtml(html, imdbId) {
     imdb_writers: extractNameList(movie.creator),
     imdb_stars: extractNameList(movie.actor),
     imdb_release_date: releaseDate,
-    imdb_countries: [],
-    imdb_languages: [],
+    imdb_countries: uniqueStrings([
+      ...extractLocaleList(movie.countryOfOrigin || movie.country || movie.locationCreated),
+      ...fallbackCountries,
+    ]),
+    imdb_languages: uniqueStrings([...extractLocaleList(movie.inLanguage), ...fallbackLanguages, ...jsonSpokenLanguages]),
   };
 }
 

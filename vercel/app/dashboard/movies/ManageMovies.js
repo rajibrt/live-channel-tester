@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Clapperboard, FolderPlus, Pencil, Trash2 } from "lucide-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../../components/ui/table";
+import { flexRender, getCoreRowModel, getFilteredRowModel, getSortedRowModel, useReactTable } from "@tanstack/react-table";
 import styles from "../page.module.css";
 
 function toSlug(value) {
@@ -33,6 +35,14 @@ function toList(csv) {
     .split(",")
     .map((part) => part.trim())
     .filter(Boolean);
+}
+
+function serializeMovieForm(form) {
+  return JSON.stringify({
+    ...form,
+    is_published: Boolean(form?.is_published),
+    category_ids: normalizeIds(form?.category_ids),
+  });
 }
 
 const EMPTY_MOVIE_FORM = {
@@ -156,6 +166,15 @@ function CategoryCombobox({ categories = [], value = [], onChange }) {
   );
 }
 
+function IndeterminateCheckbox({ indeterminate, ...props }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!ref.current) return;
+    ref.current.indeterminate = Boolean(indeterminate) && !props.checked;
+  }, [indeterminate, props.checked]);
+  return <input ref={ref} type="checkbox" {...props} />;
+}
+
 export default function ManageMovies({ initialCategories = [], initialMovies = [], categorySlug = "" }) {
   const router = useRouter();
   const currentCategorySlug = String(categorySlug || "").trim().toLowerCase();
@@ -174,7 +193,44 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
   const [categoryCountFilter, setCategoryCountFilter] = useState("all");
   const [movieSearch, setMovieSearch] = useState("");
   const [movieStatusFilter, setMovieStatusFilter] = useState("all");
-  const [movieSort, setMovieSort] = useState("updated_desc");
+  const [movieSorting, setMovieSorting] = useState([{ id: "updated_at", desc: true }]);
+  const [movieColumnFilters, setMovieColumnFilters] = useState([]);
+  const [movieRowSelection, setMovieRowSelection] = useState({});
+  const [previewSourceUrl, setPreviewSourceUrl] = useState("");
+  const [previewTitle, setPreviewTitle] = useState("");
+  const [imdbImagePreviewUrls, setImdbImagePreviewUrls] = useState([]);
+  const [importingMovies, setImportingMovies] = useState(false);
+  const [importingPrepared, setImportingPrepared] = useState(false);
+  const [importSummary, setImportSummary] = useState(null);
+  const [preparedItems, setPreparedItems] = useState([]);
+  const [selectionMap, setSelectionMap] = useState({});
+  const [importStatusMap, setImportStatusMap] = useState({});
+  const [scanRawItems, setScanRawItems] = useState([]);
+  const [scanRawCount, setScanRawCount] = useState(0);
+  const [scanPreparedCount, setScanPreparedCount] = useState(0);
+  const [importProgress, setImportProgress] = useState({
+    total: 0,
+    processed: 0,
+    remaining: 0,
+    saved: 0,
+    skipped: 0,
+    failed: 0,
+    current_title: "",
+    current_status: "",
+  });
+  const selectAllCheckboxRef = useRef(null);
+  const [importForm, setImportForm] = useState({
+    base_url: "",
+    include: "movies,animation,hindi,english,bangla",
+    exclude: "android games,software,tv shows,series",
+    providers: "imdb,omdb,tmdb",
+    publish: true,
+    limit: "0",
+    max_depth: "6",
+  });
+  const [movieFormInitialSnapshot, setMovieFormInitialSnapshot] = useState(
+    serializeMovieForm(EMPTY_MOVIE_FORM)
+  );
 
   const [categoryForm, setCategoryForm] = useState({
     id: "",
@@ -184,6 +240,55 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
   });
 
   const [movieForm, setMovieForm] = useState({ ...EMPTY_MOVIE_FORM });
+  const isMovieFormDirty = useMemo(
+    () => showMovieForm && serializeMovieForm(movieForm) !== movieFormInitialSnapshot,
+    [movieForm, movieFormInitialSnapshot, showMovieForm]
+  );
+  const importSelectionStats = useMemo(() => {
+    const stats = {
+      total: preparedItems.length,
+      selected: 0,
+      ready: 0,
+      duplicate: 0,
+      saved: 0,
+      failed: 0,
+      skipped: 0,
+    };
+    for (const row of preparedItems) {
+      const id = String(row?.item_id || "");
+      const status = String(importStatusMap[id] || (row?.duplicate?.is_duplicate ? "duplicate" : "ready"));
+      if (status === "saved") stats.saved += 1;
+      else if (status === "failed") stats.failed += 1;
+      else if (status === "duplicate") stats.duplicate += 1;
+      else if (status === "skipped") stats.skipped += 1;
+      else stats.ready += 1;
+      if (selectionMap[id]) stats.selected += 1;
+    }
+    return stats;
+  }, [preparedItems, selectionMap, importStatusMap]);
+  const selectableIds = useMemo(() => {
+    return preparedItems
+      .map((row) => String(row?.item_id || ""))
+      .filter((id) => {
+        if (!id) return false;
+        const status = String(importStatusMap[id] || "");
+        return status !== "saved" && status !== "skipped";
+      });
+  }, [preparedItems, importStatusMap]);
+  const selectedSelectableCount = useMemo(() => {
+    let count = 0;
+    for (const id of selectableIds) {
+      if (selectionMap[id]) count += 1;
+    }
+    return count;
+  }, [selectableIds, selectionMap]);
+  const allSelectableSelected = selectableIds.length > 0 && selectedSelectableCount === selectableIds.length;
+  const someSelectableSelected = selectedSelectableCount > 0 && selectedSelectableCount < selectableIds.length;
+
+  useEffect(() => {
+    if (!selectAllCheckboxRef.current) return;
+    selectAllCheckboxRef.current.indeterminate = someSelectableSelected;
+  }, [someSelectableSelected]);
 
   const selectedCategory = useMemo(
     () => categories.find((row) => String(row?.slug || "").trim().toLowerCase() === currentCategorySlug) || null,
@@ -227,34 +332,6 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
     });
   }, [categories, categoryCountFilter, categoryMovieCount, categorySearch]);
 
-  const filteredMoviesInSelectedCategory = useMemo(() => {
-    const q = movieSearch.trim().toLowerCase();
-    const next = moviesInSelectedCategory.filter((row) => {
-      const title = String(row?.title || "").toLowerCase();
-      const slug = String(row?.slug || "").toLowerCase();
-      const matchesText = !q || title.includes(q) || slug.includes(q);
-      const matchesStatus =
-        movieStatusFilter === "published"
-          ? Boolean(row?.is_published)
-          : movieStatusFilter === "hidden"
-            ? !Boolean(row?.is_published)
-            : true;
-      return matchesText && matchesStatus;
-    });
-    next.sort((a, b) => {
-      if (movieSort === "title_asc") {
-        return String(a?.title || "").localeCompare(String(b?.title || ""), undefined, { sensitivity: "base" });
-      }
-      if (movieSort === "title_desc") {
-        return String(b?.title || "").localeCompare(String(a?.title || ""), undefined, { sensitivity: "base" });
-      }
-      const aTime = new Date(a?.updated_at || 0).getTime();
-      const bTime = new Date(b?.updated_at || 0).getTime();
-      return bTime - aTime;
-    });
-    return next;
-  }, [movieSearch, movieSort, movieStatusFilter, moviesInSelectedCategory]);
-
   useEffect(() => {
     if (!showMovieForm || !selectedCategory?.id) return;
     setMovieForm((prev) => {
@@ -266,18 +343,70 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
   }, [showMovieForm, selectedCategory]);
 
   const resetMovieForm = () => {
-    setMovieForm({ ...EMPTY_MOVIE_FORM });
+    const next = { ...EMPTY_MOVIE_FORM };
+    setMovieForm(next);
+    setMovieFormInitialSnapshot(serializeMovieForm(next));
     setImdbQuery("");
+    setImdbImagePreviewUrls([]);
   };
 
   const openNewMovieForm = () => {
-    setShowMovieForm(true);
-    setImdbQuery("");
-    setMovieForm({
+    const next = {
       ...EMPTY_MOVIE_FORM,
       category_ids: selectedCategory ? [Number(selectedCategory.id)] : [],
-    });
+    };
+    setShowMovieForm(true);
+    setImdbQuery("");
+    setImdbImagePreviewUrls([]);
+    setMovieForm(next);
+    setMovieFormInitialSnapshot(serializeMovieForm(next));
   };
+
+  const closeSourcePreview = () => {
+    setPreviewSourceUrl("");
+    setPreviewTitle("");
+  };
+
+  const openSourcePreview = () => {
+    const source = String(movieForm.source_url || "").trim();
+    if (!source) {
+      setError("Source URL দিন, তারপর Preview চাপুন।");
+      return;
+    }
+    setError("");
+    setPreviewSourceUrl(source);
+    setPreviewTitle(String(movieForm.title || "Source Preview"));
+  };
+
+  const confirmDiscardMovieForm = () => {
+    if (!isMovieFormDirty) return true;
+    return window.confirm("আপনি পরিবর্তনগুলো save করেননি। Save না করে বের হতে চান?");
+  };
+
+  useEffect(() => {
+    if (!isMovieFormDirty) return undefined;
+
+    const handleBeforeUnload = (event) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    const handlePopState = () => {
+      const ok = window.confirm("আপনি পরিবর্তনগুলো save করেননি। Save না করে বের হতে চান?");
+      if (!ok) {
+        window.history.pushState({ movieFormGuard: true }, "", window.location.href);
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    window.history.pushState({ movieFormGuard: true }, "", window.location.href);
+    window.addEventListener("popstate", handlePopState);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [isMovieFormDirty]);
 
   const refreshCategories = async () => {
     const res = await fetch("/api/admin/movie-categories", { cache: "no-store" });
@@ -291,6 +420,253 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
     const payload = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(payload?.error || "Failed to load movies");
     setMovies(Array.isArray(payload?.items) ? payload.items : []);
+  };
+
+  const handleImportMovies = async (event) => {
+    event.preventDefault();
+    setError("");
+    setMessage("");
+    setImportSummary(null);
+    setPreparedItems([]);
+    setSelectionMap({});
+    setImportStatusMap({});
+    setScanRawItems([]);
+    setScanRawCount(0);
+    setScanPreparedCount(0);
+    setImportProgress({
+      total: 0,
+      processed: 0,
+      remaining: 0,
+      saved: 0,
+      skipped: 0,
+      failed: 0,
+      current_title: "",
+      current_status: "",
+    });
+    setImportingMovies(true);
+    try {
+      const payload = {
+        base_url: String(importForm.base_url || "").trim(),
+        include: String(importForm.include || ""),
+        exclude: String(importForm.exclude || ""),
+        providers: String(importForm.providers || ""),
+        publish: Boolean(importForm.publish),
+        limit: Number(importForm.limit || 0),
+        max_depth: Number(importForm.max_depth || 6),
+      };
+      const res = await fetch("/api/admin/movies/import/scan-stream", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok || !res.body) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error || "Movie scan failed");
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let finalSummary = null;
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        for (const line of lines) {
+          const raw = line.trim();
+          if (!raw) continue;
+          let evt = null;
+          try {
+            evt = JSON.parse(raw);
+          } catch {
+            continue;
+          }
+          if (evt?.type === "raw_found") {
+            setScanRawCount(Number(evt.raw_count || 0));
+            setScanRawItems((prev) => {
+              const next = prev.concat({
+                title: String(evt.title || "Untitled"),
+                category_name: String(evt.category_name || ""),
+                source_url: String(evt.source_url || ""),
+              });
+              return next.slice(-200);
+            });
+          }
+          if (evt?.type === "prepared") {
+            setScanPreparedCount(Number(evt.prepared_count || 0));
+            const item = evt?.item && typeof evt.item === "object" ? evt.item : null;
+            if (item) {
+              const id = String(item?.item_id || "");
+              if (id) {
+                setPreparedItems((prev) => {
+                  const has = prev.some((row) => String(row?.item_id || "") === id);
+                  if (has) return prev;
+                  return prev.concat(item);
+                });
+                setSelectionMap((prev) => {
+                  if (Object.prototype.hasOwnProperty.call(prev || {}, id)) return prev;
+                  return { ...(prev || {}), [id]: !Boolean(item?.duplicate?.is_duplicate) };
+                });
+                setImportStatusMap((prev) => {
+                  if (Object.prototype.hasOwnProperty.call(prev || {}, id)) return prev;
+                  return {
+                    ...(prev || {}),
+                    [id]: item?.duplicate?.is_duplicate ? "duplicate" : "ready",
+                  };
+                });
+              }
+            }
+          }
+          if (evt?.type === "error") {
+            throw new Error(evt.error || "Movie scan failed");
+          }
+          if (evt?.type === "complete") {
+            finalSummary = evt.summary || null;
+          }
+        }
+      }
+
+      if (!finalSummary) {
+        throw new Error("Scan finished without summary.");
+      }
+
+      const items = Array.isArray(finalSummary?.items) ? finalSummary.items : [];
+      setScanRawCount(Number(finalSummary?.scanned_count || 0));
+      setScanPreparedCount(Number(finalSummary?.candidate_count || 0));
+      const nextSelection = {};
+      const nextStatus = {};
+      for (const row of items) {
+        const id = String(row?.item_id || "");
+        if (!id) continue;
+        nextSelection[id] = !Boolean(row?.duplicate?.is_duplicate);
+        nextStatus[id] = row?.duplicate?.is_duplicate ? "duplicate" : "ready";
+      }
+      setPreparedItems(items);
+      setSelectionMap(nextSelection);
+      setImportStatusMap(nextStatus);
+      setImportSummary(finalSummary);
+      setMessage("Scan complete. Duplicate list review করে Import দিন।");
+    } catch (err) {
+      setError(err?.message || "Movie import failed");
+    } finally {
+      setImportingMovies(false);
+    }
+  };
+
+  const handleImportPreparedMovies = async () => {
+    if (!preparedItems.length) {
+      setError("আগে scan চালান, তারপর import দিন।");
+      return;
+    }
+    setError("");
+    setMessage("");
+    setImportingPrepared(true);
+    try {
+      const selectedItems = preparedItems.filter((item) => {
+        const id = String(item?.item_id || "");
+        if (!id) return false;
+        if (!selectionMap[id]) return false;
+        return importStatusMap[id] !== "saved";
+      });
+      if (!selectedItems.length) {
+        throw new Error("Import করার জন্য অন্তত ১টা item select করুন।");
+      }
+      setImportProgress({
+        total: selectedItems.length,
+        processed: 0,
+        remaining: selectedItems.length,
+        saved: 0,
+        skipped: 0,
+        failed: 0,
+        current_title: "",
+        current_status: "",
+      });
+
+      const res = await fetch("/api/admin/movies/import/import-stream", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action: "import",
+          publish: Boolean(importForm.publish),
+          skip_duplicates: false,
+          prepared_items: selectedItems,
+        }),
+      });
+      if (!res.ok || !res.body) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error || "Import failed");
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let finalSummary = null;
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        for (const line of lines) {
+          const raw = line.trim();
+          if (!raw) continue;
+          let evt = null;
+          try {
+            evt = JSON.parse(raw);
+          } catch {
+            continue;
+          }
+          if (evt?.type === "error") {
+            throw new Error(evt.error || "Import failed");
+          }
+          if (evt?.type === "progress") {
+            const itemId = String(evt?.item_id || "");
+            const status = String(evt?.status || "");
+            if (itemId && status) {
+              setImportStatusMap((prev) => ({ ...(prev || {}), [itemId]: status }));
+              if (status === "saved" || status === "skipped") {
+                setSelectionMap((prev) => ({ ...(prev || {}), [itemId]: false }));
+              }
+            }
+            const c = evt?.counters || {};
+            setImportProgress({
+              total: Number(c?.total || selectedItems.length),
+              processed: Number(c?.processed || 0),
+              remaining: Number(c?.remaining || 0),
+              saved: Number(c?.saved || 0),
+              skipped: Number(c?.skipped || 0),
+              failed: Number(c?.failed || 0),
+              current_title: String(evt?.title || ""),
+              current_status: status,
+            });
+          }
+          if (evt?.type === "complete") {
+            finalSummary = evt.summary || null;
+          }
+        }
+      }
+
+      if (!finalSummary) {
+        throw new Error("Import finished without summary.");
+      }
+
+      setImportSummary((prev) => ({
+        ...(prev || {}),
+        import_result: finalSummary,
+      }));
+      await Promise.all([refreshMovies(), refreshCategories()]);
+      setMessage(
+        `Import done. Saved ${Number(finalSummary?.saved_count || 0)}, skipped ${Number(finalSummary?.skipped_count || 0)}, failed ${Number(finalSummary?.failed_count || 0)}. Failed rows are marked as "failed".`
+      );
+    } catch (err) {
+      setError(err?.message || "Import failed");
+    } finally {
+      setImportingPrepared(false);
+    }
   };
 
   const handleCategorySubmit = async (event) => {
@@ -414,6 +790,12 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
       const payload = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(payload?.error || "Failed to fetch IMDb data");
       const item = payload?.item || {};
+      const imageUrls = Array.isArray(item.image_urls)
+        ? item.image_urls.map((v) => String(v || "").trim()).filter(Boolean)
+        : [];
+      const previewUrls = [
+        ...new Set([item.poster_url, item.backdrop_url, ...imageUrls].map((v) => String(v || "").trim()).filter(Boolean)),
+      ];
       setMovieForm((prev) => ({
         ...prev,
         title: item.title || prev.title,
@@ -436,6 +818,7 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
         imdb_countries: toCsv(item.imdb_countries) || prev.imdb_countries,
         imdb_languages: toCsv(item.imdb_languages) || prev.imdb_languages,
       }));
+      setImdbImagePreviewUrls(previewUrls);
       if (item.imdb_id) setImdbQuery(item.imdb_id);
       setMessage("IMDb তথ্য auto-fill হয়েছে। এখন চাইলে edit করে save করুন।");
     } catch (err) {
@@ -455,6 +838,12 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
       const payload = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(payload?.error || "Movie delete failed");
       await refreshMovies();
+      setMovieRowSelection((prev) => {
+        if (!prev[String(id)]) return prev;
+        const next = { ...prev };
+        delete next[String(id)];
+        return next;
+      });
       if (String(movieForm.id || "") === String(id)) resetMovieForm();
       setMessage("Movie deleted.");
     } catch (err) {
@@ -465,8 +854,7 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
   const openMovieEditor = (row) => {
     if (!row) return;
     const firstSource = Array.isArray(row.sources) ? row.sources[0] : null;
-    setImdbQuery(String(row.imdb_id || ""));
-    setMovieForm({
+    const next = {
       id: String(row.id || ""),
       title: String(row.title || ""),
       slug: String(row.slug || ""),
@@ -490,9 +878,146 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
       imdb_languages: toCsv(row.imdb_languages),
       is_published: Boolean(row.is_published),
       category_ids: (row.categories || []).map((cat) => Number(cat.id)).filter(Boolean),
-    });
+    };
+    setImdbImagePreviewUrls(
+      [...new Set([row.poster_url, row.backdrop_url].map((v) => String(v || "").trim()).filter(Boolean))]
+    );
+    setImdbQuery(String(row.imdb_id || ""));
+    setMovieForm(next);
+    setMovieFormInitialSnapshot(serializeMovieForm(next));
     setShowMovieForm(true);
   };
+
+  const handleDeleteSelectedMovies = async () => {
+    const selectedIds = Object.entries(movieRowSelection)
+      .filter(([, checked]) => Boolean(checked))
+      .map(([id]) => String(id));
+    if (!selectedIds.length) {
+      setError("Delete করার জন্য আগে movie select করুন।");
+      return;
+    }
+    const selectedRows = moviesInSelectedCategory.filter((row) => selectedIds.includes(String(row.id)));
+    if (!window.confirm(`${selectedRows.length}টি movie delete করবেন?`)) return;
+
+    setError("");
+    setMessage("");
+    setSavingMovie(true);
+    const failedTitles = [];
+    let deleted = 0;
+    for (const row of selectedRows) {
+      try {
+        const res = await fetch(`/api/admin/movies/${encodeURIComponent(row.id)}`, { method: "DELETE" });
+        const payload = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(payload?.error || "Movie delete failed");
+        deleted += 1;
+      } catch {
+        failedTitles.push(String(row?.title || row?.id || "Unknown"));
+      }
+    }
+
+    await refreshMovies();
+    setMovieRowSelection({});
+    if (failedTitles.length) {
+      setError(`Delete failed (${failedTitles.length}): ${failedTitles.slice(0, 5).join(", ")}`);
+    }
+    if (deleted > 0) {
+      setMessage(`${deleted}টি movie deleted.`);
+    }
+    setSavingMovie(false);
+  };
+
+  const movieColumns = useMemo(
+    () => [
+      {
+        id: "select",
+        header: ({ table }) => (
+          <IndeterminateCheckbox
+            checked={table.getIsAllRowsSelected()}
+            indeterminate={table.getIsSomeRowsSelected()}
+            onChange={table.getToggleAllRowsSelectedHandler()}
+            aria-label="Select all movies"
+          />
+        ),
+        cell: ({ row }) => (
+          <input
+            type="checkbox"
+            checked={row.getIsSelected()}
+            onChange={row.getToggleSelectedHandler()}
+            aria-label={`Select ${row.original?.title || "movie"}`}
+          />
+        ),
+        enableSorting: false,
+        enableColumnFilter: false,
+      },
+      {
+        accessorKey: "title",
+        header: ({ column }) => (
+          <button type="button" className={styles.tableHeadBtn} onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
+            Title
+          </button>
+        ),
+      },
+      {
+        id: "status",
+        accessorFn: (row) => (row?.is_published ? "Published" : "Hidden"),
+        header: ({ column }) => (
+          <button type="button" className={styles.tableHeadBtn} onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
+            Status
+          </button>
+        ),
+      },
+      {
+        id: "updated_at",
+        accessorFn: (row) => new Date(row?.updated_at || 0).getTime(),
+        cell: ({ row }) => (row.original?.updated_at ? new Date(row.original.updated_at).toLocaleString() : "-"),
+        header: ({ column }) => (
+          <button type="button" className={styles.tableHeadBtn} onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
+            Updated
+          </button>
+        ),
+      },
+      {
+        id: "action",
+        header: "Action",
+        cell: ({ row }) => (
+          <div className={styles.rowActions}>
+            <button type="button" className={styles.ghostBtn} onClick={() => openMovieEditor(row.original)}>
+              <Pencil size={14} aria-hidden="true" />
+              Edit
+            </button>
+            <button type="button" className={styles.deleteBtn} onClick={() => handleDeleteMovie(row.original.id)}>
+              <Trash2 size={14} aria-hidden="true" />
+              Delete
+            </button>
+          </div>
+        ),
+        enableSorting: false,
+        enableColumnFilter: false,
+      },
+    ],
+    [handleDeleteMovie, openMovieEditor]
+  );
+
+  const movieTable = useReactTable({
+    data: moviesInSelectedCategory,
+    columns: movieColumns,
+    getRowId: (row) => String(row.id),
+    state: {
+      sorting: movieSorting,
+      columnFilters: movieColumnFilters,
+      rowSelection: movieRowSelection,
+    },
+    onSortingChange: setMovieSorting,
+    onColumnFiltersChange: setMovieColumnFilters,
+    onRowSelectionChange: setMovieRowSelection,
+    getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+  });
+
+  useEffect(() => {
+    setMovieRowSelection({});
+  }, [currentCategorySlug, movies]);
 
   return (
     <div className={styles.form}>
@@ -556,7 +1081,10 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
                       <button
                         type="button"
                         className={styles.rowLinkBtn}
-                        onClick={() => router.push(`/dashboard/movies/category/${encodeURIComponent(String(row.slug || ""))}`)}
+                        onClick={() => {
+                          if (!confirmDiscardMovieForm()) return;
+                          router.push(`/dashboard/movies/category/${encodeURIComponent(String(row.slug || ""))}`);
+                        }}
                       >
                         {row.name}
                       </button>
@@ -610,7 +1138,10 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
             <button
               type="button"
               className={styles.ghostBtn}
-              onClick={() => router.push("/dashboard/movies")}
+              onClick={() => {
+                if (!confirmDiscardMovieForm()) return;
+                router.push("/dashboard/movies");
+              }}
             >
               <ArrowLeft size={14} aria-hidden="true" />
               Back to Categories
@@ -634,59 +1165,82 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
               <span>Search Movie</span>
               <input
                 value={movieSearch}
-                onChange={(e) => setMovieSearch(e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setMovieSearch(value);
+                  setMovieColumnFilters((prev) => {
+                    const next = prev.filter((item) => item.id !== "title");
+                    if (String(value || "").trim()) next.push({ id: "title", value });
+                    return next;
+                  });
+                }}
                 placeholder="Search by movie title or slug"
               />
             </label>
             <label className={styles.field}>
               <span>Status</span>
-              <select value={movieStatusFilter} onChange={(e) => setMovieStatusFilter(e.target.value)}>
+              <select
+                value={movieStatusFilter}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setMovieStatusFilter(value);
+                  setMovieColumnFilters((prev) => {
+                    const next = prev.filter((item) => item.id !== "status");
+                    if (value === "published") next.push({ id: "status", value: "Published" });
+                    if (value === "hidden") next.push({ id: "status", value: "Hidden" });
+                    return next;
+                  });
+                }}
+              >
                 <option value="all">All Status</option>
                 <option value="published">Published</option>
                 <option value="hidden">Hidden</option>
               </select>
             </label>
-            <label className={styles.field}>
-              <span>Sort</span>
-              <select value={movieSort} onChange={(e) => setMovieSort(e.target.value)}>
-                <option value="updated_desc">Latest Updated</option>
-                <option value="title_asc">Title A to Z</option>
-                <option value="title_desc">Title Z to A</option>
-              </select>
-            </label>
+          </div>
+          <div className={styles.actions}>
+            <button type="button" className={styles.ghostBtn} onClick={() => movieTable.toggleAllRowsSelected(true)}>
+              Select All
+            </button>
+            <button type="button" className={styles.ghostBtn} onClick={() => movieTable.toggleAllRowsSelected(false)}>
+              Deselect All
+            </button>
+            <button type="button" className={styles.deleteBtn} onClick={handleDeleteSelectedMovies} disabled={savingMovie}>
+              <Trash2 size={14} aria-hidden="true" />
+              Delete Selected ({movieTable.getSelectedRowModel().rows.length})
+            </button>
           </div>
           <div className={styles.tableWrap}>
-            <table>
-              <thead>
-                <tr>
-                  <th>Title</th>
-                  <th>Status</th>
-                  <th>Updated</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredMoviesInSelectedCategory.length ? (
-                  filteredMoviesInSelectedCategory.map((row) => (
-                    <tr key={row.id}>
-                      <td>{row.title}</td>
-                      <td>{row.is_published ? "Published" : "Hidden"}</td>
-                      <td>{row.updated_at ? new Date(row.updated_at).toLocaleString() : "-"}</td>
-                      <td>
-                        <button type="button" className={styles.ghostBtn} onClick={() => openMovieEditor(row)}>
-                          <Pencil size={14} aria-hidden="true" />
-                          Edit
-                        </button>
-                      </td>
-                    </tr>
+            <Table>
+              <TableHeader>
+                {movieTable.getHeaderGroups().map((headerGroup) => (
+                  <TableRow key={headerGroup.id}>
+                    {headerGroup.headers.map((header) => (
+                      <TableHead key={header.id}>
+                        {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                      </TableHead>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableHeader>
+              <TableBody>
+                {movieTable.getRowModel().rows.length ? (
+                  movieTable.getRowModel().rows.map((row) => (
+                    <TableRow key={row.id} data-state={row.getIsSelected() && "selected"}>
+                      {row.getVisibleCells().map((cell) => (
+                        <TableCell key={cell.id}>
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </TableCell>
+                      ))}
+                    </TableRow>
                   ))
                 ) : (
-                  <tr>
-                    <td colSpan={4}>No movies found for current filter.</td>
-                  </tr>
+                  <TableRow>
+                    <TableCell colSpan={movieColumns.length}>No movies found for current filter.</TableCell>
+                  </TableRow>
                 )}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
             </>
           ) : (
@@ -694,6 +1248,364 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
           )}
         </section>
       ) : null}
+
+      <section className={styles.card}>
+        <h2>FTP / Apache Movie Import</h2>
+        <p className={styles.hint}>
+          FTP/Apache directory URL দিন। Script title detect করে IMDb primary + OMDb/TMDb fallback দিয়ে movie metadata update করবে।
+        </p>
+        <form className={styles.form} onSubmit={handleImportMovies}>
+          <div className={styles.formGrid}>
+            <label className={styles.field}>
+              <span>Base URL</span>
+              <input
+                value={importForm.base_url}
+                onChange={(e) => setImportForm((prev) => ({ ...prev, base_url: e.target.value }))}
+                placeholder="http://10.1.1.1/data/"
+                required
+              />
+            </label>
+            <label className={styles.field}>
+              <span>Metadata Providers</span>
+              <input
+                value={importForm.providers}
+                onChange={(e) => setImportForm((prev) => ({ ...prev, providers: e.target.value }))}
+                placeholder="imdb,omdb,tmdb"
+              />
+            </label>
+          </div>
+
+          <div className={styles.formGrid}>
+            <label className={styles.field}>
+              <span>Include Keywords (comma separated)</span>
+              <input
+                value={importForm.include}
+                onChange={(e) => setImportForm((prev) => ({ ...prev, include: e.target.value }))}
+                placeholder="movies,animation,hindi,english,bangla"
+              />
+            </label>
+            <label className={styles.field}>
+              <span>Exclude Keywords (comma separated)</span>
+              <input
+                value={importForm.exclude}
+                onChange={(e) => setImportForm((prev) => ({ ...prev, exclude: e.target.value }))}
+                placeholder="android games,software,tv shows,series"
+              />
+            </label>
+          </div>
+
+          <div className={styles.formGrid}>
+            <label className={styles.field}>
+              <span>Limit (0 = all)</span>
+              <input
+                type="number"
+                min="0"
+                value={importForm.limit}
+                onChange={(e) => setImportForm((prev) => ({ ...prev, limit: e.target.value }))}
+              />
+            </label>
+            <label className={styles.field}>
+              <span>Max Depth</span>
+              <input
+                type="number"
+                min="1"
+                value={importForm.max_depth}
+                onChange={(e) => setImportForm((prev) => ({ ...prev, max_depth: e.target.value }))}
+              />
+            </label>
+          </div>
+
+          <div className={styles.actions}>
+            <label className={styles.ghostBtn} style={{ cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={Boolean(importForm.publish)}
+                onChange={(e) => setImportForm((prev) => ({ ...prev, publish: e.target.checked }))}
+              />
+              Publish Imported
+            </label>
+            <button type="submit" className={styles.primaryBtn} disabled={importingMovies}>
+              {importingMovies ? "Scanning..." : "Start Scan"}
+            </button>
+            <button
+              type="button"
+              className={styles.primaryBtn}
+              disabled={importingPrepared || !preparedItems.length}
+              onClick={handleImportPreparedMovies}
+            >
+              {importingPrepared
+                ? "Importing..."
+                : `Import Selected${importSelectionStats.selected ? ` (${importSelectionStats.selected})` : ""}`}
+            </button>
+          </div>
+        </form>
+
+        {importSummary || preparedItems.length ? (
+          <>
+            <div className={styles.formGrid}>
+              <label className={styles.field}>
+                <span>Scanned</span>
+                <input value={String(importSummary?.scanned_count || scanRawCount || 0)} readOnly />
+              </label>
+              <label className={styles.field}>
+                <span>Candidates</span>
+                <input value={String(importSummary?.candidate_count || scanPreparedCount || 0)} readOnly />
+              </label>
+              <label className={styles.field}>
+                <span>Saved</span>
+                <input value={String(importSummary?.import_result?.saved_count || 0)} readOnly />
+              </label>
+              <label className={styles.field}>
+                <span>Duplicates</span>
+                <input value={String(importSummary?.duplicates_count || 0)} readOnly />
+              </label>
+              <label className={styles.field}>
+                <span>Failed</span>
+                <input value={String(importSummary?.import_result?.failed_count || 0)} readOnly />
+              </label>
+            </div>
+
+            <h3 style={{ margin: "8px 0 0" }}>Scan Results (select multiple তারপর Import Selected)</h3>
+            <p className={styles.hint} style={{ marginBottom: 8 }}>
+              Selected: {importSelectionStats.selected} / {importSelectionStats.total} | Ready:{" "}
+              {importSelectionStats.ready} | Duplicate: {importSelectionStats.duplicate} | Saved:{" "}
+              {importSelectionStats.saved} | Failed: {importSelectionStats.failed}
+            </p>
+            <div className={styles.actions} style={{ marginBottom: 8 }}>
+              <button
+                type="button"
+                className={styles.ghostBtn}
+                onClick={() =>
+                  setSelectionMap((prev) => {
+                    const next = { ...(prev || {}) };
+                    for (const id of selectableIds) next[id] = true;
+                    return next;
+                  })
+                }
+              >
+                Select All
+              </button>
+              <button
+                type="button"
+                className={styles.ghostBtn}
+                onClick={() =>
+                  setSelectionMap((prev) => {
+                    const next = { ...(prev || {}) };
+                    for (const id of selectableIds) next[id] = false;
+                    return next;
+                  })
+                }
+              >
+                Deselect All
+              </button>
+              <button
+                type="button"
+                className={styles.ghostBtn}
+                onClick={() =>
+                  setSelectionMap((prev) => {
+                    const next = { ...(prev || {}) };
+                    for (const row of preparedItems) {
+                      const id = String(row?.item_id || "");
+                      if (!id) continue;
+                      const status = String(
+                        importStatusMap[id] || (row?.duplicate?.is_duplicate ? "duplicate" : "ready")
+                      );
+                      if (status === "ready" || status === "failed") next[id] = true;
+                    }
+                    return next;
+                  })
+                }
+              >
+                Select Ready + Failed
+              </button>
+              <button
+                type="button"
+                className={styles.ghostBtn}
+                onClick={() =>
+                  setSelectionMap((prev) => {
+                    const next = { ...(prev || {}) };
+                    for (const row of preparedItems) {
+                      const id = String(row?.item_id || "");
+                      if (!id) continue;
+                      const status = String(
+                        importStatusMap[id] || (row?.duplicate?.is_duplicate ? "duplicate" : "ready")
+                      );
+                      next[id] = status === "failed";
+                    }
+                    return next;
+                  })
+                }
+              >
+                Select Failed Only
+              </button>
+              <button
+                type="button"
+                className={styles.ghostBtn}
+                onClick={() => {
+                  const next = {};
+                  for (const row of preparedItems) {
+                    const id = String(row?.item_id || "");
+                    if (!id) continue;
+                    next[id] = false;
+                  }
+                  setSelectionMap(next);
+                }}
+              >
+                Clear Selection
+              </button>
+            </div>
+            {importProgress.total > 0 ? (
+              <p className={styles.hint} style={{ marginBottom: 8 }}>
+                Import Progress: {importProgress.processed}/{importProgress.total} | Remaining:{" "}
+                {importProgress.remaining} | Saved: {importProgress.saved} | Failed: {importProgress.failed} | Skipped:{" "}
+                {importProgress.skipped}
+                {importProgress.current_title ? ` | Current: ${importProgress.current_title}` : ""}
+              </p>
+            ) : null}
+            <div className={styles.tableWrap}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>
+                      <input
+                        ref={selectAllCheckboxRef}
+                        type="checkbox"
+                        checked={allSelectableSelected}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setSelectionMap((prev) => {
+                            const next = { ...(prev || {}) };
+                            for (const id of selectableIds) next[id] = checked;
+                            return next;
+                          });
+                        }}
+                      />
+                    </th>
+                    <th>Title</th>
+                    <th>Duplicate Reason</th>
+                    <th>Matched Existing</th>
+                    <th>Auto Category</th>
+                    <th>Metadata</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {preparedItems.map((row, idx) => {
+                    const id = String(row?.item_id || "");
+                    const status = String(importStatusMap[id] || (row?.duplicate?.is_duplicate ? "duplicate" : "ready"));
+                    const locked = status === "saved" || status === "skipped";
+                    const statusClass =
+                      status === "saved"
+                        ? styles.importStatusSaved
+                        : status === "failed"
+                          ? styles.importStatusFailed
+                          : status === "duplicate"
+                            ? styles.importStatusDuplicate
+                            : status === "skipped"
+                              ? styles.importStatusSkipped
+                              : styles.importStatusReady;
+                    const rowClass =
+                      status === "saved"
+                        ? styles.importRowSaved
+                        : status === "failed"
+                          ? styles.importRowFailed
+                          : status === "duplicate"
+                            ? styles.importRowDuplicate
+                            : "";
+                    return (
+                    <tr key={`${row.item_id || row.title || "dup"}-${idx}`} className={rowClass}>
+                      <td>
+                        <input
+                          type="checkbox"
+                          checked={Boolean(selectionMap[id])}
+                          disabled={locked}
+                          onChange={(e) =>
+                            setSelectionMap((prev) => ({ ...prev, [id]: e.target.checked }))
+                          }
+                        />
+                      </td>
+                      <td>{row.title || "-"}</td>
+                      <td>{Array.isArray(row?.duplicate?.reasons) ? row.duplicate.reasons.join(", ") : "-"}</td>
+                      <td>
+                        {Array.isArray(row?.duplicate?.matches) && row.duplicate.matches.length
+                          ? row.duplicate.matches
+                              .slice(0, 2)
+                              .map((m) => `${m.title || "Untitled"}${m.release_year ? ` (${m.release_year})` : ""}`)
+                              .join(" | ")
+                          : "-"}
+                      </td>
+                      <td>{row?.category_name || "-"}</td>
+                      <td>
+                        {[
+                          row?.release_year ? `Year: ${row.release_year}` : "",
+                          Number.isFinite(Number(row?.imdb_rating)) ? `IMDb: ${row.imdb_rating}` : "",
+                          row?.imdb_release_date ? `Date: ${row.imdb_release_date}` : "",
+                          Array.isArray(row?.imdb_languages) && row.imdb_languages.length
+                            ? `Lang: ${row.imdb_languages.slice(0, 2).join(", ")}`
+                            : "",
+                          Array.isArray(row?.imdb_countries) && row.imdb_countries.length
+                            ? `Country: ${row.imdb_countries.slice(0, 2).join(", ")}`
+                            : "",
+                          Array.isArray(row?.imdb_genres) && row.imdb_genres.length
+                            ? `Genres: ${row.imdb_genres.slice(0, 2).join(", ")}`
+                            : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" | ") || "-"}
+                      </td>
+                      <td>
+                        <span className={statusClass}>{status}</span>
+                      </td>
+                    </tr>
+                    );
+                  })}
+                  {!preparedItems.length ? (
+                    <tr>
+                      <td colSpan={7}>No scan result yet.</td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          </>
+        ) : null}
+
+        {importingMovies ? (
+          <>
+            <h3 style={{ margin: "8px 0 0" }}>Live Scan Feed</h3>
+            <p className={styles.hint}>
+              Found: {scanRawCount} | Prepared: {scanPreparedCount}
+            </p>
+            <div className={styles.tableWrap}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Title</th>
+                    <th>Category</th>
+                    <th>Source URL</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {scanRawItems.slice(-40).map((row, idx) => (
+                    <tr key={`${row.title}-${idx}`}>
+                      <td>{row.title}</td>
+                      <td>{row.category_name || "-"}</td>
+                      <td style={{ maxWidth: 460, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {row.source_url || "-"}
+                      </td>
+                    </tr>
+                  ))}
+                  {!scanRawItems.length ? (
+                    <tr>
+                      <td colSpan={3}>Scanning চলছে... প্রথম মুভি পেলে এখানে সাথে সাথে দেখাবে।</td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          </>
+        ) : null}
+      </section>
 
       {showCategoryForm ? (
         <section className={styles.card}>
@@ -750,7 +1662,7 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
       {showMovieForm ? (
         <section className={styles.card}>
           <h2>{movieForm.id ? "Edit Movie" : "Add Movie"}</h2>
-          <p className={styles.hint}>Add movie and one primary source URL. Source URL stays server-side and client plays via proxy.</p>
+          <p className={styles.hint}>Add movie and one primary source URL.</p>
 
           <form className={styles.form} onSubmit={handleMovieSubmit}>
           <CategoryCombobox
@@ -809,7 +1721,16 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
             </label>
             <label className={styles.field}>
               <span>Source URL</span>
-              <input value={movieForm.source_url} onChange={(e) => setMovieForm((prev) => ({ ...prev, source_url: e.target.value }))} placeholder="https://.../movie.m3u8" />
+              <div className={styles.sourcePreviewRow}>
+                <input
+                  value={movieForm.source_url}
+                  onChange={(e) => setMovieForm((prev) => ({ ...prev, source_url: e.target.value }))}
+                  placeholder="https://.../movie.m3u8"
+                />
+                <button type="button" className={styles.ghostBtn} onClick={openSourcePreview}>
+                  Preview
+                </button>
+              </div>
             </label>
             <label className={styles.field}>
               <span>Visibility</span>
@@ -880,6 +1801,31 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
             </label>
           </div>
 
+          {imdbImagePreviewUrls.length ? (
+            <label className={styles.field}>
+              <span>IMDb Image Preview ({imdbImagePreviewUrls.length})</span>
+              <div className={styles.imdbPreviewGrid}>
+                {imdbImagePreviewUrls.map((url, idx) => (
+                  <a
+                    key={`${url}-${idx}`}
+                    href={url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={styles.imdbPreviewCard}
+                    title={url}
+                  >
+                    <img
+                      src={url}
+                      alt={`IMDb preview ${idx + 1}`}
+                      className={styles.imdbPreviewImage}
+                      loading="lazy"
+                    />
+                  </a>
+                ))}
+              </div>
+            </label>
+          ) : null}
+
           <label className={styles.field}>
             <span>Synopsis</span>
             <textarea value={movieForm.synopsis} onChange={(e) => setMovieForm((prev) => ({ ...prev, synopsis: e.target.value }))} />
@@ -893,6 +1839,7 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
                 type="button"
                 className={styles.ghostBtn}
                 onClick={() => {
+                  if (!confirmDiscardMovieForm()) return;
                   setShowMovieForm(false);
                   resetMovieForm();
                 }}
@@ -908,6 +1855,27 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
             </div>
           </form>
         </section>
+      ) : null}
+
+      {previewSourceUrl ? (
+        <div className={styles.modalWrap} onClick={closeSourcePreview}>
+          <div className={styles.modalCard} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <h4>{previewTitle || "Source Preview"}</h4>
+              <button type="button" className={styles.closeBtn} onClick={closeSourcePreview}>
+                Close
+              </button>
+            </div>
+            <video
+              key={previewSourceUrl}
+              className={styles.video}
+              controls
+              playsInline
+              preload="metadata"
+              src={previewSourceUrl}
+            />
+          </div>
+        </div>
       ) : null}
     </div>
   );
