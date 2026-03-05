@@ -1,5 +1,5 @@
 import { getSupabaseAdmin } from "./supabaseAdmin";
-import { normalizeStreamUrl, toStreamProxyUrl } from "./streamUrl";
+import { isPrivateNetworkUrl, normalizeStreamUrl, toStreamProxyUrl } from "./streamUrl";
 import { deriveWatchState, isWatchedProgress, normalizeSeconds } from "./movieProgress";
 import { inferVideoQualityLabelFromUrl } from "./videoQuality";
 
@@ -89,7 +89,14 @@ function toMovieShape(movie, categoryRows, sourceRows, progressRow, isFavorite) 
 
   const firstSource = sortedSources[0] || null;
   const normalizedSource = normalizeStreamUrl(firstSource?.source_url || "");
-  const playbackUrl = normalizedSource ? toStreamProxyUrl(normalizedSource) || normalizedSource : "";
+  const privateDirectRaw = String(process.env.STREAM_PRIVATE_DIRECT_PLAYBACK || "true").trim();
+  const usePrivateDirectPlayback = !/^(0|false|no|off)$/i.test(privateDirectRaw);
+  const isPrivateSource = normalizedSource ? isPrivateNetworkUrl(normalizedSource) : false;
+  const playbackUrl = normalizedSource
+    ? (usePrivateDirectPlayback && isPrivateSource
+        ? normalizedSource
+        : toStreamProxyUrl(normalizedSource) || normalizedSource)
+    : "";
 
   const watchState = deriveWatchState({
     positionSeconds,

@@ -5,6 +5,7 @@ This project is deployed to Dokploy using a prebuilt Docker image.
 Primary reference:
 
 - `vercel/docs/prod-deploy-checklist.md`
+- `vercel/docs/transcode-gateway-setup.md` (domain no-sound for LAN movie sources)
 
 ## Current Deploy Mode
 

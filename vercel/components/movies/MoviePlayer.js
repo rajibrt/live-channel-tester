@@ -21,7 +21,48 @@ function formatClock(totalSeconds) {
 }
 
 function isTranscodePlaybackUrl(value) {
-  return String(value || "").includes("/api/stream-transcode?");
+  const raw = String(value || "");
+  return /stream-transcode/i.test(raw);
+}
+
+function hasLikelyUnsupportedAudioInUrl(value) {
+  const raw = String(value || "").toLowerCase();
+  if (!raw) return false;
+  return /(ac-?3|eac-?3|dts|truehd|dd5\.1|ddp5\.1)/i.test(raw);
+}
+
+function isPrivateLanUrl(value) {
+  try {
+    const host = new URL(String(value || "")).hostname;
+    if (!host) return false;
+    if (host === "localhost" || host === "127.0.0.1") return true;
+    if (/^10\.\d+\.\d+\.\d+$/.test(host)) return true;
+    if (/^192\.168\.\d+\.\d+$/.test(host)) return true;
+    if (/^172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+$/.test(host)) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+function shouldAvoidServerTranscode(rawUrl) {
+  if (!isPrivateLanUrl(rawUrl)) return false;
+  if (typeof window === "undefined") return false;
+  const host = String(window.location.hostname || "").toLowerCase();
+  // Hosted domain/server usually cannot reach user's private LAN source.
+  return host !== "localhost" && host !== "127.0.0.1" && host !== "::1";
+}
+
+function resolveCompatibilityPlaybackUrl(rawSourceUrl) {
+  const raw = String(rawSourceUrl || "").trim();
+  if (!raw) return "";
+  return toStreamTranscodeUrl(raw);
+}
+
+function isTruthyEnv(value) {
+  const raw = String(value || "").trim().toLowerCase();
+  if (!raw) return false;
+  return !/^(0|false|no|off)$/i.test(raw);
 }
 
 function withTranscodeStart(value, seconds) {
@@ -38,6 +79,30 @@ function withTranscodeStart(value, seconds) {
   } catch {
     const sep = raw.includes("?") ? "&" : "?";
     return `${raw}${sep}start=${encodeURIComponent(String(Math.max(0, toSeconds(seconds))))}`;
+  }
+}
+
+async function diagnoseTranscodeFailure(playbackUrl) {
+  const url = String(playbackUrl || "").trim();
+  if (!isTranscodePlaybackUrl(url)) return "";
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+    const res = await fetch(url, {
+      method: "GET",
+      credentials: "include",
+      headers: { Range: "bytes=0-" },
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    if (res.ok) return "";
+    const body = await res.json().catch(() => ({}));
+    const reason = String(body?.reason || body?.error || "").trim();
+    const details = String(body?.details || "").trim();
+    return [reason, details].filter(Boolean).join(" | ").slice(0, 220);
+  } catch {
+    return "";
   }
 }
 
@@ -65,8 +130,12 @@ export default function MoviePlayer({
   const [seekNonce, setSeekNonce] = useState(0);
   const [playbackSeconds, setPlaybackSeconds] = useState(0);
   const [fallbackPlaybackUrl, setFallbackPlaybackUrl] = useState("");
+  const [compatModeRequested, setCompatModeRequested] = useState(false);
+  const [compatibilityDisabled, setCompatibilityDisabled] = useState(false);
   const [scrubValue, setScrubValue] = useState(null);
   const fallbackTriedRef = useRef(false);
+  const autoCompatAttemptedRef = useRef(false);
+  const forceCompatMode = isTruthyEnv(process.env.NEXT_PUBLIC_STREAM_ALWAYS_COMPAT_MODE);
 
   useEffect(() => {
     onProgressSavedRef.current = onProgressSaved;
@@ -82,7 +151,10 @@ export default function MoviePlayer({
 
   useEffect(() => {
     fallbackTriedRef.current = false;
+    autoCompatAttemptedRef.current = false;
     setFallbackPlaybackUrl("");
+    setCompatModeRequested(false);
+    setCompatibilityDisabled(false);
     seekStartFromRef.current = null;
     setSeekNonce(0);
     setScrubValue(null);
@@ -92,12 +164,36 @@ export default function MoviePlayer({
     const rawUrl = String(movie?.source?.rawUrl || "").trim();
     if (!rawUrl) return undefined;
     if (fallbackPlaybackUrl) return undefined;
+    if (compatibilityDisabled) return undefined;
+
+    const compatibilityUrl = resolveCompatibilityPlaybackUrl(rawUrl);
+    if (forceCompatMode) {
+      if (compatibilityUrl) {
+        fallbackTriedRef.current = true;
+        setCompatModeRequested(true);
+        setStatusText("Compatibility mode forced by environment.");
+        setFallbackPlaybackUrl(compatibilityUrl);
+      }
+      return undefined;
+    }
+
+    // For common unsupported audio labels in filenames (DD5.1/DTS/EAC3),
+    // attempt compatibility mode once per movie automatically.
+    if (!autoCompatAttemptedRef.current && hasLikelyUnsupportedAudioInUrl(rawUrl) && compatibilityUrl) {
+      autoCompatAttemptedRef.current = true;
+      fallbackTriedRef.current = true;
+      setCompatModeRequested(true);
+      setStatusText("Likely unsupported audio codec detected. Switching to compatibility mode...");
+      setFallbackPlaybackUrl(compatibilityUrl);
+      return undefined;
+    }
 
     let cancelled = false;
     const controller = new AbortController();
 
     const runProbe = async () => {
       try {
+        const compatibilityUrl = resolveCompatibilityPlaybackUrl(rawUrl);
         const probeRes = await fetch(`/api/stream-probe?url=${encodeURIComponent(rawUrl)}`, {
           method: "GET",
           credentials: "include",
@@ -107,10 +203,11 @@ export default function MoviePlayer({
         if (!probeRes.ok) return;
         const probe = await probeRes.json().catch(() => ({}));
         if (cancelled) return;
-        if (probe?.should_transcode_audio) {
+        if (probe?.should_transcode_audio && compatibilityUrl) {
           fallbackTriedRef.current = true;
           setStatusText("Compatibility audio detected. Preparing playback...");
-          setFallbackPlaybackUrl(toStreamTranscodeUrl(rawUrl));
+          setCompatModeRequested(true);
+          setFallbackPlaybackUrl(compatibilityUrl);
         }
       } catch {
         // ignore probe failures and keep native playback
@@ -122,7 +219,7 @@ export default function MoviePlayer({
       cancelled = true;
       controller.abort();
     };
-  }, [fallbackPlaybackUrl, movie?.id, movie?.source?.rawUrl]);
+  }, [compatModeRequested, compatibilityDisabled, fallbackPlaybackUrl, forceCompatMode, movie?.id, movie?.source?.rawUrl]);
 
   const postProgress = useCallback(
     async (source) => {
@@ -255,16 +352,48 @@ export default function MoviePlayer({
 
     const handleError = () => {
       const rawUrl = String(movie?.source?.rawUrl || "");
-      const canFallback = !fallbackTriedRef.current && !isTranscoded && rawUrl;
+      const compatibilityUrl = resolveCompatibilityPlaybackUrl(rawUrl);
+      const canFallback =
+        !fallbackTriedRef.current &&
+        !isTranscoded &&
+        rawUrl &&
+        compatibilityUrl;
       if (canFallback) {
         fallbackTriedRef.current = true;
         const currentAbs = toSeconds(video.currentTime) + toSeconds(transcodeOffsetRef.current);
         setStatusText("Switching to compatibility audio...");
         seekStartFromRef.current = currentAbs;
-        setFallbackPlaybackUrl(toStreamTranscodeUrl(rawUrl));
+        setCompatModeRequested(true);
+        setFallbackPlaybackUrl(compatibilityUrl);
         return;
       }
+      if (!isTranscoded && shouldAvoidServerTranscode(rawUrl) && !compatModeRequested) {
+        setStatusText("Playback failed (server cannot access private source; using direct LAN playback only)");
+      } else if (!isTranscoded && shouldAvoidServerTranscode(rawUrl) && compatModeRequested) {
+        setStatusText("Playback failed (compatibility mode needs LAN-reachable transcode server)");
+      } else {
       setStatusText("Playback failed");
+      }
+      if (isTranscoded) {
+        diagnoseTranscodeFailure(playbackUrl).then((info) => {
+          if (!info) return;
+          const lower = info.toLowerCase();
+          const networkBlocked =
+            lower.includes("operation timed out") ||
+            lower.includes("connection to tcp") ||
+            lower.includes("error opening input file");
+          if (networkBlocked) {
+            // Domain cannot reach LAN source for server-side transcode.
+            // Fall back to normal mode and stop auto-retrying compat.
+            setCompatibilityDisabled(true);
+            setCompatModeRequested(false);
+            setFallbackPlaybackUrl("");
+            setStatusText("Compatibility mode unavailable on domain (LAN source unreachable). Switched to normal mode.");
+            return;
+          }
+          setStatusText(`Playback failed (${info})`);
+        });
+      }
       onTrackActivityRef.current?.("movie_playback_failed", {
         movie_id: String(movie?.id || ""),
       });
@@ -319,6 +448,9 @@ export default function MoviePlayer({
   const favoriteActive = Boolean(movie?.isFavorite);
   const hasPlayableMovie = Boolean(movie?.playbackUrl);
   const isTranscodedPlayback = isTranscodePlaybackUrl(fallbackPlaybackUrl || movie?.playbackUrl);
+  const rawSourceUrl = String(movie?.source?.rawUrl || "");
+  const privateHostedMode = shouldAvoidServerTranscode(rawSourceUrl);
+  const likelyUnsupportedAudio = hasLikelyUnsupportedAudioInUrl(rawSourceUrl);
   const showPlayAction = isPaused || !hasPlayableMovie;
   const watchedSeconds = Number(playbackSeconds || movie?.progress?.positionSeconds || 0);
   const durationSeconds = Number(movie?.progress?.durationSeconds || movie?.runtimeSeconds || 0);
@@ -383,6 +515,36 @@ export default function MoviePlayer({
     [isTranscodedPlayback, queueTranscodeSeek]
   );
 
+  const toggleCompatibilityMode = useCallback(() => {
+    const rawUrl = String(movie?.source?.rawUrl || "").trim();
+    if (!rawUrl) return;
+    const compatibilityUrl = resolveCompatibilityPlaybackUrl(rawUrl);
+    const video = videoRef.current;
+    const currentAbs = video
+      ? toSeconds(video.currentTime) + toSeconds(transcodeOffsetRef.current)
+      : toSeconds(playbackSeconds || movie?.progress?.positionSeconds || 0);
+    seekStartFromRef.current = currentAbs;
+    if (isTranscodedPlayback) {
+      setCompatibilityDisabled(true);
+      setCompatModeRequested(false);
+      setFallbackPlaybackUrl("");
+      setStatusText("Switched to normal mode");
+      return;
+    }
+    if (!compatibilityUrl) {
+      setStatusText("Compatibility mode unavailable (gateway not configured for private source)");
+      return;
+    }
+    setCompatibilityDisabled(false);
+    setCompatModeRequested(true);
+    setFallbackPlaybackUrl(compatibilityUrl);
+    if (privateHostedMode) {
+      setStatusText("Trying compatibility mode (requires transcode server access to LAN source)...");
+    } else {
+      setStatusText("Switching to compatibility mode...");
+    }
+  }, [isTranscodedPlayback, movie?.progress?.positionSeconds, movie?.source?.rawUrl, playbackSeconds, privateHostedMode]);
+
   return (
     <section className={styles.playerWrap}>
       <video ref={videoRef} className={styles.video} controls playsInline preload="metadata" />
@@ -435,6 +597,14 @@ export default function MoviePlayer({
           </button>
           <button
             type="button"
+            className={`${styles.movieNavBtn} ${styles.movieNavBtnInactive}`}
+            onClick={toggleCompatibilityMode}
+            disabled={!rawSourceUrl}
+          >
+            <span className={styles.movieBtnText}>{isTranscodedPlayback ? "Normal Mode" : "Compatibility Mode"}</span>
+          </button>
+          <button
+            type="button"
             className={`${styles.movieFavoriteBtn} ${favoriteActive ? styles.movieFavoriteBtnActive : styles.movieFavoriteBtnInactive}`}
             onClick={() => onToggleFavorite?.(movie)}
             aria-label={favoriteActive ? "Favorited" : "Add Favorite"}
@@ -477,6 +647,9 @@ export default function MoviePlayer({
         <p className={styles.playerHintText}>Resume starts when progress is at least 30s. Watched is 95%+.</p>
         {isTranscodedPlayback ? (
           <p className={styles.playerHintText}>Compatibility mode active (AAC fallback). Use -10s/+10s for reliable seeking.</p>
+        ) : null}
+        {!isTranscodedPlayback && privateHostedMode && likelyUnsupportedAudio ? (
+          <p className={styles.playerHintText}>This source likely has unsupported browser audio codec. Try Compatibility Mode.</p>
         ) : null}
       </div>
     </section>
