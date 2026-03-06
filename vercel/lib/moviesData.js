@@ -159,15 +159,29 @@ function toMovieShape(movie, categoryRows, sourceRows, progressRow, isFavorite) 
 
 export async function getMoviesCatalogForUser(userId) {
   const admin = getSupabaseAdmin();
-
-  const { data: movieRows, error: movieErr } = await admin
-    .from("movies")
-    .select(
-      "id,slug,title,synopsis,poster_url,backdrop_url,release_year,runtime_seconds,is_published,updated_at,imdb_id,imdb_url,imdb_rating,imdb_votes,content_rating,imdb_genres,imdb_directors,imdb_writers,imdb_stars,imdb_release_date,imdb_countries,imdb_languages,video_quality"
-    )
-    .eq("is_published", true)
-    .order("updated_at", { ascending: false })
-    .limit(500);
+  const pageSize = 500;
+  const movieRows = [];
+  let from = 0;
+  let movieErr = null;
+  while (true) {
+    const to = from + pageSize - 1;
+    const { data, error } = await admin
+      .from("movies")
+      .select(
+        "id,slug,title,synopsis,poster_url,backdrop_url,release_year,runtime_seconds,is_published,updated_at,imdb_id,imdb_url,imdb_rating,imdb_votes,content_rating,imdb_genres,imdb_directors,imdb_writers,imdb_stars,imdb_release_date,imdb_countries,imdb_languages,video_quality"
+      )
+      .eq("is_published", true)
+      .order("updated_at", { ascending: false })
+      .range(from, to);
+    if (error) {
+      movieErr = error;
+      break;
+    }
+    const chunk = Array.isArray(data) ? data : [];
+    movieRows.push(...chunk);
+    if (!chunk.length) break;
+    from += chunk.length;
+  }
 
   if (movieErr || !Array.isArray(movieRows) || !movieRows.length) {
     const { data: categories } = await admin
@@ -189,38 +203,72 @@ export async function getMoviesCatalogForUser(userId) {
   }
 
   const movieIds = movieRows.map((row) => Number(row?.id)).filter((id) => Number.isInteger(id) && id > 0);
+  const movieIdSet = new Set(movieIds);
+  const categoriesPromise = admin
+    .from("movie_categories")
+    .select("id,slug,name,position")
+    .order("position", { ascending: true })
+    .order("name", { ascending: true });
+  const mapPromise = (async () => {
+    const rows = [];
+    let offset = 0;
+    while (true) {
+      const { data, error } = await admin
+        .from("movie_category_map")
+        .select("movie_id,category_id")
+        .order("movie_id", { ascending: true })
+        .order("category_id", { ascending: true })
+        .range(offset, offset + pageSize - 1);
+      if (error) throw new Error(error.message || "Failed to load movie/category map");
+      const chunk = Array.isArray(data) ? data : [];
+      rows.push(...chunk);
+      if (!chunk.length) break;
+      offset += chunk.length;
+    }
+    return rows;
+  })();
+  const sourcesPromise = (async () => {
+    const rows = [];
+    let offset = 0;
+    while (true) {
+      const { data, error } = await admin
+        .from("movie_sources")
+        .select("id,movie_id,label,source_url,is_active,sort_order")
+        .eq("is_active", true)
+        .order("movie_id", { ascending: true })
+        .order("sort_order", { ascending: true })
+        .order("id", { ascending: true })
+        .range(offset, offset + pageSize - 1);
+      if (error) throw new Error(error.message || "Failed to load movie sources");
+      const chunk = Array.isArray(data) ? data : [];
+      rows.push(...chunk);
+      if (!chunk.length) break;
+      offset += chunk.length;
+    }
+    return rows;
+  })();
 
-  const [categoriesRes, mapRes, sourcesRes, progressRes, favoritesRes] = await Promise.all([
-    admin
-      .from("movie_categories")
-      .select("id,slug,name,position")
-      .order("position", { ascending: true })
-      .order("name", { ascending: true }),
-    admin
-      .from("movie_category_map")
-      .select("movie_id,category_id")
-      .in("movie_id", movieIds),
-    admin
-      .from("movie_sources")
-      .select("id,movie_id,label,source_url,is_active,sort_order")
-      .in("movie_id", movieIds)
-      .eq("is_active", true)
-      .order("sort_order", { ascending: true })
-      .order("id", { ascending: true }),
+  const [categoriesRes, mapRows, sourceRows, progressRes, favoritesRes] = await Promise.all([
+    categoriesPromise,
+    mapPromise,
+    sourcesPromise,
     userId
       ? admin
           .from("movie_watch_progress")
           .select("movie_id,position_seconds,duration_seconds,progress_percent,is_completed,updated_at")
+          .in("movie_id", movieIds)
           .eq("user_id", userId)
       : Promise.resolve({ data: [] }),
     userId
-      ? admin.from("movie_favorites").select("movie_id").eq("user_id", userId)
+      ? admin
+          .from("movie_favorites")
+          .select("movie_id")
+          .in("movie_id", movieIds)
+          .eq("user_id", userId)
       : Promise.resolve({ data: [] }),
   ]);
 
   const categories = Array.isArray(categoriesRes?.data) ? categoriesRes.data : [];
-  const mapRows = Array.isArray(mapRes?.data) ? mapRes.data : [];
-  const sourceRows = Array.isArray(sourcesRes?.data) ? sourcesRes.data : [];
   const progressRows = Array.isArray(progressRes?.data) ? progressRes.data : [];
   const favoriteRows = Array.isArray(favoritesRes?.data) ? favoritesRes.data : [];
 
@@ -239,7 +287,7 @@ export async function getMoviesCatalogForUser(userId) {
   for (const row of mapRows) {
     const movieId = Number(row?.movie_id);
     const categoryId = Number(row?.category_id);
-    if (!Number.isInteger(movieId) || !Number.isInteger(categoryId)) continue;
+    if (!Number.isInteger(movieId) || !Number.isInteger(categoryId) || !movieIdSet.has(movieId)) continue;
     const category = categoryById.get(categoryId);
     if (!category) continue;
     const list = categoriesByMovie.get(movieId) || [];
@@ -250,7 +298,7 @@ export async function getMoviesCatalogForUser(userId) {
   const sourcesByMovie = new Map();
   for (const row of sourceRows) {
     const movieId = Number(row?.movie_id);
-    if (!Number.isInteger(movieId)) continue;
+    if (!Number.isInteger(movieId) || !movieIdSet.has(movieId)) continue;
     const list = sourcesByMovie.get(movieId) || [];
     list.push(row);
     sourcesByMovie.set(movieId, list);

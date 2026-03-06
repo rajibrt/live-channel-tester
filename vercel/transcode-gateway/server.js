@@ -56,9 +56,11 @@ function buildFfmpegArgs(target, startSeconds) {
     "-loglevel",
     "error",
     "-fflags",
-    "+genpts+igndts",
+    "+genpts",
     "-avoid_negative_ts",
     "make_zero",
+    "-thread_queue_size",
+    "4096",
   ];
   if (seek > 0) args.push("-ss", String(Math.floor(seek)));
   args.push(
@@ -70,7 +72,6 @@ function buildFfmpegArgs(target, startSeconds) {
     "0:a:0?",
     "-sn"
   );
-
   if (FORCE_VIDEO_REENCODE) {
     args.push(
       "-c:v",
@@ -82,7 +83,7 @@ function buildFfmpegArgs(target, startSeconds) {
       "-pix_fmt",
       "yuv420p",
       "-vsync",
-      "2",
+      "cfr",
       "-g",
       "48",
       "-keyint_min",
@@ -102,7 +103,7 @@ function buildFfmpegArgs(target, startSeconds) {
     "-ar",
     "48000",
     "-af",
-    "aresample=async=1000:first_pts=0",
+    "aresample=async=1:first_pts=0",
     "-b:a",
     AUDIO_BITRATE,
     "-max_interleave_delta",

@@ -143,14 +143,16 @@ function buildFfmpegArgs(targetUrl, startSeconds = 0, forceVideoReencode = false
     "error",
     // Stabilize timestamps for better A/V sync on problematic containers.
     "-fflags",
-    "+genpts+igndts",
+    "+genpts",
     "-avoid_negative_ts",
     "make_zero",
+    "-thread_queue_size",
+    "4096",
   ];
 
   const seek = Math.max(0, Number(startSeconds || 0) || 0);
   if (seek > 0) {
-    // Fast seek for compatibility mode resume.
+    // Keep seek before input for fast startup on large resume offsets.
     args.push("-ss", String(Math.floor(seek)));
   }
 
@@ -163,7 +165,6 @@ function buildFfmpegArgs(targetUrl, startSeconds = 0, forceVideoReencode = false
     "0:a:0?",
     "-sn",
   );
-
   if (forceVideoReencode) {
     args.push(
       "-c:v",
@@ -175,7 +176,7 @@ function buildFfmpegArgs(targetUrl, startSeconds = 0, forceVideoReencode = false
       "-pix_fmt",
       "yuv420p",
       "-vsync",
-      "2",
+      "cfr",
       "-g",
       "48",
       "-keyint_min",
@@ -195,7 +196,7 @@ function buildFfmpegArgs(targetUrl, startSeconds = 0, forceVideoReencode = false
     "-ar",
     "48000",
     "-af",
-    "aresample=async=1000:first_pts=0",
+    "aresample=async=1:first_pts=0",
     "-b:a",
     audioBitrate,
     "-max_interleave_delta",
@@ -317,7 +318,7 @@ export async function GET(request) {
 
   const ffmpegBin = String(process.env.FFMPEG_PATH || "ffmpeg").trim() || "ffmpeg";
   const ffprobeBin = String(process.env.FFPROBE_PATH || "ffprobe").trim() || "ffprobe";
-  const forceVideoReencodeRaw = String(process.env.STREAM_TRANSCODE_FORCE_VIDEO_REENCODE || "").trim();
+  const forceVideoReencodeRaw = String(process.env.STREAM_TRANSCODE_FORCE_VIDEO_REENCODE || "true").trim();
   const forceVideoReencodeRequested =
     forceVideoReencodeRaw && !/^(0|false|no|off)$/i.test(forceVideoReencodeRaw);
   const sourceVideoCodec = await probePrimaryVideoCodec(ffprobeBin, target);

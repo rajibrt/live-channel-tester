@@ -28,7 +28,7 @@ function isTranscodePlaybackUrl(value) {
 function hasLikelyUnsupportedAudioInUrl(value) {
   const raw = String(value || "").toLowerCase();
   if (!raw) return false;
-  return /(ac-?3|eac-?3|dts|truehd|dd5\.1|ddp5\.1)/i.test(raw);
+  return /(ac-?3|eac-?3|dts|truehd|dd[\d.]+|ddp[\d.]*)/i.test(raw);
 }
 
 function isPrivateLanUrl(value) {
@@ -129,6 +129,8 @@ export default function MoviePlayer({
   const [isPaused, setIsPaused] = useState(false);
   const [seekNonce, setSeekNonce] = useState(0);
   const [playbackSeconds, setPlaybackSeconds] = useState(0);
+  const [mediaDurationSeconds, setMediaDurationSeconds] = useState(0);
+  const [probedDurationSeconds, setProbedDurationSeconds] = useState(0);
   const [fallbackPlaybackUrl, setFallbackPlaybackUrl] = useState("");
   const [compatModeRequested, setCompatModeRequested] = useState(false);
   const [compatibilityDisabled, setCompatibilityDisabled] = useState(false);
@@ -158,7 +160,33 @@ export default function MoviePlayer({
     seekStartFromRef.current = null;
     setSeekNonce(0);
     setScrubValue(null);
+    setMediaDurationSeconds(0);
+    setProbedDurationSeconds(0);
   }, [movie?.id]);
+
+  useEffect(() => {
+    const rawUrl = String(movie?.source?.rawUrl || "").trim();
+    if (!rawUrl) return undefined;
+    const controller = new AbortController();
+    const runProbe = async () => {
+      try {
+        const probeRes = await fetch(`/api/stream-probe?url=${encodeURIComponent(rawUrl)}`, {
+          method: "GET",
+          credentials: "include",
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!probeRes.ok) return;
+        const probe = await probeRes.json().catch(() => ({}));
+        const duration = toSeconds(probe?.duration_seconds || 0);
+        if (duration > 0) setProbedDurationSeconds(duration);
+      } catch {
+        // ignore probe failures
+      }
+    };
+    runProbe();
+    return () => controller.abort();
+  }, [movie?.id, movie?.source?.rawUrl]);
 
   useEffect(() => {
     const rawUrl = String(movie?.source?.rawUrl || "").trim();
@@ -177,8 +205,8 @@ export default function MoviePlayer({
       return undefined;
     }
 
-    // For common unsupported audio labels in filenames (DD5.1/DTS/EAC3),
-    // attempt compatibility mode once per movie automatically.
+    // For common unsupported audio labels in filenames (DD2.0/DD5.1/DTS/EAC3),
+    // attempt compatibility mode automatically.
     if (!autoCompatAttemptedRef.current && hasLikelyUnsupportedAudioInUrl(rawUrl) && compatibilityUrl) {
       autoCompatAttemptedRef.current = true;
       fallbackTriedRef.current = true;
@@ -230,9 +258,14 @@ export default function MoviePlayer({
 
       const payload = {
         position_seconds: toSeconds(video.currentTime) + toSeconds(transcodeOffsetRef.current),
-        duration_seconds: Number.isFinite(Number(video.duration))
-          ? toSeconds(video.duration) + toSeconds(transcodeOffsetRef.current)
-          : toSeconds(movie?.runtimeSeconds || movie?.progress?.durationSeconds || 0),
+        duration_seconds: Math.max(
+          Number.isFinite(Number(video.duration))
+            ? toSeconds(video.duration) + toSeconds(transcodeOffsetRef.current)
+            : 0,
+          toSeconds(movie?.runtimeSeconds || 0),
+          toSeconds(movie?.progress?.durationSeconds || 0),
+          toSeconds(probedDurationSeconds || 0)
+        ),
         source,
       };
 
@@ -260,7 +293,7 @@ export default function MoviePlayer({
         // ignore save progress failures
       }
     },
-    [movie?.id, movie?.runtimeSeconds, movie?.progress?.durationSeconds]
+    [movie?.id, movie?.runtimeSeconds, movie?.progress?.durationSeconds, probedDurationSeconds]
   );
 
   const postComplete = useCallback(async () => {
@@ -293,7 +326,10 @@ export default function MoviePlayer({
     video.removeAttribute("src");
     video.load();
 
-    const playbackUrl = String(fallbackPlaybackUrl || movie?.playbackUrl || "");
+    const forcedCompatPlaybackUrl = forceCompatMode
+      ? resolveCompatibilityPlaybackUrl(String(movie?.source?.rawUrl || ""))
+      : "";
+    const playbackUrl = String(fallbackPlaybackUrl || forcedCompatPlaybackUrl || movie?.playbackUrl || "");
     if (!playbackUrl) {
       setStatusText("Select a movie with a playable source.");
       return undefined;
@@ -311,6 +347,12 @@ export default function MoviePlayer({
     video.load();
 
     const handleLoadedMetadata = () => {
+      const measuredDuration = Number.isFinite(Number(video.duration))
+        ? toSeconds(video.duration) + toSeconds(transcodeOffsetRef.current)
+        : 0;
+      if (measuredDuration > 0) {
+        setMediaDurationSeconds((prev) => Math.max(prev, measuredDuration));
+      }
       if (!isTranscoded && desiredStart > 0 && Number.isFinite(video.duration)) {
         video.currentTime = Math.min(desiredStart, Math.max(0, Math.floor(video.duration) - 1));
       }
@@ -343,6 +385,20 @@ export default function MoviePlayer({
 
     const handleTimeUpdate = () => {
       setPlaybackSeconds(toSeconds(video.currentTime) + toSeconds(transcodeOffsetRef.current));
+      if (Number.isFinite(Number(video.duration))) {
+        const measuredDuration = toSeconds(video.duration) + toSeconds(transcodeOffsetRef.current);
+        if (measuredDuration > 0) {
+          setMediaDurationSeconds((prev) => Math.max(prev, measuredDuration));
+        }
+      }
+    };
+
+    const handleDurationChange = () => {
+      if (!Number.isFinite(Number(video.duration))) return;
+      const measuredDuration = toSeconds(video.duration) + toSeconds(transcodeOffsetRef.current);
+      if (measuredDuration > 0) {
+        setMediaDurationSeconds((prev) => Math.max(prev, measuredDuration));
+      }
     };
 
     const handleEnded = () => {
@@ -406,6 +462,7 @@ export default function MoviePlayer({
     video.addEventListener("ended", handleEnded);
     video.addEventListener("error", handleError);
     video.addEventListener("timeupdate", handleTimeUpdate);
+    video.addEventListener("durationchange", handleDurationChange);
     setIsPaused(video.paused);
 
     intervalRef.current = setInterval(() => {
@@ -438,12 +495,13 @@ export default function MoviePlayer({
       video.removeEventListener("ended", handleEnded);
       video.removeEventListener("error", handleError);
       video.removeEventListener("timeupdate", handleTimeUpdate);
+      video.removeEventListener("durationchange", handleDurationChange);
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("pagehide", onPageHide);
       window.removeEventListener("beforeunload", onPageHide);
       window.removeEventListener("movie-force-pause", onForcePause);
     };
-  }, [fallbackPlaybackUrl, movie?.id, movie?.playbackUrl, movie?.source?.rawUrl, postComplete, postProgress, replayToken, seekNonce, startFrom]);
+  }, [fallbackPlaybackUrl, forceCompatMode, movie?.id, movie?.playbackUrl, movie?.source?.rawUrl, postComplete, postProgress, replayToken, seekNonce, startFrom]);
 
   const favoriteActive = Boolean(movie?.isFavorite);
   const hasPlayableMovie = Boolean(movie?.playbackUrl);
@@ -453,8 +511,17 @@ export default function MoviePlayer({
   const likelyUnsupportedAudio = hasLikelyUnsupportedAudioInUrl(rawSourceUrl);
   const showPlayAction = isPaused || !hasPlayableMovie;
   const watchedSeconds = Number(playbackSeconds || movie?.progress?.positionSeconds || 0);
-  const durationSeconds = Number(movie?.progress?.durationSeconds || movie?.runtimeSeconds || 0);
-  const watchedPercent = Number(movie?.progress?.progressPercent || 0);
+  const durationSeconds = Number(
+    Math.max(
+      toSeconds(movie?.progress?.durationSeconds || 0),
+      toSeconds(movie?.runtimeSeconds || 0),
+      toSeconds(probedDurationSeconds || 0),
+      toSeconds(mediaDurationSeconds || 0)
+    )
+  );
+  const watchedPercent = durationSeconds > 0
+    ? Math.round((Math.max(0, Math.min(watchedSeconds, durationSeconds)) / durationSeconds) * 100)
+    : Number(movie?.progress?.progressPercent || 0);
   const watchTimeText = `${formatClock(watchedSeconds)} / ${formatClock(durationSeconds)}`;
   const watchProgressText = watchedPercent > 0 ? `${Math.round(watchedPercent)}% watched` : "Not started";
   const scrubDuration = Math.max(0, toSeconds(durationSeconds || movie?.runtimeSeconds || 0));

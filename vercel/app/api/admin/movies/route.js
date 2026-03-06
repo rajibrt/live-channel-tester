@@ -27,35 +27,76 @@ function toDecimal(value, fallback = null) {
 }
 
 async function loadMovies(admin) {
-  const { data: movies, error } = await admin
-    .from("movies")
-    .select(
-      "id,slug,title,synopsis,poster_url,backdrop_url,release_year,runtime_seconds,is_published,updated_at,imdb_id,imdb_url,imdb_rating,imdb_votes,content_rating,imdb_genres,imdb_directors,imdb_writers,imdb_stars,imdb_release_date,imdb_countries,imdb_languages,video_quality"
-    )
-    .order("updated_at", { ascending: false })
-    .limit(500);
-  if (error) throw new Error(error.message || "Failed to load movies");
+  const pageSize = 500;
+  const movies = [];
+  let from = 0;
+  while (true) {
+    const to = from + pageSize - 1;
+    const { data, error } = await admin
+      .from("movies")
+      .select(
+        "id,slug,title,synopsis,poster_url,backdrop_url,release_year,runtime_seconds,is_published,updated_at,imdb_id,imdb_url,imdb_rating,imdb_votes,content_rating,imdb_genres,imdb_directors,imdb_writers,imdb_stars,imdb_release_date,imdb_countries,imdb_languages,video_quality"
+      )
+      .order("updated_at", { ascending: false })
+      .range(from, to);
+    if (error) throw new Error(error.message || "Failed to load movies");
+    const chunk = Array.isArray(data) ? data : [];
+    movies.push(...chunk);
+    if (!chunk.length) break;
+    from += chunk.length;
+  }
 
   const ids = (movies || []).map((row) => Number(row?.id)).filter((id) => Number.isInteger(id) && id > 0);
   if (!ids.length) return [];
+  const movieIdSet = new Set(ids);
 
-  const [mapRes, categoryRes, sourceRes] = await Promise.all([
-    admin.from("movie_category_map").select("movie_id,category_id").in("movie_id", ids),
-    admin.from("movie_categories").select("id,slug,name").order("position", { ascending: true }),
-    admin
-      .from("movie_sources")
-      .select("id,movie_id,label,source_url,is_active,sort_order")
-      .in("movie_id", ids)
-      .order("sort_order", { ascending: true })
-      .order("id", { ascending: true }),
-  ]);
+  const categoriesPromise = admin.from("movie_categories").select("id,slug,name").order("position", { ascending: true });
+  const mapPromise = (async () => {
+    const rows = [];
+    let offset = 0;
+    while (true) {
+      const { data, error } = await admin
+        .from("movie_category_map")
+        .select("movie_id,category_id")
+        .order("movie_id", { ascending: true })
+        .order("category_id", { ascending: true })
+        .range(offset, offset + pageSize - 1);
+      if (error) throw new Error(error.message || "Failed to load movie/category map");
+      const chunk = Array.isArray(data) ? data : [];
+      rows.push(...chunk);
+      if (!chunk.length) break;
+      offset += chunk.length;
+    }
+    return rows;
+  })();
+  const sourcePromise = (async () => {
+    const rows = [];
+    let offset = 0;
+    while (true) {
+      const { data, error } = await admin
+        .from("movie_sources")
+        .select("id,movie_id,label,source_url,is_active,sort_order")
+        .order("movie_id", { ascending: true })
+        .order("sort_order", { ascending: true })
+        .order("id", { ascending: true })
+        .range(offset, offset + pageSize - 1);
+      if (error) throw new Error(error.message || "Failed to load movie sources");
+      const chunk = Array.isArray(data) ? data : [];
+      rows.push(...chunk);
+      if (!chunk.length) break;
+      offset += chunk.length;
+    }
+    return rows;
+  })();
+
+  const [mapRows, categoryRes, sourceRows] = await Promise.all([mapPromise, categoriesPromise, sourcePromise]);
 
   const categoryById = new Map((categoryRes.data || []).map((row) => [Number(row.id), row]));
   const categoryMapByMovie = new Map();
-  for (const row of mapRes.data || []) {
+  for (const row of mapRows || []) {
     const movieId = Number(row?.movie_id);
     const categoryId = Number(row?.category_id);
-    if (!movieId || !categoryId) continue;
+    if (!movieId || !categoryId || !movieIdSet.has(movieId)) continue;
     const category = categoryById.get(categoryId);
     if (!category) continue;
     const list = categoryMapByMovie.get(movieId) || [];
@@ -64,9 +105,9 @@ async function loadMovies(admin) {
   }
 
   const sourceByMovie = new Map();
-  for (const row of sourceRes.data || []) {
+  for (const row of sourceRows || []) {
     const movieId = Number(row?.movie_id);
-    if (!movieId) continue;
+    if (!movieId || !movieIdSet.has(movieId)) continue;
     const list = sourceByMovie.get(movieId) || [];
     list.push(row);
     sourceByMovie.set(movieId, list);

@@ -52,12 +52,15 @@ function parseProbe(stdout) {
     )
   );
   const unsupported = codecs.filter((name) => UNSUPPORTED_AUDIO_CODECS.has(name));
+  const rawDuration = Number(parsed?.format?.duration || 0);
+  const durationSeconds = Number.isFinite(rawDuration) && rawDuration > 0 ? Math.floor(rawDuration) : 0;
   return {
     ok: true,
     has_audio: audioStreams.length > 0,
     audio_codecs: codecs,
     unsupported_audio_codecs: unsupported,
     should_transcode_audio: unsupported.length > 0,
+    duration_seconds: durationSeconds,
   };
 }
 
@@ -156,6 +159,7 @@ export async function GET(request) {
         audio_codecs: [],
         unsupported_audio_codecs: [],
         should_transcode_audio: false,
+        duration_seconds: 0,
       },
       { status: 200 }
     );

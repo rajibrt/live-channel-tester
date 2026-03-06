@@ -367,7 +367,7 @@ function categorySlugKey(row) {
   return toSlug(row?.slug || row?.name || "");
 }
 
-function selectCategoryByMetadata(meta, categories = []) {
+function selectCategoryByMetadata(meta, categories = [], hints = []) {
   const rows = Array.isArray(categories) ? categories : [];
   const bySlug = new Map();
   for (const row of rows) {
@@ -387,6 +387,31 @@ function selectCategoryByMetadata(meta, categories = []) {
     }
     return null;
   };
+
+  const hintPool = (Array.isArray(hints) ? hints : [])
+    .map((v) => text(v).toLowerCase())
+    .filter(Boolean)
+    .join(" ");
+  if (/\bbengali\b|\bbangla\b|\bbangladesh\b/.test(hintPool)) {
+    const row = pick(["bangla", "bengali"]);
+    if (row) return row;
+  }
+  if (/\bhindi\b/.test(hintPool)) {
+    const row = pick(["hindi"]);
+    if (row) return row;
+  }
+  if (/\benglish\b/.test(hintPool)) {
+    const row = pick(["english"]);
+    if (row) return row;
+  }
+  if (/\banimation\b|\banime\b|\bcartoon\b|\bfamily\b/.test(hintPool)) {
+    const row = pick(["family"]);
+    if (row) return row;
+  }
+  if (/\bromance\b|\blove\b/.test(hintPool)) {
+    const row = pick(["love-story", "love"]);
+    if (row) return row;
+  }
 
   if (/\bbengali\b|\bbangla\b|\bbangladesh\b/.test(pool)) {
     const row = pick(["bangla", "bengali"]);
@@ -409,7 +434,7 @@ function selectCategoryByMetadata(meta, categories = []) {
     if (row) return row;
   }
 
-  return pick(["english", "family", "movies", "all-movies"]) || rows[0] || null;
+  return pick(["movies", "all-movies", "family", "english"]) || rows[0] || null;
 }
 
 export async function crawlMoviesFromApache(baseUrl, options = {}) {
@@ -555,7 +580,7 @@ export async function prepareMoviesFromApache(admin, input = {}) {
     const title = text(meta?.title || item.title);
     const releaseYear = meta?.release_year || null;
     const slugBase = toSlug(`${title}-${releaseYear || ""}`) || toSlug(title) || `movie-${Date.now()}`;
-    const selectedCategory = selectCategoryByMetadata(meta, existingCategories);
+    const selectedCategory = selectCategoryByMetadata(meta, existingCategories, [item.categoryName, item.titleRaw]);
     const prepared = {
       item_id: buildItemId(sourceUrl, title, releaseYear),
       slug_base: slugBase,
