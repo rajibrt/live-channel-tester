@@ -5,6 +5,15 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, Clapperboard, FolderPlus, Pencil, Trash2 } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../../components/ui/table";
 import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "../../../components/ui/pagination";
+import {
   flexRender,
   getCoreRowModel,
   getFilteredRowModel,
@@ -129,6 +138,23 @@ function movieDataStateLabel(state) {
   if (state === "metadata_missing") return "No Metadata";
   if (state === "missing_both") return "No Source + Metadata";
   return "Unknown";
+}
+
+function buildPageItems(currentPage, totalPages) {
+  const total = Math.max(1, Number(totalPages || 1));
+  const current = Math.min(Math.max(1, Number(currentPage || 1)), total);
+  const keep = new Set([1, total, current - 1, current, current + 1]);
+  const sorted = Array.from(keep)
+    .filter((n) => Number.isInteger(n) && n >= 1 && n <= total)
+    .sort((a, b) => a - b);
+  const out = [];
+  for (let i = 0; i < sorted.length; i += 1) {
+    const value = sorted[i];
+    const prev = sorted[i - 1];
+    if (i > 0 && value - prev > 1) out.push(`ellipsis-${prev}-${value}`);
+    out.push(value);
+  }
+  return out;
 }
 
 const EMPTY_MOVIE_FORM = {
@@ -1263,6 +1289,12 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
     getSortedRowModel: getSortedRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
   });
+  const movieCurrentPage = movieTable.getState().pagination.pageIndex + 1;
+  const movieTotalPages = movieTable.getPageCount() || 1;
+  const moviePageItems = useMemo(
+    () => buildPageItems(movieCurrentPage, movieTotalPages),
+    [movieCurrentPage, movieTotalPages]
+  );
 
   useEffect(() => {
     setMovieRowSelection({});
@@ -1525,41 +1557,55 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
               </label>
             </div>
             <div className={styles.paginationActions}>
-              <button
-                type="button"
-                className={styles.ghostBtn}
-                onClick={() => movieTable.setPageIndex(0)}
-                disabled={!movieTable.getCanPreviousPage()}
-              >
-                First
-              </button>
-              <button
-                type="button"
-                className={styles.ghostBtn}
-                onClick={() => movieTable.previousPage()}
-                disabled={!movieTable.getCanPreviousPage()}
-              >
-                Previous
-              </button>
-              <span className={styles.paginationPageInfo}>
-                Page {movieTable.getState().pagination.pageIndex + 1} of {movieTable.getPageCount() || 1}
-              </span>
-              <button
-                type="button"
-                className={styles.ghostBtn}
-                onClick={() => movieTable.nextPage()}
-                disabled={!movieTable.getCanNextPage()}
-              >
-                Next
-              </button>
-              <button
-                type="button"
-                className={styles.ghostBtn}
-                onClick={() => movieTable.setPageIndex(Math.max(movieTable.getPageCount() - 1, 0))}
-                disabled={!movieTable.getCanNextPage()}
-              >
-                Last
-              </button>
+              <Pagination className={styles.paginationNavInline}>
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationLink
+                      size="default"
+                      onClick={() => movieTable.setPageIndex(0)}
+                      disabled={!movieTable.getCanPreviousPage()}
+                    >
+                      First
+                    </PaginationLink>
+                  </PaginationItem>
+                  <PaginationItem>
+                    <PaginationPrevious
+                      onClick={() => movieTable.previousPage()}
+                      disabled={!movieTable.getCanPreviousPage()}
+                    />
+                  </PaginationItem>
+                  {moviePageItems.map((item) => (
+                    <PaginationItem key={String(item)}>
+                      {typeof item === "number" ? (
+                        <PaginationLink
+                          isActive={item === movieCurrentPage}
+                          size="icon"
+                          onClick={() => movieTable.setPageIndex(Math.max(item - 1, 0))}
+                        >
+                          {item}
+                        </PaginationLink>
+                      ) : (
+                        <PaginationEllipsis />
+                      )}
+                    </PaginationItem>
+                  ))}
+                  <PaginationItem>
+                    <PaginationNext
+                      onClick={() => movieTable.nextPage()}
+                      disabled={!movieTable.getCanNextPage()}
+                    />
+                  </PaginationItem>
+                  <PaginationItem>
+                    <PaginationLink
+                      size="default"
+                      onClick={() => movieTable.setPageIndex(Math.max(movieTable.getPageCount() - 1, 0))}
+                      disabled={!movieTable.getCanNextPage()}
+                    >
+                      Last
+                    </PaginationLink>
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
             </div>
           </div>
           <div className={styles.tableWrap}>

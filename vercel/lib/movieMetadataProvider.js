@@ -242,11 +242,15 @@ async function lookupViaImdb({ title, year }) {
   }
   if (!found?.imdb_id) throw new Error("IMDb title search returned no movie id");
   const movie = await fetchImdbMovieById(found.imdb_id);
+  const fetchedTitle = text(movie?.title);
+  if (!fetchedTitle) {
+    throw new Error(`IMDb payload empty for ${found.imdb_id}`);
+  }
   const confidenceRaw =
-    scoreTitleMatch(title, movie?.title || found.title) + yearPenalty(year, movie?.release_year || found?.year || null);
+    scoreTitleMatch(title, fetchedTitle) + yearPenalty(year, movie?.release_year || found?.year || null);
   const confidence = Math.max(0.5, Math.min(1, confidenceRaw));
   if (confidenceRaw < 0.52) {
-    throw new Error(`IMDb weak match (${movie?.title || found?.title || "unknown"})`);
+    throw new Error(`IMDb weak match (${fetchedTitle || found?.title || "unknown"})`);
   }
   return normalizeMovieMeta({
     ...movie,

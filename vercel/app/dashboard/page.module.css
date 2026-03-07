@@ -2914,6 +2914,16 @@
   flex-wrap: wrap;
 }
 
+.paginationNavInline {
+  width: auto;
+  margin: 0;
+}
+
+.paginationCurrentPage {
+  min-width: 150px;
+  pointer-events: none;
+}
+
 .paginationPageInfo {
   min-width: 120px;
   text-align: center;

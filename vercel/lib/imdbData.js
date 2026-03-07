@@ -165,6 +165,19 @@ function extractMetaTagContent(html, key, attr = "property") {
   return "";
 }
 
+function extractCanonicalHref(html) {
+  const input = text(html);
+  if (!input) return "";
+  const tags = input.match(/<link\b[^>]*>/gi) || [];
+  for (const tag of tags) {
+    const attrs = parseAttributes(tag);
+    if (String(attrs.rel || "").trim().toLowerCase() !== "canonical") continue;
+    const href = text(attrs.href || "");
+    if (href) return href;
+  }
+  return "";
+}
+
 function normalizeReleaseDateLabel(raw) {
   const v = text(raw);
   if (!v) return "";
@@ -262,16 +275,22 @@ function extractMovieFromNextData(html, imdbId) {
 }
 
 function extractMovieFromMetaTags(html, imdbId) {
+  const id = normalizeImdbId(imdbId);
   const ogTitle = extractMetaTagContent(html, "og:title");
+  const canonical = extractCanonicalHref(html);
+  if (id && canonical && !canonical.includes(`/title/${id}/`)) return null;
   const title = text(ogTitle.replace(/\s*-\s*IMDb\s*$/i, "")).replace(/\s*\(\d{4}\)\s*$/, "");
   const desc = extractMetaTagContent(html, "og:description");
   const image = extractMetaTagContent(html, "og:image");
   const releaseYearMatch = ogTitle.match(/\((19\d{2}|20\d{2})\)/);
   const releaseYear = releaseYearMatch ? Number(releaseYearMatch[1]) : null;
-  if (!title && !desc && !image) return null;
+  const suspiciousTitle = /\b(404|not\s+found|error)\b/i.test(title);
+  const suspiciousDesc = /\b(404|not\s+found|page you requested|an error occurred)\b/i.test(desc);
+  if (suspiciousTitle || suspiciousDesc) return null;
+  if (!title || (!desc && !image)) return null;
   return {
-    imdb_id: normalizeImdbId(imdbId),
-    imdb_url: normalizeImdbId(imdbId) ? `https://www.imdb.com/title/${normalizeImdbId(imdbId)}/` : "",
+    imdb_id: id,
+    imdb_url: id ? `https://www.imdb.com/title/${id}/` : "",
     title,
     synopsis: desc,
     release_year: Number.isInteger(releaseYear) ? releaseYear : null,
@@ -301,6 +320,10 @@ export function normalizeImdbId(input) {
 
 export function parseImdbMovieHtml(html, imdbId) {
   const id = normalizeImdbId(imdbId);
+  const canonical = extractCanonicalHref(html);
+  if (id && canonical && !canonical.includes(`/title/${id}/`)) {
+    throw new Error("IMDb title payload mismatch");
+  }
   const objects = extractJsonLdObjects(html);
   const movie = pickMovieJsonLd(objects);
   if (!movie) {

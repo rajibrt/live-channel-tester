@@ -528,6 +528,7 @@ export default function MoviePlayer({
   const watchedPercent = durationSeconds > 0
     ? Math.round((Math.max(0, Math.min(watchedSeconds, durationSeconds)) / durationSeconds) * 100)
     : Number(movie?.progress?.progressPercent || 0);
+  const isMarkedWatched = Boolean(movie?.progress?.isCompleted) || watchedPercent >= 95;
   const watchTimeText = `${formatClock(watchedSeconds)} / ${formatClock(durationSeconds)}`;
   const watchProgressText = watchedPercent > 0 ? `${Math.round(watchedPercent)}% watched` : "Not started";
   const scrubDuration = Math.max(0, toSeconds(durationSeconds || movie?.runtimeSeconds || 0));
@@ -662,11 +663,13 @@ export default function MoviePlayer({
           </button>
           <button
             type="button"
-            className={`${styles.movieNavBtn} ${styles.movieNavBtnInactive}`}
+            className={`${styles.movieNavBtn} ${isMarkedWatched ? styles.movieNavBtnSuccess : styles.movieNavBtnInactive}`}
             onClick={() => onMarkComplete?.(movie)}
+            aria-label={isMarkedWatched ? "Watched" : "Mark Watched"}
+            title={isMarkedWatched ? "Already watched" : "Mark Watched"}
           >
-            <CheckCircle2 size={15} />
-            <span className={styles.movieBtnText}>Mark Watched</span>
+            <CheckCircle2 size={15} fill={isMarkedWatched ? "currentColor" : "none"} />
+            <span className={styles.movieBtnText}>{isMarkedWatched ? "Watched" : "Mark Watched"}</span>
           </button>
           <button
             type="button"

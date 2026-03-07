@@ -2,14 +2,25 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import MovieDetail from "./MovieDetail";
+import MovieCard from "./MovieCard";
 import MovieGrid from "./MovieGrid";
 import MoviePlayer from "./MoviePlayer";
 import styles from "./movies.module.css";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "../ui/pagination";
 import { deriveWatchState } from "../../lib/movieProgress";
 
 const LAST_MODE_KEY = "iptv:v1:last-mode";
 const LAST_MOVIE_SLUG_KEY = "iptv:v1:last-movie-slug";
 const MOVIES_PAGE_SIZE = 24;
+const CONTINUE_PAGE_SIZE = 6;
 
 function text(value) {
   return String(value || "").trim();
@@ -27,8 +38,26 @@ function parseMovieSearchQuery(rawSearch) {
   return { textQuery: cleanText, genreQuery };
 }
 
+function buildPageItems(currentPage, totalPages) {
+  const total = Math.max(1, Number(totalPages || 1));
+  const current = Math.min(Math.max(1, Number(currentPage || 1)), total);
+  const keep = new Set([1, total, current - 1, current, current + 1]);
+  const sorted = Array.from(keep)
+    .filter((n) => Number.isInteger(n) && n >= 1 && n <= total)
+    .sort((a, b) => a - b);
+  const out = [];
+  for (let i = 0; i < sorted.length; i += 1) {
+    const value = sorted[i];
+    const prev = sorted[i - 1];
+    if (i > 0 && value - prev > 1) out.push(`ellipsis-${prev}-${value}`);
+    out.push(value);
+  }
+  return out;
+}
+
 export default function MoviesView({
   variant = "browse",
+  externalFilterResetToken = 0,
   initialMovies = [],
   movieCategories = [],
   initialContinueWatching = [],
@@ -55,6 +84,7 @@ export default function MoviesView({
   const [movies, setMovies] = useState(() => (Array.isArray(initialMovies) ? initialMovies : []));
   const [search, setSearch] = useState("");
   const [moviesPage, setMoviesPage] = useState(1);
+  const [continuePage, setContinuePage] = useState(1);
   const moviesSectionRef = useRef(null);
   const hasFilterScrollMountedRef = useRef(false);
   const [categorySlug, setCategorySlug] = useState("all");
@@ -221,11 +251,11 @@ export default function MoviesView({
   }, [applyMovieFilters, modeScopedMovies]);
 
   const continueWatching = useMemo(() => {
-    return filteredMovies
+    return movies
       .filter((movie) => movie.watchState === "continue")
       .sort((a, b) => new Date(b?.progress?.updatedAt || 0).getTime() - new Date(a?.progress?.updatedAt || 0).getTime())
-      .slice(0, 12);
-  }, [filteredMovies]);
+      .slice(0, 60);
+  }, [movies]);
 
   const scrollToMoviesSection = useCallback((behavior = "smooth") => {
     if (typeof window === "undefined") return;
@@ -239,6 +269,17 @@ export default function MoviesView({
   const totalFilteredMovies = filteredMovies.length;
   const totalPages = Math.max(1, Math.ceil(totalFilteredMovies / MOVIES_PAGE_SIZE));
   const currentPage = Math.min(Math.max(1, Number(moviesPage || 1)), totalPages);
+  const pageItems = useMemo(() => buildPageItems(currentPage, totalPages), [currentPage, totalPages]);
+  const totalContinuePages = Math.max(1, Math.ceil(continueWatching.length / CONTINUE_PAGE_SIZE));
+  const currentContinuePage = Math.min(Math.max(1, Number(continuePage || 1)), totalContinuePages);
+  const continuePageItems = useMemo(
+    () => buildPageItems(currentContinuePage, totalContinuePages),
+    [currentContinuePage, totalContinuePages]
+  );
+  const continuePagedMovies = useMemo(() => {
+    const start = (currentContinuePage - 1) * CONTINUE_PAGE_SIZE;
+    return continueWatching.slice(start, start + CONTINUE_PAGE_SIZE);
+  }, [continueWatching, currentContinuePage]);
   const pagedMovies = useMemo(() => {
     const start = (currentPage - 1) * MOVIES_PAGE_SIZE;
     return filteredMovies.slice(start, start + MOVIES_PAGE_SIZE);
@@ -253,6 +294,16 @@ export default function MoviesView({
   }, [moviesPage, totalPages]);
 
   useEffect(() => {
+    if (continuePage > totalContinuePages) setContinuePage(totalContinuePages);
+  }, [continuePage, totalContinuePages]);
+
+  useEffect(() => {
+    setSearch("");
+    setMoviesPage(1);
+    if (showInlineFilters) setCategorySlug("all");
+  }, [externalFilterResetToken, showInlineFilters]);
+
+  useEffect(() => {
     if (!hasFilterScrollMountedRef.current) {
       hasFilterScrollMountedRef.current = true;
       return;
@@ -261,15 +312,21 @@ export default function MoviesView({
   }, [filterMode, filterCategorySlug, filterGenreSlug, filterLanguageSlug, filterYear, categorySlug, showInlineFilters, scrollToMoviesSection]);
 
   const activeFilterTags = useMemo(() => {
-    if (showInlineFilters) return [];
     const tags = [];
-    if (String(filterCategorySlug || "").trim()) tags.push({ key: "category", label: `Category: ${String(filterCategorySlug || "").trim()}` });
-    if (String(filterGenreSlug || "").trim()) tags.push({ key: "genre", label: `Genre: ${String(filterGenreSlug || "").trim()}` });
-    if (String(filterLanguageSlug || "").trim()) tags.push({ key: "language", label: `Language: ${String(filterLanguageSlug || "").trim()}` });
-    if (String(filterYear || "").trim()) tags.push({ key: "year", label: `Year: ${String(filterYear || "").trim()}` });
-    if (String(filterMode || "all").toLowerCase() !== "all") tags.push({ key: "mode", label: `Mode: ${String(filterMode || "").trim()}` });
+    if (String(search || "").trim()) tags.push({ key: "search", label: `Search: ${String(search || "").trim()}` });
+    if (showInlineFilters) {
+      if (String(categorySlug || "").trim().toLowerCase() !== "all") {
+        tags.push({ key: "inline_category", label: `Category: ${String(categorySlug || "").trim()}` });
+      }
+    } else {
+      if (String(filterCategorySlug || "").trim()) tags.push({ key: "category", label: `Category: ${String(filterCategorySlug || "").trim()}` });
+      if (String(filterGenreSlug || "").trim()) tags.push({ key: "genre", label: `Genre: ${String(filterGenreSlug || "").trim()}` });
+      if (String(filterLanguageSlug || "").trim()) tags.push({ key: "language", label: `Language: ${String(filterLanguageSlug || "").trim()}` });
+      if (String(filterYear || "").trim()) tags.push({ key: "year", label: `Year: ${String(filterYear || "").trim()}` });
+      if (String(filterMode || "all").toLowerCase() !== "all") tags.push({ key: "mode", label: `Mode: ${String(filterMode || "").trim()}` });
+    }
     return tags;
-  }, [filterCategorySlug, filterGenreSlug, filterLanguageSlug, filterYear, filterMode, showInlineFilters]);
+  }, [search, categorySlug, filterCategorySlug, filterGenreSlug, filterLanguageSlug, filterYear, filterMode, showInlineFilters]);
 
   const upsertMovieProgress = useCallback((movieId, progress) => {
     const id = String(movieId || "");
@@ -398,182 +455,322 @@ export default function MoviesView({
   return (
     <section className={`${styles.wrap} ${styles.wrapBrowse}`}>
       <div className={styles.leftCol}>
-        <div className={styles.filters}>
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search movies or genre:horror"
-            className={styles.searchInput}
-          />
-          {showInlineFilters ? (
-            <>
-              <button
-                type="button"
-                className={`${styles.filterBtn} ${categorySlug === "all" ? styles.filterBtnActive : ""}`}
-                onClick={() => setCategorySlug("all")}
-              >
-                All ({movies.length})
-              </button>
-              {categoriesWithCount.map((category) => (
-                <button
-                  type="button"
-                  key={category.slug || category.id}
-                  className={`${styles.filterBtn} ${categorySlug === category.slug ? styles.filterBtnActive : ""}`}
-                  onClick={() => setCategorySlug(category.slug)}
-                >
-                  {category.name} ({category.count})
-                </button>
-              ))}
-            </>
-          ) : null}
-          {!showInlineFilters ? (
-            <>
-              <button
-                type="button"
-                className={`${styles.filterBtn} ${!filterGenreSlug ? styles.filterBtnActive : ""}`}
-                onClick={() => onSelectGenreFilter?.("")}
-              >
-                All Genres
-              </button>
-              {(Array.isArray(facetedGenreOptions) ? facetedGenreOptions : genreOptions).map((genre) => {
-                const key = String(genre?.key || "").trim().toLowerCase();
-                return (
-                  <button
-                    type="button"
-                    key={key || genre?.name}
-                    className={`${styles.filterBtn} ${key && key === String(filterGenreSlug || "").trim().toLowerCase() ? styles.filterBtnActive : ""}`}
-                    onClick={() => onSelectGenreFilter?.(key)}
-                  >
-                    {genre?.name} ({Number(genre?.count || 0)})
-                  </button>
-                );
-              })}
-              <button
-                type="button"
-                className={`${styles.filterBtn} ${!filterLanguageSlug ? styles.filterBtnActive : ""}`}
-                onClick={() => onSelectLanguageFilter?.("")}
-              >
-                All Languages
-              </button>
-              {(Array.isArray(facetedLanguageOptions) ? facetedLanguageOptions : languageOptions).map((language) => {
-                const key = String(language?.key || "").trim().toLowerCase();
-                return (
-                  <button
-                    type="button"
-                    key={key || language?.name}
-                    className={`${styles.filterBtn} ${key && key === String(filterLanguageSlug || "").trim().toLowerCase() ? styles.filterBtnActive : ""}`}
-                    onClick={() => onSelectLanguageFilter?.(key)}
-                  >
-                    {language?.name} ({Number(language?.count || 0)})
-                  </button>
-                );
-              })}
-              <button
-                type="button"
-                className={`${styles.filterBtn} ${!filterYear ? styles.filterBtnActive : ""}`}
-                onClick={() => onSelectYearFilter?.("")}
-              >
-                All Years
-              </button>
-              {(Array.isArray(facetedYearOptions) ? facetedYearOptions : yearOptions).map((yearRow) => {
-                const key = String(yearRow?.key || "").trim();
-                return (
-                  <button
-                    type="button"
-                    key={key || yearRow?.name}
-                    className={`${styles.filterBtn} ${key && key === String(filterYear || "").trim() ? styles.filterBtnActive : ""}`}
-                    onClick={() => onSelectYearFilter?.(key)}
-                  >
-                    {yearRow?.name} ({Number(yearRow?.count || 0)})
-                  </button>
-                );
-              })}
-            </>
-          ) : null}
-        </div>
-        {!showInlineFilters ? (
-          <div className={styles.activeFilterWrap}>
-            <strong className={styles.activeFilterTitle}>Active Filters</strong>
-            <div className={styles.activeFilterChips}>
-              {activeFilterTags.length ? activeFilterTags.map((tag) => (
-                <button
-                  key={tag.key}
-                  type="button"
-                  className={styles.activeFilterChip}
-                  onClick={() => {
-                    if (tag.key === "category") onSelectCategoryFilter?.("");
-                    if (tag.key === "genre") onSelectGenreFilter?.("");
-                    if (tag.key === "language") onSelectLanguageFilter?.("");
-                    if (tag.key === "year") onSelectYearFilter?.("");
-                    if (tag.key === "mode") onSelectModeFilter?.("all");
-                  }}
-                  title="Clear this filter"
-                >
-                  {tag.label} ×
-                </button>
-              )) : <span className={styles.activeFilterChip}>All Movies</span>}
-              {activeFilterTags.length ? (
-                <button type="button" className={styles.clearAllBtn} onClick={() => onResetFilters?.()}>
-                  Clear All Filters
-                </button>
+        {continueWatching.length ? (
+          <section className={`${styles.sectionCard} ${styles.sectionContinue}`}>
+            <header className={styles.sectionTop}>
+              <h3 className={styles.sectionTitle}>Continue Watching</h3>
+              <span className={styles.sectionCount}>{continueWatching.length}</span>
+            </header>
+            <div className={styles.continueBody}>
+              <div className={styles.continueStrip}>
+                {continuePagedMovies.map((movie) => (
+                  <div key={movie.id} className={styles.continueCardSlot}>
+                    <MovieCard
+                      movie={movie}
+                      isActive={String(selectedMovieId || "") === String(movie.id || "")}
+                      onSelect={handleSelectMovie}
+                      onToggleFavorite={handleToggleFavorite}
+                    />
+                  </div>
+                ))}
+              </div>
+              {totalContinuePages > 1 ? (
+                <div className={styles.continuePagination}>
+                  <Pagination className={styles.paginationNav}>
+                    <PaginationContent>
+                      <PaginationItem>
+                        <PaginationPrevious
+                          disabled={currentContinuePage <= 1}
+                          onClick={() => setContinuePage((prev) => Math.max(1, prev - 1))}
+                        />
+                      </PaginationItem>
+                      {continuePageItems.map((item) => (
+                        <PaginationItem key={`continue-${String(item)}`}>
+                          {typeof item === "number" ? (
+                            <PaginationLink
+                              isActive={item === currentContinuePage}
+                              size="icon"
+                              onClick={() => setContinuePage(item)}
+                            >
+                              {item}
+                            </PaginationLink>
+                          ) : (
+                            <PaginationEllipsis />
+                          )}
+                        </PaginationItem>
+                      ))}
+                      <PaginationItem>
+                        <PaginationNext
+                          disabled={currentContinuePage >= totalContinuePages}
+                          onClick={() => setContinuePage((prev) => Math.min(totalContinuePages, prev + 1))}
+                        />
+                      </PaginationItem>
+                    </PaginationContent>
+                  </Pagination>
+                </div>
               ) : null}
             </div>
+          </section>
+        ) : null}
+
+        <section className={`${styles.sectionCard} ${styles.sectionControls}`}>
+          <header className={styles.sectionTop}>
+            <h3 className={styles.sectionTitle}>Search & Filtering</h3>
+            <span className={styles.sectionHint}>Live results</span>
+          </header>
+          <div className={styles.searchRow}>
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search movies or genre:horror"
+              className={`${styles.searchInput} ${styles.searchInputCentered}`}
+            />
           </div>
-        ) : null}
+          <div className={styles.filters}>
+            {showInlineFilters ? (
+              <>
+                <button
+                  type="button"
+                  className={`${styles.filterBtn} ${categorySlug === "all" ? styles.filterBtnActive : ""}`}
+                  onClick={() => setCategorySlug("all")}
+                >
+                  All ({movies.length})
+                </button>
+                {categoriesWithCount.map((category) => (
+                  <button
+                    type="button"
+                    key={category.slug || category.id}
+                    className={`${styles.filterBtn} ${categorySlug === category.slug ? styles.filterBtnActive : ""}`}
+                    onClick={() => setCategorySlug(category.slug)}
+                  >
+                    {category.name} ({category.count})
+                  </button>
+                ))}
+              </>
+            ) : null}
+          </div>
+          {!showInlineFilters ? (
+            <div className={styles.filterSections}>
+              <section className={styles.filterSection}>
+                <header className={styles.filterSectionHead}>
+                  <strong>Genres</strong>
+                </header>
+                <div className={styles.filterSectionBody}>
+                  <button
+                    type="button"
+                    className={`${styles.filterBtn} ${!filterGenreSlug ? styles.filterBtnActive : ""}`}
+                    onClick={() => onSelectGenreFilter?.("")}
+                  >
+                    All Genres
+                  </button>
+                  {(Array.isArray(facetedGenreOptions) ? facetedGenreOptions : genreOptions).map((genre) => {
+                    const key = String(genre?.key || "").trim().toLowerCase();
+                    return (
+                      <button
+                        type="button"
+                        key={key || genre?.name}
+                        className={`${styles.filterBtn} ${key && key === String(filterGenreSlug || "").trim().toLowerCase() ? styles.filterBtnActive : ""}`}
+                        onClick={() => onSelectGenreFilter?.(key)}
+                      >
+                        {genre?.name} ({Number(genre?.count || 0)})
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
 
-        {continueWatching.length ? (
-          <MovieGrid
-            title="Continue Watching"
-            movies={continueWatching}
-            selectedMovieId={selectedMovieId}
-            onSelectMovie={handleSelectMovie}
-            onToggleFavorite={handleToggleFavorite}
-          />
-        ) : null}
+              <section className={styles.filterSection}>
+                <header className={styles.filterSectionHead}>
+                  <strong>Languages</strong>
+                </header>
+                <div className={styles.filterSectionBody}>
+                  <button
+                    type="button"
+                    className={`${styles.filterBtn} ${!filterLanguageSlug ? styles.filterBtnActive : ""}`}
+                    onClick={() => onSelectLanguageFilter?.("")}
+                  >
+                    All Languages
+                  </button>
+                  {(Array.isArray(facetedLanguageOptions) ? facetedLanguageOptions : languageOptions).map((language) => {
+                    const key = String(language?.key || "").trim().toLowerCase();
+                    return (
+                      <button
+                        type="button"
+                        key={key || language?.name}
+                        className={`${styles.filterBtn} ${key && key === String(filterLanguageSlug || "").trim().toLowerCase() ? styles.filterBtnActive : ""}`}
+                        onClick={() => onSelectLanguageFilter?.(key)}
+                      >
+                        {language?.name} ({Number(language?.count || 0)})
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
 
-        <div ref={moviesSectionRef}>
+              <section className={styles.filterSection}>
+                <header className={styles.filterSectionHead}>
+                  <strong>Years</strong>
+                </header>
+                <div className={styles.filterSectionBody}>
+                  <button
+                    type="button"
+                    className={`${styles.filterBtn} ${!filterYear ? styles.filterBtnActive : ""}`}
+                    onClick={() => onSelectYearFilter?.("")}
+                  >
+                    All Years
+                  </button>
+                  {(Array.isArray(facetedYearOptions) ? facetedYearOptions : yearOptions).map((yearRow) => {
+                    const key = String(yearRow?.key || "").trim();
+                    return (
+                      <button
+                        type="button"
+                        key={key || yearRow?.name}
+                        className={`${styles.filterBtn} ${key && key === String(filterYear || "").trim() ? styles.filterBtnActive : ""}`}
+                        onClick={() => onSelectYearFilter?.(key)}
+                      >
+                        {yearRow?.name} ({Number(yearRow?.count || 0)})
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            </div>
+          ) : null}
+          {!showInlineFilters ? (
+            <div className={styles.activeFilterWrap}>
+              <strong className={styles.activeFilterTitle}>Active Filters</strong>
+              <div className={styles.activeFilterChips}>
+                {activeFilterTags.length ? activeFilterTags.map((tag) => (
+                  <button
+                    type="button"
+                    key={tag.key}
+                    className={styles.activeFilterChip}
+                    onClick={() => {
+                      if (tag.key === "category") onSelectCategoryFilter?.("");
+                      if (tag.key === "genre") onSelectGenreFilter?.("");
+                      if (tag.key === "language") onSelectLanguageFilter?.("");
+                      if (tag.key === "year") onSelectYearFilter?.("");
+                      if (tag.key === "mode") onSelectModeFilter?.("all");
+                    }}
+                    title="Clear this filter"
+                  >
+                    {tag.label} ×
+                  </button>
+                )) : <span className={styles.activeFilterChip}>All Movies</span>}
+                {activeFilterTags.length ? (
+                  <button type="button" className={styles.clearAllBtn} onClick={() => onResetFilters?.()}>
+                    Clear All Filters
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+        </section>
+
+        <section className={`${styles.sectionCard} ${styles.sectionMovies}`} ref={moviesSectionRef}>
+          <header className={styles.sectionTop}>
+            <h3 className={styles.sectionTitle}>Movies</h3>
+            <span className={styles.sectionHint}>
+              {totalFilteredMovies} result{totalFilteredMovies === 1 ? "" : "s"}
+            </span>
+          </header>
           <MovieGrid
-            title="Movies"
+            title=""
             movies={pagedMovies}
             selectedMovieId={selectedMovieId}
             onSelectMovie={handleSelectMovie}
             onToggleFavorite={handleToggleFavorite}
           />
-        </div>
-        <div className={styles.paginationBar}>
-          <span className={styles.paginationInfo}>
-            Showing {(currentPage - 1) * MOVIES_PAGE_SIZE + (pagedMovies.length ? 1 : 0)}-
-            {(currentPage - 1) * MOVIES_PAGE_SIZE + pagedMovies.length} of {totalFilteredMovies}
-          </span>
-          <div className={styles.paginationActions}>
-            <button
-              type="button"
-              className={styles.paginationBtn}
-              disabled={currentPage <= 1}
-              onClick={() => {
-                setMoviesPage((prev) => Math.max(1, prev - 1));
-                scrollToMoviesSection();
-              }}
-            >
-              Prev
-            </button>
+          <div className={styles.paginationBar}>
             <span className={styles.paginationInfo}>
-              Page {currentPage}/{totalPages}
+              Showing {(currentPage - 1) * MOVIES_PAGE_SIZE + (pagedMovies.length ? 1 : 0)}-
+              {(currentPage - 1) * MOVIES_PAGE_SIZE + pagedMovies.length} of {totalFilteredMovies}
             </span>
-            <button
-              type="button"
-              className={styles.paginationBtn}
-              disabled={currentPage >= totalPages}
-              onClick={() => {
-                setMoviesPage((prev) => Math.min(totalPages, prev + 1));
-                scrollToMoviesSection();
-              }}
-            >
-              Next
-            </button>
+            <div className={styles.paginationActions}>
+              <Pagination className={styles.paginationNav}>
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious
+                      disabled={currentPage <= 1}
+                      onClick={() => {
+                        setMoviesPage((prev) => Math.max(1, prev - 1));
+                        scrollToMoviesSection();
+                      }}
+                    />
+                  </PaginationItem>
+                  {pageItems.map((item) => (
+                    <PaginationItem key={String(item)}>
+                      {typeof item === "number" ? (
+                        <PaginationLink
+                          isActive={item === currentPage}
+                          size="icon"
+                          onClick={() => {
+                            setMoviesPage(item);
+                            scrollToMoviesSection();
+                          }}
+                        >
+                          {item}
+                        </PaginationLink>
+                      ) : (
+                        <PaginationEllipsis />
+                      )}
+                    </PaginationItem>
+                  ))}
+                  <PaginationItem>
+                    <PaginationNext
+                      disabled={currentPage >= totalPages}
+                      onClick={() => {
+                        setMoviesPage((prev) => Math.min(totalPages, prev + 1));
+                        scrollToMoviesSection();
+                      }}
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            </div>
+          </div>
+        </section>
+      </div>
+      {activeFilterTags.length ? (
+        <div className={styles.filterDock}>
+          <div className={styles.filterDockInner}>
+            <div className={styles.filterDockRow}>
+              <div className={styles.filterDockChips}>
+                {activeFilterTags.map((tag) => (
+                  <button
+                    key={tag.key}
+                    type="button"
+                    className={styles.activeFilterChip}
+                    onClick={() => {
+                      if (tag.key === "search") setSearch("");
+                      if (tag.key === "inline_category") setCategorySlug("all");
+                      if (tag.key === "category") onSelectCategoryFilter?.("");
+                      if (tag.key === "genre") onSelectGenreFilter?.("");
+                      if (tag.key === "language") onSelectLanguageFilter?.("");
+                      if (tag.key === "year") onSelectYearFilter?.("");
+                      if (tag.key === "mode") onSelectModeFilter?.("all");
+                    }}
+                    title="Clear this filter"
+                  >
+                    {tag.label} ×
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                className={styles.filterDockClearBtn}
+                onClick={() => {
+                  setSearch("");
+                  if (showInlineFilters) setCategorySlug("all");
+                  onResetFilters?.();
+                }}
+              >
+                Clear All Filters
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      ) : null}
     </section>
   );
 }

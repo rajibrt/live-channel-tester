@@ -3,6 +3,7 @@
   gap: 12px;
   padding: 0;
   height: 100%;
+  min-width: 0;
   overflow: hidden;
 }
 
@@ -28,7 +29,168 @@
 .leftCol {
   display: flex;
   flex-direction: column;
+  gap: 10px;
+  min-width: 0;
   overflow: hidden;
+}
+
+.sectionCard {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid color-mix(in oklab, var(--border) 88%, transparent);
+  border-radius: 14px;
+  background: color-mix(in oklab, var(--card) 90%, transparent);
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.sectionContinue {
+  border-color: color-mix(in oklab, var(--chart-2) 26%, var(--border));
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in oklab, var(--chart-2) 9%, var(--card)) 0%,
+      color-mix(in oklab, var(--card) 94%, transparent) 100%
+    );
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--chart-2) 14%, transparent);
+}
+
+.sectionControls {
+  border-color: color-mix(in oklab, var(--primary) 28%, var(--border));
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in oklab, var(--primary) 12%, var(--card)) 0%,
+      color-mix(in oklab, var(--accent) 8%, var(--card)) 46%,
+      color-mix(in oklab, var(--card) 95%, transparent) 100%
+    );
+  box-shadow:
+    inset 0 0 0 1px color-mix(in oklab, var(--primary) 18%, transparent),
+    var(--shadow-sm);
+}
+
+.sectionMovies {
+  border-color: color-mix(in oklab, var(--ring) 16%, var(--border));
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in oklab, var(--ring) 6%, var(--card)) 0%,
+      color-mix(in oklab, var(--card) 95%, transparent) 100%
+    );
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--ring) 10%, transparent);
+}
+
+.sectionTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid color-mix(in oklab, var(--border) 88%, transparent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--card) 96%, transparent) 0%,
+    color-mix(in oklab, var(--card) 86%, transparent) 100%
+  );
+}
+
+.sectionTitle {
+  margin: 0;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: color-mix(in oklab, var(--foreground) 88%, transparent);
+}
+
+.sectionCount,
+.sectionHint {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 5px 9px;
+}
+
+.continueTopActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.continueNav {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.continueNavBtn {
+  border: 1px solid color-mix(in oklab, var(--border) 90%, transparent);
+  background: color-mix(in oklab, var(--card) 88%, transparent);
+  color: var(--foreground);
+  border-radius: 10px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  font: inherit;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.continueNavBtn:hover:not(:disabled) {
+  border-color: color-mix(in oklab, var(--ring) 46%, var(--border));
+  background: color-mix(in oklab, var(--primary) 12%, var(--card));
+}
+
+.continueNavBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.continueStrip {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(180px, 220px);
+  gap: 10px;
+  overflow: hidden;
+  padding: 2px 0;
+}
+
+.continueBody {
+  padding: 0 14px 14px;
+}
+
+.continuePagination {
+  padding-top: 10px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.continueCardSlot {
+  min-width: 0;
+  scroll-snap-align: start;
+  cursor: pointer;
+}
+
+.continueCardSlot .card {
+  height: 100%;
+  cursor: pointer;
+}
+
+.sectionCount {
+  border: 1px solid color-mix(in oklab, var(--ring) 44%, var(--border));
+  color: color-mix(in oklab, var(--foreground) 94%, transparent);
+  background: color-mix(in oklab, var(--ring) 14%, transparent);
+}
+
+.sectionHint {
+  border: 1px solid color-mix(in oklab, var(--primary) 44%, var(--border));
+  color: color-mix(in oklab, var(--primary) 94%, var(--foreground));
+  background: color-mix(in oklab, var(--primary) 12%, transparent);
 }
 
 .watchPlayerCol,
@@ -58,6 +220,11 @@
   max-width: none;
   width: 100%;
   margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
 }
 
 .wrapWatch .rightCol {
@@ -67,16 +234,127 @@
 .filters {
   display: flex;
   gap: 8px;
-  padding: 12px;
+  padding: 14px;
   border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.searchRow {
+  padding: 14px 14px 0;
+  display: flex;
+  justify-content: center;
+}
+
+.searchInputCentered {
+  width: min(760px, 100%);
+  margin: 0 auto;
+}
+
+.filterSections {
+  display: grid;
+  gap: 10px;
+  padding: 0 14px 14px;
+  border-bottom: 1px solid var(--border);
+  min-width: 0;
+}
+
+.filterSection {
+  border: 1px solid color-mix(in oklab, var(--border) 88%, transparent);
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--card) 92%, transparent);
+  padding: 10px;
+}
+
+.filterSectionHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  color: color-mix(in oklab, var(--muted-foreground) 88%, var(--foreground));
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.filterSectionBody {
+  display: flex;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
 .activeFilterWrap {
   display: grid;
   gap: 8px;
-  padding: 0 12px 12px;
+  padding: 0 14px 14px;
   border-bottom: 1px solid var(--border);
+  min-width: 0;
+}
+
+.filterDock {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 60;
+  padding: 6px 10px 8px;
+  pointer-events: none;
+}
+
+.filterDockInner {
+  pointer-events: auto;
+  width: fit-content;
+  max-width: min(1280px, calc(100vw - 18px));
+  margin: 0 auto;
+  border: 1px solid color-mix(in oklab, var(--border) 86%, transparent);
+  border-radius: 14px;
+  padding: 8px 10px;
+  backdrop-filter: blur(8px);
+  background: color-mix(in oklab, var(--background) 62%, transparent);
+  box-shadow: var(--shadow-lg);
+  display: grid;
+  gap: 6px;
+}
+
+.filterDockRow {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.filterDockChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  overflow: auto;
+  max-height: min(22vh, 170px);
+  padding-right: 2px;
+  min-width: 0;
+}
+
+.filterDockClearBtn {
+  border: 1px solid color-mix(in oklab, var(--primary) 50%, var(--border));
+  border-radius: 10px;
+  padding: 7px 11px;
+  color: var(--primary-foreground);
+  background: linear-gradient(
+    135deg,
+    var(--primary) 0%,
+    color-mix(in oklab, var(--primary) 58%, var(--accent)) 100%
+  );
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow:
+    var(--shadow-lg),
+    inset 0 0 0 1px color-mix(in oklab, #ffffff 14%, transparent);
+}
+
+.filterDockClearBtn:hover {
+  filter: brightness(1.05);
 }
 
 .activeFilterTitle {
@@ -140,7 +418,9 @@
 }
 
 .gridWrap {
-  padding: 12px;
+  padding: 14px;
+  min-width: 0;
+  overflow-x: hidden;
   overflow: auto;
 }
 
@@ -403,8 +683,9 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 0 12px 14px;
+  padding: 0 14px 14px;
   flex-wrap: wrap;
+  border-top: 1px solid color-mix(in oklab, var(--border) 88%, transparent);
 }
 
 .paginationInfo {
@@ -416,6 +697,17 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+}
+
+.paginationNav {
+  width: auto;
+  margin: 0;
+}
+
+.paginationCurrent {
+  min-width: 122px;
+  pointer-events: none;
 }
 
 .paginationBtn {
@@ -658,9 +950,23 @@
   box-shadow: var(--shadow-lg);
 }
 
+.movieNavBtnSuccess {
+  color: color-mix(in oklab, var(--chart-2) 84%, var(--foreground));
+  background: color-mix(in oklab, var(--chart-2) 18%, transparent);
+  border-color: color-mix(in oklab, var(--chart-2) 46%, var(--border));
+  box-shadow:
+    inset 0 0 0 1px color-mix(in oklab, var(--chart-2) 22%, transparent),
+    var(--shadow-sm);
+}
+
 .movieNavBtn:hover:not(.movieNavBtnActive):not(:disabled) {
   border-color: color-mix(in oklab, var(--ring) 38%, var(--border));
   background: color-mix(in oklab, var(--muted) 88%, transparent);
+}
+
+.movieNavBtnSuccess:hover:not(:disabled) {
+  border-color: color-mix(in oklab, var(--chart-2) 62%, var(--border));
+  background: color-mix(in oklab, var(--chart-2) 24%, transparent);
 }
 
 .movieNavBtn:disabled {
@@ -820,12 +1126,193 @@
     gap: 6px;
   }
 
+  .filterDock {
+    padding: 6px 8px 8px;
+  }
+
+  .filterDockInner {
+    border-radius: 12px;
+    padding: 7px 8px;
+    width: min(calc(100vw - 16px), 980px);
+  }
+
+  .continueStrip {
+    grid-auto-columns: minmax(146px, 1fr);
+    padding: 2px 0;
+  }
+
+  .continueBody {
+    padding: 0 12px 12px;
+  }
+
+  .sectionCard {
+    gap: 8px;
+    border-radius: 12px;
+  }
+
+  .sectionTop {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  .searchRow {
+    padding: 12px 12px 0;
+  }
+
+  .filters,
+  .filterSections,
+  .activeFilterWrap,
+  .gridWrap,
+  .paginationBar {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
 }
 
 @media (max-width: 640px) {
-  .grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .leftCol {
     gap: 8px;
+  }
+
+  .sectionCard {
+    border-radius: 10px;
+    gap: 6px;
+  }
+
+  .sectionTop {
+    padding: 9px 10px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .sectionTitle {
+    font-size: 12px;
+    letter-spacing: 0.03em;
+  }
+
+  .sectionHint,
+  .sectionCount {
+    font-size: 10px;
+    padding: 4px 8px;
+  }
+
+  .continueTopActions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .continueNavBtn {
+    width: 30px;
+    height: 30px;
+    font-size: 17px;
+    border-radius: 9px;
+  }
+
+  .continueStrip {
+    grid-auto-columns: minmax(132px, 1fr);
+    gap: 7px;
+  }
+
+  .continueBody {
+    padding: 0 10px 10px;
+  }
+
+  .searchRow {
+    padding: 10px 10px 0;
+  }
+
+  .searchInput {
+    min-width: 0;
+    font-size: 14px;
+    padding: 10px 11px;
+  }
+
+  .filters,
+  .filterSections,
+  .activeFilterWrap,
+  .gridWrap,
+  .paginationBar {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .filters {
+    padding-top: 10px;
+    padding-bottom: 10px;
+    gap: 6px;
+  }
+
+  .filterSections,
+  .activeFilterWrap {
+    padding-bottom: 10px;
+  }
+
+  .filterSection {
+    padding: 8px;
+    border-radius: 10px;
+  }
+
+  .filterSectionHead {
+    margin-bottom: 6px;
+  }
+
+  .filterSectionBody,
+  .activeFilterChips {
+    gap: 6px;
+  }
+
+  .filterBtn,
+  .activeFilterChip,
+  .clearAllBtn {
+    font-size: 11px;
+    padding: 6px 9px;
+  }
+
+  .paginationBar {
+    padding-top: 8px;
+    padding-bottom: 10px;
+    gap: 8px;
+  }
+
+  .paginationInfo,
+  .paginationActions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .paginationBtn {
+    min-height: 36px;
+    padding: 6px 10px;
+  }
+
+  .grid {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 8px;
+  }
+
+  .card {
+    border-radius: 12px;
+  }
+
+  .cardBody {
+    padding: 8px;
+    gap: 4px;
+  }
+
+  .movieTitle {
+    font-size: 14px;
+    line-height: 1.25;
+  }
+
+  .metaText,
+  .genreText {
+    font-size: 11px;
+  }
+
+  .badge,
+  .favoriteBtn {
+    font-size: 10px;
   }
 
   .card:hover,
@@ -891,5 +1378,25 @@
 
   .movieBtnText {
     display: none;
+  }
+
+  .filterDockChips {
+    max-height: min(26vh, 150px);
+    gap: 6px;
+  }
+
+  .filterDockClearBtn {
+    width: auto;
+  }
+}
+
+@media (max-width: 420px) {
+  .grid {
+    grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
+    gap: 7px;
+  }
+
+  .continueStrip {
+    grid-auto-columns: minmax(136px, 156px);
   }
 }
