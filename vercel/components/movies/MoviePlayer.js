@@ -13,7 +13,7 @@ import {
   FastForward,
 } from 'lucide-react'
 import styles from './movies.module.css'
-import { toStreamTranscodeUrl } from '../../lib/streamUrl'
+import { resolveBrowserPlaybackUrl, toStreamTranscodeUrl } from '../../lib/streamUrl'
 
 function toSeconds(value) {
   const n = Number(value)
@@ -35,6 +35,38 @@ function formatClock(totalSeconds) {
   if (h > 0)
     return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
   return `${m}:${String(s).padStart(2, '0')}`
+}
+
+function isHlsUrl(url) {
+  return /\.m3u8(\?|$)/i.test(String(url || ''))
+}
+
+function loadHlsScript() {
+  if (typeof window === 'undefined') return Promise.resolve(null)
+  if (window.Hls) return Promise.resolve(window.Hls)
+
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector('script[data-hls-script="1"]')
+    if (existing) {
+      existing.addEventListener('load', () => resolve(window.Hls || null), {
+        once: true,
+      })
+      existing.addEventListener(
+        'error',
+        () => reject(new Error('Failed to load HLS script.')),
+        { once: true },
+      )
+      return
+    }
+
+    const script = document.createElement('script')
+    script.src = 'https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js'
+    script.async = true
+    script.dataset.hlsScript = '1'
+    script.onload = () => resolve(window.Hls || null)
+    script.onerror = () => reject(new Error('Failed to load HLS script.'))
+    document.head.appendChild(script)
+  })
 }
 
 function isTranscodePlaybackUrl(value) {
@@ -143,6 +175,7 @@ export default function MoviePlayer({
   onTrackActivity,
 }) {
   const videoRef = useRef(null)
+  const hlsRef = useRef(null)
   const intervalRef = useRef(null)
   const onProgressSavedRef = useRef(onProgressSaved)
   const onMarkedCompleteRef = useRef(onMarkedComplete)
@@ -380,6 +413,11 @@ export default function MoviePlayer({
     const video = videoRef.current
     if (!video) return undefined
 
+    if (hlsRef.current) {
+      hlsRef.current.destroy()
+      hlsRef.current = null
+    }
+
     video.pause()
     video.removeAttribute('src')
     video.load()
@@ -387,9 +425,14 @@ export default function MoviePlayer({
     const forcedCompatPlaybackUrl = forceCompatMode
       ? resolveCompatibilityPlaybackUrl(String(movie?.source?.rawUrl || ''))
       : ''
+    const directPlaybackUrl = resolveBrowserPlaybackUrl(
+      String(movie?.source?.rawUrl || movie?.playbackUrl || ''),
+      typeof window !== 'undefined' ? window.location?.protocol : '',
+    )
     const playbackUrl = String(
       fallbackPlaybackUrl ||
         forcedCompatPlaybackUrl ||
+        directPlaybackUrl ||
         movie?.playbackUrl ||
         '',
     )
@@ -410,10 +453,14 @@ export default function MoviePlayer({
         : toSeconds(requestedSeek)
     const desiredStart = Math.max(0, requestedStart)
     transcodeOffsetRef.current = isTranscoded ? desiredStart : 0
-    video.src = isTranscoded
+    const sourceForPlayback = isTranscoded
       ? withTranscodeStart(playbackUrl, desiredStart)
       : playbackUrl
-    video.load()
+
+    const applyNativeSource = (source) => {
+      video.src = source
+      video.load()
+    }
 
     const handleLoadedMetadata = () => {
       const measuredDuration = Number.isFinite(Number(video.duration))
@@ -559,6 +606,37 @@ export default function MoviePlayer({
     video.addEventListener('durationchange', handleDurationChange)
     setIsPaused(video.paused)
 
+    let cancelled = false
+    const startPlayback = async () => {
+      if (!isTranscoded && isHlsUrl(sourceForPlayback)) {
+        const canPlayNatively =
+          video.canPlayType('application/vnd.apple.mpegurl') ||
+          video.canPlayType('application/x-mpegURL')
+        if (!canPlayNatively) {
+          try {
+            const Hls = await loadHlsScript()
+            if (cancelled) return
+            if (Hls?.isSupported?.()) {
+              const hls = new Hls({ lowLatencyMode: true, maxBufferLength: 30 })
+              hlsRef.current = hls
+              hls.loadSource(sourceForPlayback)
+              hls.attachMedia(video)
+              hls.on(Hls.Events.ERROR, (_event, data) => {
+                if (!data?.fatal) return
+                setStatusText('Playback failed')
+              })
+              return
+            }
+          } catch {
+            // fall back to native assignment below
+          }
+        }
+      }
+      applyNativeSource(sourceForPlayback)
+    }
+
+    startPlayback()
+
     intervalRef.current = setInterval(() => {
       if (!video.paused && !video.ended) postProgress('interval')
     }, 20000)
@@ -579,9 +657,14 @@ export default function MoviePlayer({
     window.addEventListener('movie-force-pause', onForcePause)
 
     return () => {
+      cancelled = true
       clearInterval(intervalRef.current)
       intervalRef.current = null
       postProgress('unmount')
+      if (hlsRef.current) {
+        hlsRef.current.destroy()
+        hlsRef.current = null
+      }
       video.removeEventListener('loadedmetadata', handleLoadedMetadata)
       video.removeEventListener('pause', handlePause)
       video.removeEventListener('seeked', handleSeeked)
@@ -609,9 +692,15 @@ export default function MoviePlayer({
   ])
 
   const favoriteActive = Boolean(movie?.isFavorite)
-  const hasPlayableMovie = Boolean(movie?.playbackUrl)
+  const browserResolvedPlaybackUrl = resolveBrowserPlaybackUrl(
+    String(movie?.source?.rawUrl || movie?.playbackUrl || ''),
+    typeof window !== 'undefined' ? window.location?.protocol : '',
+  )
+  const hasPlayableMovie = Boolean(
+    fallbackPlaybackUrl || browserResolvedPlaybackUrl || movie?.playbackUrl,
+  )
   const isTranscodedPlayback = isTranscodePlaybackUrl(
-    fallbackPlaybackUrl || movie?.playbackUrl,
+    fallbackPlaybackUrl || browserResolvedPlaybackUrl || movie?.playbackUrl,
   )
   const rawSourceUrl = String(movie?.source?.rawUrl || '')
   const privateHostedMode = shouldAvoidServerTranscode(rawSourceUrl)
