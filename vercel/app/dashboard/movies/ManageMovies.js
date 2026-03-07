@@ -4,7 +4,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Clapperboard, FolderPlus, Pencil, Trash2 } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../../components/ui/table";
-import { flexRender, getCoreRowModel, getFilteredRowModel, getSortedRowModel, useReactTable } from "@tanstack/react-table";
+import {
+  flexRender,
+  getCoreRowModel,
+  getFilteredRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
+  useReactTable,
+} from "@tanstack/react-table";
 import styles from "../page.module.css";
 
 function toSlug(value) {
@@ -43,6 +50,85 @@ function serializeMovieForm(form) {
     is_published: Boolean(form?.is_published),
     category_ids: normalizeIds(form?.category_ids),
   });
+}
+
+function movieHasSource(row) {
+  return (row?.sources || []).some((src) => String(src?.source_url || "").trim());
+}
+
+function text(value) {
+  return String(value || "").trim();
+}
+
+function listHasValue(values) {
+  return Array.isArray(values) && values.some((v) => text(v));
+}
+
+function getMetadataSignals(row) {
+  const imdbId = text(row?.imdb_id).toLowerCase();
+  const hasImdbId = /^tt\d{7,12}$/.test(imdbId) && imdbId !== "tt1234567";
+  const hasSynopsis = text(row?.synopsis).length >= 20;
+  const hasPoster = /^https?:\/\//i.test(text(row?.poster_url)) || /^https?:\/\//i.test(text(row?.backdrop_url));
+  const releaseYear = Number(row?.release_year || 0);
+  const hasYear = Number.isInteger(releaseYear) && releaseYear >= 1888 && releaseYear <= 2100;
+  const hasReleaseDate = text(row?.imdb_release_date).length >= 4;
+  const hasRating = Number(row?.imdb_rating || 0) > 0 || Number(row?.imdb_votes || 0) > 0;
+  const hasPeople = listHasValue(row?.imdb_directors) || listHasValue(row?.imdb_writers) || listHasValue(row?.imdb_stars);
+  const hasTaxonomy = listHasValue(row?.imdb_genres) || listHasValue(row?.imdb_languages) || listHasValue(row?.imdb_countries);
+  return {
+    hasImdbId,
+    hasSynopsis,
+    hasPoster,
+    hasYear,
+    hasReleaseDate,
+    hasRating,
+    hasPeople,
+    hasTaxonomy,
+  };
+}
+
+function movieHasMetadata(row) {
+  const s = getMetadataSignals(row);
+  return (
+    s.hasImdbId ||
+    s.hasSynopsis ||
+    s.hasPoster ||
+    s.hasYear ||
+    s.hasReleaseDate ||
+    s.hasRating ||
+    s.hasPeople ||
+    s.hasTaxonomy
+  );
+}
+
+function movieHasCompleteMetadata(row) {
+  const hasList = (values) => Array.isArray(values) && values.some((v) => String(v || "").trim());
+  const s = getMetadataSignals(row);
+  const hasCoreNarrative = s.hasSynopsis && s.hasPoster;
+  const hasIdentity = s.hasImdbId || s.hasTaxonomy || s.hasPeople;
+  const hasTiming = s.hasYear || s.hasReleaseDate;
+  const hasDetail = s.hasRating || hasList(row?.imdb_genres) || hasList(row?.imdb_stars);
+  return Boolean(hasCoreNarrative && hasIdentity && hasTiming && hasDetail);
+}
+
+function movieDataState(row) {
+  const hasSource = movieHasSource(row);
+  const hasAnyMeta = movieHasMetadata(row);
+  const hasCompleteMeta = movieHasCompleteMetadata(row);
+  if (hasSource && hasCompleteMeta) return "complete";
+  if (hasSource && hasAnyMeta && !hasCompleteMeta) return "metadata_partial";
+  if (!hasSource && hasAnyMeta) return "source_missing";
+  if (hasSource && !hasAnyMeta) return "metadata_missing";
+  return "missing_both";
+}
+
+function movieDataStateLabel(state) {
+  if (state === "complete") return "Complete";
+  if (state === "metadata_partial") return "Partial Metadata";
+  if (state === "source_missing") return "No Source";
+  if (state === "metadata_missing") return "No Metadata";
+  if (state === "missing_both") return "No Source + Metadata";
+  return "Unknown";
 }
 
 const EMPTY_MOVIE_FORM = {
@@ -193,9 +279,17 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
   const [categoryCountFilter, setCategoryCountFilter] = useState("all");
   const [movieSearch, setMovieSearch] = useState("");
   const [movieStatusFilter, setMovieStatusFilter] = useState("all");
+  const [movieDataFilter, setMovieDataFilter] = useState("all");
   const [movieSorting, setMovieSorting] = useState([{ id: "updated_at", desc: true }]);
   const [movieColumnFilters, setMovieColumnFilters] = useState([]);
   const [movieRowSelection, setMovieRowSelection] = useState({});
+  const [moviePagination, setMoviePagination] = useState({ pageIndex: 0, pageSize: 25 });
+  const [refreshingMovieMetadata, setRefreshingMovieMetadata] = useState(false);
+  const [metadataRefreshSummary, setMetadataRefreshSummary] = useState(null);
+  const [movieMetadataSettingsLoading, setMovieMetadataSettingsLoading] = useState(false);
+  const [movieMetadataSettingsSaving, setMovieMetadataSettingsSaving] = useState(false);
+  const [omdbKeysText, setOmdbKeysText] = useState("");
+  const [omdbUsageInfo, setOmdbUsageInfo] = useState(null);
   const [previewSourceUrl, setPreviewSourceUrl] = useState("");
   const [previewTitle, setPreviewTitle] = useState("");
   const [imdbImagePreviewUrls, setImdbImagePreviewUrls] = useState([]);
@@ -349,6 +443,11 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
     setImdbQuery("");
     setImdbImagePreviewUrls([]);
   };
+  const closeMovieForm = () => {
+    if (!confirmDiscardMovieForm()) return;
+    setShowMovieForm(false);
+    resetMovieForm();
+  };
 
   const openNewMovieForm = () => {
     const next = {
@@ -420,6 +519,47 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
     const payload = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(payload?.error || "Failed to load movies");
     setMovies(Array.isArray(payload?.items) ? payload.items : []);
+  };
+
+  const refreshMovieMetadataSettings = async () => {
+    setMovieMetadataSettingsLoading(true);
+    try {
+      const res = await fetch("/api/admin/movie-metadata-settings", { cache: "no-store" });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload?.error || "Failed to load movie metadata settings");
+      setOmdbKeysText(Array.isArray(payload?.omdb_api_keys) ? payload.omdb_api_keys.join("\n") : "");
+      setOmdbUsageInfo(payload?.omdb_usage || null);
+    } catch (err) {
+      setError(err?.message || "Failed to load movie metadata settings");
+    } finally {
+      setMovieMetadataSettingsLoading(false);
+    }
+  };
+
+  const handleSaveOmdbKeys = async () => {
+    setMovieMetadataSettingsSaving(true);
+    setError("");
+    setMessage("");
+    try {
+      const keys = String(omdbKeysText || "")
+        .split(/[,\n\r]+/g)
+        .map((item) => item.trim())
+        .filter(Boolean);
+      const res = await fetch("/api/admin/movie-metadata-settings", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ omdb_api_keys: keys }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload?.error || "Failed to save OMDb keys");
+      setOmdbKeysText(Array.isArray(payload?.omdb_api_keys) ? payload.omdb_api_keys.join("\n") : "");
+      setOmdbUsageInfo(payload?.omdb_usage || null);
+      setMessage("OMDb API keys saved.");
+    } catch (err) {
+      setError(err?.message || "Failed to save OMDb keys");
+    } finally {
+      setMovieMetadataSettingsSaving(false);
+    }
   };
 
   const handleImportMovies = async (event) => {
@@ -788,7 +928,9 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
         body: JSON.stringify({ query: imdbQuery }),
       });
       const payload = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(payload?.error || "Failed to fetch IMDb data");
+      if (!res.ok) {
+        throw new Error(String(payload?.error || "Failed to fetch IMDb data").trim());
+      }
       const item = payload?.item || {};
       const imageUrls = Array.isArray(item.image_urls)
         ? item.image_urls.map((v) => String(v || "").trim()).filter(Boolean)
@@ -819,8 +961,10 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
         imdb_languages: toCsv(item.imdb_languages) || prev.imdb_languages,
       }));
       setImdbImagePreviewUrls(previewUrls);
+      if (payload?.omdb_usage) setOmdbUsageInfo(payload.omdb_usage);
       if (item.imdb_id) setImdbQuery(item.imdb_id);
-      setMessage("IMDb তথ্য auto-fill হয়েছে। এখন চাইলে edit করে save করুন।");
+      const provider = String(payload?.provider || "imdb");
+      setMessage(`Metadata auto-fill হয়েছে (${provider}). এখন চাইলে edit করে save করুন।`);
     } catch (err) {
       setError(err?.message || "Failed to fetch IMDb data");
     } finally {
@@ -926,6 +1070,73 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
     setSavingMovie(false);
   };
 
+  const handleRefreshMissingMetadata = async () => {
+    const selectedRows = movieTable.getSelectedRowModel().rows.map((row) => row.original);
+    if (!selectedRows.length) {
+      setError("Metadata fetch করার জন্য আগে movie select করুন।");
+      return;
+    }
+    const targetIds = selectedRows
+      .filter((row) => {
+        const state = movieDataState(row);
+        return state === "metadata_missing" || state === "metadata_partial" || state === "missing_both";
+      })
+      .map((row) => Number(row.id))
+      .filter((id) => Number.isInteger(id) && id > 0);
+
+    if (!targetIds.length) {
+      setError("Selected movie-গুলোর মধ্যে metadata missing পাওয়া যায়নি।");
+      return;
+    }
+    if (
+      !window.confirm(
+        `Selected ${selectedRows.length}টির মধ্যে ${targetIds.length}টি movie-তে metadata re-fetch/update করবেন?`
+      )
+    )
+      return;
+
+    setRefreshingMovieMetadata(true);
+    setError("");
+    setMessage("");
+    setMetadataRefreshSummary(null);
+    try {
+      const res = await fetch("/api/admin/movies/metadata-refresh", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          movie_ids: targetIds,
+          providers: String(importForm.providers || "imdb,omdb,tmdb")
+            .split(",")
+            .map((v) => String(v || "").trim().toLowerCase())
+            .filter(Boolean),
+        }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload?.error || "Metadata refresh failed");
+      setMetadataRefreshSummary({
+        processed: Number(payload?.processed || 0),
+        succeeded: Number(payload?.succeeded || 0),
+        failed: Number(payload?.failed || 0),
+      });
+      const failedItems = Array.isArray(payload?.results)
+        ? payload.results.filter((row) => !row?.ok).slice(0, 5)
+        : [];
+      if (payload?.omdb_usage) setOmdbUsageInfo(payload.omdb_usage);
+      await refreshMovies();
+      setMessage(`Metadata refresh done. Success: ${payload?.succeeded || 0}, Failed: ${payload?.failed || 0}`);
+      if (failedItems.length) {
+        const reasonText = failedItems
+          .map((row) => `${row?.movie_id || "?"}: ${String(row?.error || "failed")}`)
+          .join(" | ");
+        setError(`Metadata refresh failed details -> ${reasonText}`);
+      }
+    } catch (err) {
+      setError(err?.message || "Metadata refresh failed");
+    } finally {
+      setRefreshingMovieMetadata(false);
+    }
+  };
+
   const movieColumns = useMemo(
     () => [
       {
@@ -967,6 +1178,41 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
         ),
       },
       {
+        id: "metadata_state",
+        accessorFn: (row) => movieDataState(row),
+        header: ({ column }) => (
+          <button type="button" className={styles.tableHeadBtn} onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
+            Metadata
+          </button>
+        ),
+        filterFn: (row, columnId, filterValue) => {
+          const current = String(row.getValue(columnId) || "");
+          const wanted = String(filterValue || "").trim().toLowerCase();
+          if (!wanted || wanted === "all") return true;
+          if (wanted === "metadata_missing")
+            return current === "metadata_missing" || current === "metadata_partial" || current === "missing_both";
+          if (wanted === "metadata_partial") return current === "metadata_partial";
+          if (wanted === "source_missing") return current === "source_missing" || current === "missing_both";
+          if (wanted === "missing_both") return current === "missing_both";
+          if (wanted === "complete") return current === "complete";
+          return current === wanted;
+        },
+        cell: ({ row }) => {
+          const state = movieDataState(row.original);
+          const badgeClass =
+            state === "complete"
+              ? styles.importStatusSaved
+              : state === "metadata_partial"
+                ? styles.importStatusDuplicate
+              : state === "metadata_missing"
+                ? styles.importStatusFailed
+                : state === "source_missing"
+                  ? styles.importStatusDuplicate
+                  : styles.importStatusSkipped;
+          return <span className={badgeClass}>{movieDataStateLabel(state)}</span>;
+        },
+      },
+      {
         id: "updated_at",
         accessorFn: (row) => new Date(row?.updated_at || 0).getTime(),
         cell: ({ row }) => (row.original?.updated_at ? new Date(row.original.updated_at).toLocaleString() : "-"),
@@ -1006,18 +1252,29 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
       sorting: movieSorting,
       columnFilters: movieColumnFilters,
       rowSelection: movieRowSelection,
+      pagination: moviePagination,
     },
     onSortingChange: setMovieSorting,
     onColumnFiltersChange: setMovieColumnFilters,
     onRowSelectionChange: setMovieRowSelection,
+    onPaginationChange: setMoviePagination,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
   });
 
   useEffect(() => {
     setMovieRowSelection({});
   }, [currentCategorySlug, movies]);
+
+  useEffect(() => {
+    setMoviePagination((prev) => ({ ...prev, pageIndex: 0 }));
+  }, [currentCategorySlug, movieSearch, movieStatusFilter, movieDataFilter]);
+
+  useEffect(() => {
+    refreshMovieMetadataSettings().catch(() => {});
+  }, []);
 
   return (
     <div className={styles.form}>
@@ -1197,6 +1454,28 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
                 <option value="hidden">Hidden</option>
               </select>
             </label>
+            <label className={styles.field}>
+              <span>Data Filter</span>
+              <select
+                value={movieDataFilter}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setMovieDataFilter(value);
+                  setMovieColumnFilters((prev) => {
+                    const next = prev.filter((item) => item.id !== "metadata_state");
+                    if (value !== "all") next.push({ id: "metadata_state", value });
+                    return next;
+                  });
+                }}
+              >
+                <option value="all">All Data</option>
+                <option value="complete">Complete (Source + Metadata)</option>
+                <option value="metadata_missing">Metadata Missing</option>
+                <option value="metadata_partial">Partial Metadata</option>
+                <option value="source_missing">Source Missing</option>
+                <option value="missing_both">Missing Both</option>
+              </select>
+            </label>
           </div>
           <div className={styles.actions}>
             <button type="button" className={styles.ghostBtn} onClick={() => movieTable.toggleAllRowsSelected(true)}>
@@ -1209,6 +1488,79 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
               <Trash2 size={14} aria-hidden="true" />
               Delete Selected ({movieTable.getSelectedRowModel().rows.length})
             </button>
+            <button
+              type="button"
+              className={styles.primaryBtn}
+              onClick={handleRefreshMissingMetadata}
+              disabled={refreshingMovieMetadata || movieTable.getSelectedRowModel().rows.length === 0}
+            >
+              {refreshingMovieMetadata
+                ? "Refreshing Metadata..."
+                : `Refetch Selected Metadata (${movieTable.getSelectedRowModel().rows.length})`}
+            </button>
+          </div>
+          {metadataRefreshSummary ? (
+            <p className={styles.hint} style={{ marginBottom: 8 }}>
+              Metadata Refresh: Processed {metadataRefreshSummary.processed} | Success {metadataRefreshSummary.succeeded} | Failed{" "}
+              {metadataRefreshSummary.failed}
+            </p>
+          ) : null}
+          <div className={styles.paginationBar}>
+            <div className={styles.paginationInfo}>
+              <span>
+                Showing {movieTable.getRowModel().rows.length} of {movieTable.getFilteredRowModel().rows.length} movies
+              </span>
+              <label className={styles.pageSizeControl}>
+                <span>Rows per page</span>
+                <select
+                  value={movieTable.getState().pagination.pageSize}
+                  onChange={(e) => movieTable.setPageSize(Number(e.target.value))}
+                >
+                  {[10, 25, 50, 100, 200].map((size) => (
+                    <option key={size} value={size}>
+                      {size}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className={styles.paginationActions}>
+              <button
+                type="button"
+                className={styles.ghostBtn}
+                onClick={() => movieTable.setPageIndex(0)}
+                disabled={!movieTable.getCanPreviousPage()}
+              >
+                First
+              </button>
+              <button
+                type="button"
+                className={styles.ghostBtn}
+                onClick={() => movieTable.previousPage()}
+                disabled={!movieTable.getCanPreviousPage()}
+              >
+                Previous
+              </button>
+              <span className={styles.paginationPageInfo}>
+                Page {movieTable.getState().pagination.pageIndex + 1} of {movieTable.getPageCount() || 1}
+              </span>
+              <button
+                type="button"
+                className={styles.ghostBtn}
+                onClick={() => movieTable.nextPage()}
+                disabled={!movieTable.getCanNextPage()}
+              >
+                Next
+              </button>
+              <button
+                type="button"
+                className={styles.ghostBtn}
+                onClick={() => movieTable.setPageIndex(Math.max(movieTable.getPageCount() - 1, 0))}
+                disabled={!movieTable.getCanNextPage()}
+              >
+                Last
+              </button>
+            </div>
           </div>
           <div className={styles.tableWrap}>
             <Table>
@@ -1248,6 +1600,85 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
           )}
         </section>
       ) : null}
+
+      <section className={styles.card}>
+        <div className={styles.controlRowEnd}>
+          <h2 style={{ margin: 0 }}>Movie Metadata API Keys</h2>
+          <div className={styles.actions}>
+            <button
+              type="button"
+              className={styles.ghostBtn}
+              onClick={() => refreshMovieMetadataSettings()}
+              disabled={movieMetadataSettingsLoading}
+            >
+              {movieMetadataSettingsLoading ? "Loading..." : "Reload Usage"}
+            </button>
+            <button
+              type="button"
+              className={styles.primaryBtn}
+              onClick={handleSaveOmdbKeys}
+              disabled={movieMetadataSettingsSaving}
+            >
+              {movieMetadataSettingsSaving ? "Saving..." : "Save API Keys"}
+            </button>
+          </div>
+        </div>
+        <p className={styles.hint}>
+          প্রতি লাইনে একটি OMDb API key দিন। দৈনিক limit (1000/key) শেষ হলে auto-rotate করে পরের key ব্যবহার হবে।
+        </p>
+        <label className={styles.field}>
+          <span>OMDb API Keys (one per line)</span>
+          <textarea
+            value={omdbKeysText}
+            onChange={(e) => setOmdbKeysText(e.target.value)}
+            placeholder={"key_1\nkey_2\nkey_3"}
+            rows={4}
+          />
+        </label>
+        {omdbUsageInfo ? (
+          <>
+            <p className={styles.hint} style={{ marginTop: 8 }}>
+              Usage Date: {omdbUsageInfo.date || "-"} | Total Used: {omdbUsageInfo.total_used || 0}/
+              {omdbUsageInfo.total_limit || 0}
+            </p>
+            <div className={styles.tableWrap}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Key</th>
+                    <th>Source</th>
+                    <th>Used</th>
+                    <th>Remaining</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(omdbUsageInfo.per_key || []).map((row, index) => (
+                    <tr key={String(row?.key_hash || `idx-${index}`)}>
+                      <td>{Number(row?.index || 0) + 1}</td>
+                      <td>{row?.masked_key || "-"}</td>
+                      <td>{row?.source || "-"}</td>
+                      <td>{row?.used || 0}</td>
+                      <td>{row?.remaining || 0}</td>
+                      <td>
+                        <span className={row?.exhausted ? styles.importStatusFailed : styles.importStatusSaved}>
+                          {row?.exhausted ? "Limit Reached" : row?.active ? "Active" : "Ready"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                  {!Array.isArray(omdbUsageInfo.per_key) || !omdbUsageInfo.per_key.length ? (
+                    <tr>
+                      <td colSpan={6}>No OMDb key configured yet.</td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          </>
+        ) : null}
+      </section>
 
       <section className={styles.card}>
         <h2>FTP / Apache Movie Import</h2>
@@ -1660,11 +2091,17 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
       ) : null}
 
       {showMovieForm ? (
-        <section className={styles.card}>
-          <h2>{movieForm.id ? "Edit Movie" : "Add Movie"}</h2>
-          <p className={styles.hint}>Add movie and one primary source URL.</p>
+        <div className={styles.modalWrap} onClick={closeMovieForm}>
+          <div className={`${styles.modalCard} ${styles.movieFormModalCard}`} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <h4>{movieForm.id ? "Edit Movie" : "Add Movie"}</h4>
+              <button type="button" className={styles.closeBtn} onClick={closeMovieForm}>
+                Close
+              </button>
+            </div>
+            <p className={styles.hint}>Add movie and one primary source URL.</p>
 
-          <form className={styles.form} onSubmit={handleMovieSubmit}>
+            <form className={styles.form} onSubmit={handleMovieSubmit}>
           <CategoryCombobox
             categories={categories}
             value={movieForm.category_ids}
@@ -1838,11 +2275,7 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
               <button
                 type="button"
                 className={styles.ghostBtn}
-                onClick={() => {
-                  if (!confirmDiscardMovieForm()) return;
-                  setShowMovieForm(false);
-                  resetMovieForm();
-                }}
+                onClick={closeMovieForm}
               >
                 Cancel
               </button>
@@ -1853,8 +2286,9 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
                 </button>
               ) : null}
             </div>
-          </form>
-        </section>
+            </form>
+          </div>
+        </div>
       ) : null}
 
       {previewSourceUrl ? (

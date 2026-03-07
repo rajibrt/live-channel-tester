@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "../../../../../lib/adminApi";
-import { fetchImdbMovieById } from "../../../../../lib/imdbData";
+import { fetchMovieMetadataByImdbIdWithFallback } from "../../../../../lib/movieMetadataByImdb";
+import { normalizeImdbId } from "../../../../../lib/imdbData";
 
 export async function POST(request) {
   const auth = await requireAdminApi();
@@ -13,9 +14,16 @@ export async function POST(request) {
   }
 
   try {
-    const movie = await fetchImdbMovieById(query);
-    return NextResponse.json({ item: movie });
+    const result = await fetchMovieMetadataByImdbIdWithFallback(query, auth.current.user.id);
+    return NextResponse.json(result);
   } catch (error) {
-    return NextResponse.json({ error: error?.message || "Failed to fetch IMDb data" }, { status: 422 });
+    const imdbId = normalizeImdbId(query);
+    return NextResponse.json(
+      {
+        error: error?.message || "Failed to fetch IMDb data",
+        imdb_id: imdbId || "",
+      },
+      { status: 422 }
+    );
   }
 }

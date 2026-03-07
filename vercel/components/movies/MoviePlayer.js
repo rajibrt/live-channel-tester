@@ -11,6 +11,12 @@ function toSeconds(value) {
   return Math.floor(n);
 }
 
+function toSignedSeconds(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  return n < 0 ? Math.ceil(n) : Math.floor(n);
+}
+
 function formatClock(totalSeconds) {
   const safe = Math.max(0, toSeconds(totalSeconds));
   const h = Math.floor(safe / 3600);
@@ -548,7 +554,7 @@ export default function MoviePlayer({
       const video = videoRef.current;
       if (!video) return;
       const base = toSeconds(video.currentTime) + toSeconds(transcodeOffsetRef.current);
-      const target = Math.max(0, base + toSeconds(delta));
+      const target = Math.max(0, base + toSignedSeconds(delta));
       if (isTranscodedPlayback) {
         queueTranscodeSeek(target);
         return;

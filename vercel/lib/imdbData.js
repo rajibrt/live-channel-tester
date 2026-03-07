@@ -140,6 +140,158 @@ function pickMovieJsonLd(objects) {
   return null;
 }
 
+function parseAttributes(fragment) {
+  const out = {};
+  const re = /([a-zA-Z_:][-a-zA-Z0-9_:.]*)\s*=\s*["']([^"']*)["']/g;
+  let m;
+  while ((m = re.exec(String(fragment || "")))) {
+    out[String(m[1] || "").toLowerCase()] = String(m[2] || "");
+  }
+  return out;
+}
+
+function extractMetaTagContent(html, key, attr = "property") {
+  const input = text(html);
+  if (!input || !key) return "";
+  const keyLower = String(key).trim().toLowerCase();
+  const attrLower = String(attr).trim().toLowerCase();
+  const tags = input.match(/<meta\b[^>]*>/gi) || [];
+  for (const tag of tags) {
+    const attrs = parseAttributes(tag);
+    if (String(attrs[attrLower] || "").trim().toLowerCase() !== keyLower) continue;
+    const content = text(attrs.content || "");
+    if (content) return content;
+  }
+  return "";
+}
+
+function normalizeReleaseDateLabel(raw) {
+  const v = text(raw);
+  if (!v) return "";
+  const iso = v.match(/\b(19\d{2}|20\d{2})(?:-(\d{2})-(\d{2}))?\b/);
+  if (iso) return iso[0];
+  return v;
+}
+
+function extractMovieFromNextData(html, imdbId) {
+  const input = text(html);
+  if (!input) return null;
+  const scriptTags = input.match(/<script\b[\s\S]*?<\/script>/gi) || [];
+  let body = "";
+  for (const tag of scriptTags) {
+    const openEnd = tag.indexOf(">");
+    if (openEnd < 0) continue;
+    const openTag = tag.slice(0, openEnd + 1);
+    const attrs = parseAttributes(openTag);
+    const id = String(attrs.id || "").trim().toLowerCase();
+    const type = String(attrs.type || "").trim().toLowerCase();
+    if (id !== "__next_data__") continue;
+    if (!type.includes("application/json")) continue;
+    const closeStart = tag.toLowerCase().lastIndexOf("</script>");
+    if (closeStart <= openEnd) continue;
+    body = tag.slice(openEnd + 1, closeStart).trim();
+    if (body) break;
+  }
+  if (!body) return null;
+  try {
+    const parsed = JSON.parse(body);
+    const data = parsed?.props?.pageProps?.aboveTheFoldData || parsed?.props?.pageProps?.mainColumnData || null;
+    if (!data || typeof data !== "object") return null;
+
+    const title = text(data?.titleText?.text || data?.originalTitleText?.text || "");
+    const synopsis = text(data?.plot?.plotText?.plainText || data?.plot?.plotText?.text || "");
+    const releaseYear = Number(data?.releaseYear?.year || 0) || null;
+    const runtimeSeconds = Number(data?.runtime?.seconds || 0) || 0;
+    const posterUrl = text(data?.primaryImage?.url || "");
+    const imageUrls = uniqueStrings([
+      posterUrl,
+      ...asList(data?.images?.edges).map((edge) => text(edge?.node?.url || edge?.node?.originalUrl || "")),
+    ]);
+
+    const directors = uniqueStrings(
+      asList(data?.directors).flatMap((block) =>
+        asList(block?.credits).map((credit) => text(credit?.name?.nameText?.text || credit?.name?.text || ""))
+      )
+    );
+    const writers = uniqueStrings(
+      asList(data?.writers).flatMap((block) =>
+        asList(block?.credits).map((credit) => text(credit?.name?.nameText?.text || credit?.name?.text || ""))
+      )
+    );
+    const stars = uniqueStrings(
+      asList(data?.castPageTitle?.edges).map((edge) => text(edge?.node?.name?.nameText?.text || edge?.node?.nameText?.text || ""))
+    );
+
+    const countries = uniqueStrings(
+      asList(data?.countriesOfOrigin?.countries).map((c) => text(c?.text || c?.id || ""))
+    );
+    const languages = uniqueStrings(
+      asList(data?.spokenLanguages?.spokenLanguages).map((lang) => text(lang?.text || lang?.id || ""))
+    );
+    const genres = uniqueStrings(
+      asList(data?.genres?.genres).map((g) => text(g?.text || g?.id || ""))
+    );
+
+    const ratingValue = parseNumeric(data?.ratingsSummary?.aggregateRating, null);
+    const ratingCount = parseNumeric(data?.ratingsSummary?.voteCount, null);
+
+    return {
+      imdb_id: normalizeImdbId(imdbId),
+      imdb_url: normalizeImdbId(imdbId) ? `https://www.imdb.com/title/${normalizeImdbId(imdbId)}/` : "",
+      title,
+      synopsis,
+      release_year: Number.isInteger(releaseYear) && releaseYear > 1800 ? releaseYear : null,
+      runtime_seconds: runtimeSeconds > 0 ? runtimeSeconds : 0,
+      poster_url: posterUrl,
+      backdrop_url: text(imageUrls[1] || imageUrls[0] || posterUrl),
+      image_urls: imageUrls,
+      imdb_rating: ratingValue,
+      imdb_votes: Number.isInteger(ratingCount) && ratingCount > 0 ? ratingCount : null,
+      content_rating: text(data?.certificate?.rating || ""),
+      imdb_genres: genres,
+      imdb_directors: directors,
+      imdb_writers: writers,
+      imdb_stars: stars,
+      imdb_release_date: normalizeReleaseDateLabel(text(data?.releaseDate?.displayableProperty?.value?.plainText || "")),
+      imdb_countries: countries,
+      imdb_languages: languages,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function extractMovieFromMetaTags(html, imdbId) {
+  const ogTitle = extractMetaTagContent(html, "og:title");
+  const title = text(ogTitle.replace(/\s*-\s*IMDb\s*$/i, "")).replace(/\s*\(\d{4}\)\s*$/, "");
+  const desc = extractMetaTagContent(html, "og:description");
+  const image = extractMetaTagContent(html, "og:image");
+  const releaseYearMatch = ogTitle.match(/\((19\d{2}|20\d{2})\)/);
+  const releaseYear = releaseYearMatch ? Number(releaseYearMatch[1]) : null;
+  if (!title && !desc && !image) return null;
+  return {
+    imdb_id: normalizeImdbId(imdbId),
+    imdb_url: normalizeImdbId(imdbId) ? `https://www.imdb.com/title/${normalizeImdbId(imdbId)}/` : "",
+    title,
+    synopsis: desc,
+    release_year: Number.isInteger(releaseYear) ? releaseYear : null,
+    runtime_seconds: 0,
+    poster_url: image,
+    backdrop_url: image,
+    image_urls: image ? [image] : [],
+    imdb_rating: null,
+    imdb_votes: null,
+    content_rating: "",
+    imdb_genres: [],
+    imdb_directors: [],
+    imdb_writers: [],
+    imdb_stars: [],
+    imdb_release_date: "",
+    imdb_countries: [],
+    imdb_languages: [],
+  };
+}
+
 export function normalizeImdbId(input) {
   const raw = text(input);
   if (!raw) return "";
@@ -152,7 +304,15 @@ export function parseImdbMovieHtml(html, imdbId) {
   const objects = extractJsonLdObjects(html);
   const movie = pickMovieJsonLd(objects);
   if (!movie) {
-    throw new Error("IMDb JSON-LD movie payload not found");
+    const fromNext = extractMovieFromNextData(html, id);
+    if (fromNext?.title || fromNext?.synopsis || fromNext?.poster_url) {
+      return fromNext;
+    }
+    const fromMeta = extractMovieFromMetaTags(html, id);
+    if (fromMeta?.title || fromMeta?.synopsis || fromMeta?.poster_url) {
+      return fromMeta;
+    }
+    throw new Error("IMDb movie payload not found");
   }
 
   const title = text(movie.name);

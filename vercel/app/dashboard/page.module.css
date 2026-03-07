@@ -1240,6 +1240,12 @@
   padding: 12px;
 }
 
+.movieFormModalCard {
+  width: min(1120px, 100%);
+  max-height: calc(100vh - 28px);
+  overflow: auto;
+}
+
 .modalHeader {
   display: flex;
   align-items: center;
@@ -2865,6 +2871,54 @@
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.paginationBar {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.paginationInfo {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  flex-wrap: wrap;
+}
+
+.pageSizeControl {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pageSizeControl select {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--foreground);
+  padding: 6px 10px;
+  font: inherit;
+  min-width: 78px;
+}
+
+.paginationActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.paginationPageInfo {
+  min-width: 120px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted-foreground);
 }
 
 .rowActions {
