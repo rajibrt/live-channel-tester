@@ -1318,12 +1318,46 @@
   .paginationInfo,
   .paginationActions {
     width: 100%;
-    justify-content: space-between;
+    justify-content: center;
   }
 
-  .paginationBtn {
-    min-height: 36px;
-    padding: 6px 10px;
+  .paginationActions {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .paginationActions::-webkit-scrollbar {
+    display: none;
+  }
+
+  .paginationNav {
+    min-width: max-content;
+    margin: 0 auto;
+  }
+
+  .paginationNav :global(ul) {
+    gap: 2px;
+  }
+
+  .paginationNav :global(button) {
+    min-width: 34px;
+    height: 34px;
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .paginationNav :global(span[aria-hidden]) {
+    width: 28px;
+  }
+
+  .paginationNav :global(button[aria-label="Go to previous page"] span),
+  .paginationNav :global(button[aria-label="Go to next page"] span) {
+    display: none;
   }
 
   .grid {
