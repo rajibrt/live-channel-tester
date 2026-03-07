@@ -85,7 +85,9 @@ export default function MoviesView({
   const [search, setSearch] = useState("");
   const [moviesPage, setMoviesPage] = useState(1);
   const [continuePage, setContinuePage] = useState(1);
+  const [isTouchContinueUi, setIsTouchContinueUi] = useState(false);
   const moviesSectionRef = useRef(null);
+  const watchPlayerColRef = useRef(null);
   const hasFilterScrollMountedRef = useRef(false);
   const [categorySlug, setCategorySlug] = useState("all");
   const [selectedMovieId, setSelectedMovieId] = useState(() => {
@@ -280,6 +282,7 @@ export default function MoviesView({
     const start = (currentContinuePage - 1) * CONTINUE_PAGE_SIZE;
     return continueWatching.slice(start, start + CONTINUE_PAGE_SIZE);
   }, [continueWatching, currentContinuePage]);
+  const continueStripMovies = isTouchContinueUi ? continueWatching : continuePagedMovies;
   const pagedMovies = useMemo(() => {
     const start = (currentPage - 1) * MOVIES_PAGE_SIZE;
     return filteredMovies.slice(start, start + MOVIES_PAGE_SIZE);
@@ -296,6 +299,27 @@ export default function MoviesView({
   useEffect(() => {
     if (continuePage > totalContinuePages) setContinuePage(totalContinuePages);
   }, [continuePage, totalContinuePages]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const media = window.matchMedia("(max-width: 640px), (hover: none) and (pointer: coarse)");
+    const sync = () => setIsTouchContinueUi(Boolean(media.matches));
+    sync();
+    media.addEventListener?.("change", sync);
+    return () => media.removeEventListener?.("change", sync);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (variant !== "watch") return;
+    const media = window.matchMedia("(max-width: 1023px)");
+    if (!media.matches) return;
+    const player = watchPlayerColRef.current;
+    if (!player) return;
+    const navbarOffset = 74;
+    const top = Math.max(0, player.getBoundingClientRect().top + window.scrollY - navbarOffset);
+    window.scrollTo({ top, behavior: "smooth" });
+  }, [variant, selectedMovieId]);
 
   useEffect(() => {
     setSearch("");
@@ -431,7 +455,7 @@ export default function MoviesView({
   if (variant === "watch") {
     return (
       <section className={`${styles.wrap} ${styles.wrapWatch}`}>
-        <div className={styles.watchPlayerCol}>
+        <div ref={watchPlayerColRef} className={styles.watchPlayerCol}>
           <MoviePlayer
             movie={selectedMovie}
             startFrom={playerStartFrom}
@@ -462,8 +486,8 @@ export default function MoviesView({
               <span className={styles.sectionCount}>{continueWatching.length}</span>
             </header>
             <div className={styles.continueBody}>
-              <div className={styles.continueStrip}>
-                {continuePagedMovies.map((movie) => (
+              <div className={`${styles.continueStrip} ${isTouchContinueUi ? styles.continueStripTouch : ""}`}>
+                {continueStripMovies.map((movie) => (
                   <div key={movie.id} className={styles.continueCardSlot}>
                     <MovieCard
                       movie={movie}
@@ -474,7 +498,7 @@ export default function MoviesView({
                   </div>
                 ))}
               </div>
-              {totalContinuePages > 1 ? (
+              {totalContinuePages > 1 && !isTouchContinueUi ? (
                 <div className={styles.continuePagination}>
                   <Pagination className={styles.paginationNav}>
                     <PaginationContent>

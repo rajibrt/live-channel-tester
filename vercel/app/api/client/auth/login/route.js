@@ -3,7 +3,6 @@ import { createClient } from "@supabase/supabase-js";
 import { CLIENT_SESSION_COOKIE } from "../../../../../lib/clientAuth";
 import { getSessionCookieDomain } from "../../../../../lib/cookieDomain";
 import { buildClientMetaFromRequest } from "../../../../../lib/requestClientMeta";
-import { getBaseUrl } from "../../../../../lib/siteUrl";
 import { getSupabaseAdmin, getSupabaseAnonConfig } from "../../../../../lib/supabaseAdmin";
 import { createSessionToken, SESSION_MAX_AGE } from "../../../../../lib/sessionToken";
 
@@ -17,24 +16,29 @@ function normalizeMobileKey(value) {
   return digits.slice(-11);
 }
 
+function redirectRelative(path) {
+  return new NextResponse(null, {
+    status: 302,
+    headers: { Location: path },
+  });
+}
+
 export async function POST(request) {
-  const baseUrl = getBaseUrl();
   const cookieDomain = getSessionCookieDomain();
-  const toRedirectUrl = (path) => new URL(path, `${baseUrl}/`);
 
   const form = await request.formData();
   const identifier = String(form.get("identifier") || "").trim();
   const password = String(form.get("password") || "");
 
   if (!identifier || !password) {
-    return NextResponse.redirect(toRedirectUrl("/client-login?error=invalid"), { status: 302 });
+    return redirectRelative("/client-login?error=invalid");
   }
 
   const isEmailLogin = identifier.includes("@");
   const loginEmail = isEmailLogin ? normalizeEmail(identifier) : "";
   const loginMobileKey = isEmailLogin ? "" : normalizeMobileKey(identifier);
   if (!isEmailLogin && !loginMobileKey) {
-    return NextResponse.redirect(toRedirectUrl("/client-login?error=invalid"), { status: 302 });
+    return redirectRelative("/client-login?error=invalid");
   }
 
   const admin = getSupabaseAdmin();
@@ -48,7 +52,7 @@ export async function POST(request) {
   const { data: profile } = await profileQuery.single();
 
   if (!profile) {
-    return NextResponse.redirect(toRedirectUrl("/client-login?error=invalid"), { status: 302 });
+    return redirectRelative("/client-login?error=invalid");
   }
 
   const { url, anon } = getSupabaseAnonConfig();
@@ -56,11 +60,11 @@ export async function POST(request) {
   const { data, error } = await auth.auth.signInWithPassword({ email: profile.email, password });
 
   if (error || !data?.session?.access_token || !data?.user) {
-    return NextResponse.redirect(toRedirectUrl("/client-login?error=invalid"), { status: 302 });
+    return redirectRelative("/client-login?error=invalid");
   }
 
   if (data.user.id !== profile.user_id) {
-    return NextResponse.redirect(toRedirectUrl("/client-login?error=invalid"), { status: 302 });
+    return redirectRelative("/client-login?error=invalid");
   }
 
   const requestMeta = buildClientMetaFromRequest(request);
@@ -76,7 +80,7 @@ export async function POST(request) {
   });
 
   const nextPath = String(profile?.approval_status || "").toLowerCase() === "approved" ? "/" : "/?pending=1";
-  const res = NextResponse.redirect(toRedirectUrl(nextPath), { status: 302 });
+  const res = redirectRelative(nextPath);
   const sessionToken = createSessionToken({ sub: data.user.id, typ: "client" }, SESSION_MAX_AGE);
   res.cookies.set(CLIENT_SESSION_COOKIE, sessionToken, {
     ...(cookieDomain ? { domain: cookieDomain } : {}),

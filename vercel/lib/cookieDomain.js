@@ -8,6 +8,10 @@ export function getSessionCookieDomain() {
     return explicit.replace(/^\./, "");
   }
 
+  if (process.env.NODE_ENV !== "production") {
+    return undefined;
+  }
+
   const candidate = String(
     process.env.SITE_URL || process.env.NEXT_PUBLIC_SITE_URL || ""
   ).trim();
@@ -22,4 +26,3 @@ export function getSessionCookieDomain() {
     return undefined;
   }
 }
-

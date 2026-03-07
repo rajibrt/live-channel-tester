@@ -1,11 +1,16 @@
 import { NextResponse } from "next/server";
 import { CLIENT_SESSION_COOKIE, getCurrentClient } from "../../../../../lib/clientAuth";
 import { getSessionCookieDomain } from "../../../../../lib/cookieDomain";
-import { getBaseUrl } from "../../../../../lib/siteUrl";
 import { getSupabaseAdmin } from "../../../../../lib/supabaseAdmin";
 
-export async function POST(request) {
-  const baseUrl = getBaseUrl();
+function redirectRelative(path) {
+  return new NextResponse(null, {
+    status: 302,
+    headers: { Location: path },
+  });
+}
+
+export async function POST() {
   const cookieDomain = getSessionCookieDomain();
 
   const current = await getCurrentClient();
@@ -18,7 +23,7 @@ export async function POST(request) {
     });
   }
 
-  const res = NextResponse.redirect(new URL("/client-login", `${baseUrl}/`), { status: 302 });
+  const res = redirectRelative("/client-login");
   res.cookies.set(CLIENT_SESSION_COOKIE, "", {
     ...(cookieDomain ? { domain: cookieDomain } : {}),
     path: "/",
