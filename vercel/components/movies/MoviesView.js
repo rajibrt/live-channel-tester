@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import MovieDetail from "./MovieDetail";
 import MovieCard from "./MovieCard";
 import MovieGrid from "./MovieGrid";
@@ -19,8 +19,9 @@ import { deriveWatchState } from "../../lib/movieProgress";
 
 const LAST_MODE_KEY = "iptv:v1:last-mode";
 const LAST_MOVIE_SLUG_KEY = "iptv:v1:last-movie-slug";
-const MOVIES_PAGE_SIZE = 24;
+const DEFAULT_MOVIES_PAGE_SIZE = 24;
 const CONTINUE_PAGE_SIZE = 6;
+const MOVIES_GRID_MAX_PAGE_SIZE = 60;
 
 function text(value) {
   return String(value || "").trim();
@@ -84,6 +85,7 @@ export default function MoviesView({
   const [movies, setMovies] = useState(() => (Array.isArray(initialMovies) ? initialMovies : []));
   const [search, setSearch] = useState("");
   const [moviesPage, setMoviesPage] = useState(1);
+  const [moviesPageSize, setMoviesPageSize] = useState(DEFAULT_MOVIES_PAGE_SIZE);
   const [continuePage, setContinuePage] = useState(1);
   const [isTouchContinueUi, setIsTouchContinueUi] = useState(false);
   const moviesSectionRef = useRef(null);
@@ -268,8 +270,21 @@ export default function MoviesView({
     window.scrollTo({ top, behavior });
   }, []);
 
+  const handleGridMetricsChange = useCallback((metrics) => {
+    const columns = Math.max(1, Number(metrics?.columns || 1));
+    const rows = Math.max(1, Math.ceil(DEFAULT_MOVIES_PAGE_SIZE / columns));
+    const nextPageSize = Math.max(
+      columns,
+      Math.min(MOVIES_GRID_MAX_PAGE_SIZE, columns * rows)
+    );
+
+    startTransition(() => {
+      setMoviesPageSize((prev) => (prev === nextPageSize ? prev : nextPageSize));
+    });
+  }, []);
+
   const totalFilteredMovies = filteredMovies.length;
-  const totalPages = Math.max(1, Math.ceil(totalFilteredMovies / MOVIES_PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(totalFilteredMovies / moviesPageSize));
   const currentPage = Math.min(Math.max(1, Number(moviesPage || 1)), totalPages);
   const pageItems = useMemo(() => buildPageItems(currentPage, totalPages), [currentPage, totalPages]);
   const totalContinuePages = Math.max(1, Math.ceil(continueWatching.length / CONTINUE_PAGE_SIZE));
@@ -284,9 +299,9 @@ export default function MoviesView({
   }, [continueWatching, currentContinuePage]);
   const continueStripMovies = isTouchContinueUi ? continueWatching : continuePagedMovies;
   const pagedMovies = useMemo(() => {
-    const start = (currentPage - 1) * MOVIES_PAGE_SIZE;
-    return filteredMovies.slice(start, start + MOVIES_PAGE_SIZE);
-  }, [filteredMovies, currentPage]);
+    const start = (currentPage - 1) * moviesPageSize;
+    return filteredMovies.slice(start, start + moviesPageSize);
+  }, [filteredMovies, currentPage, moviesPageSize]);
 
   useEffect(() => {
     setMoviesPage(1);
@@ -704,11 +719,12 @@ export default function MoviesView({
             selectedMovieId={selectedMovieId}
             onSelectMovie={handleSelectMovie}
             onToggleFavorite={handleToggleFavorite}
+            onMetricsChange={handleGridMetricsChange}
           />
           <div className={styles.paginationBar}>
             <span className={styles.paginationInfo}>
-              Showing {(currentPage - 1) * MOVIES_PAGE_SIZE + (pagedMovies.length ? 1 : 0)}-
-              {(currentPage - 1) * MOVIES_PAGE_SIZE + pagedMovies.length} of {totalFilteredMovies}
+              Showing {(currentPage - 1) * moviesPageSize + (pagedMovies.length ? 1 : 0)}-
+              {(currentPage - 1) * moviesPageSize + pagedMovies.length} of {totalFilteredMovies}
             </span>
             <div className={styles.paginationActions}>
               <Pagination className={styles.paginationNav}>

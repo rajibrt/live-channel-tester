@@ -755,6 +755,160 @@
   word-break: break-word;
 }
 
+.socialPreviewCard {
+  margin-top: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.previewToggleRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.previewToggleBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--border) 88%, transparent);
+  background: color-mix(in oklab, var(--background) 88%, var(--card));
+  color: var(--foreground);
+  padding: 0 12px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: capitalize;
+  cursor: pointer;
+}
+
+.previewToggleBtnActive {
+  color: var(--primary-foreground);
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--primary) 0%, color-mix(in oklab, var(--primary) 58%, var(--accent)) 100%);
+}
+
+.socialPreviewShell {
+  width: min(100%, 760px);
+  border-radius: 20px;
+  border: 1px solid color-mix(in oklab, var(--border) 84%, transparent);
+  background:
+    linear-gradient(180deg, color-mix(in oklab, var(--card) 94%, transparent), color-mix(in oklab, var(--background) 92%, var(--card)));
+  box-shadow: var(--shadow-xl);
+  overflow: hidden;
+}
+
+.socialPreviewShellFacebook {
+  border-color: color-mix(in oklab, #1877f2 36%, var(--border));
+}
+
+.socialPreviewShellWhatsapp {
+  border-color: color-mix(in oklab, #25d366 36%, var(--border));
+}
+
+.socialPreviewShellTelegram {
+  border-color: color-mix(in oklab, #229ed9 36%, var(--border));
+}
+
+.socialPreviewPlatformBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid color-mix(in oklab, var(--border) 86%, transparent);
+  background: color-mix(in oklab, var(--background) 86%, var(--card));
+}
+
+.socialPreviewDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--muted-foreground) 55%, transparent);
+}
+
+.socialPreviewPlatformLabel {
+  margin-left: auto;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+.socialPreviewFrame {
+  display: grid;
+  gap: 0;
+  background: color-mix(in oklab, var(--background) 90%, var(--card));
+}
+
+.socialPreviewImage {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1200 / 630;
+  object-fit: cover;
+  background: color-mix(in oklab, var(--background) 88%, var(--card));
+}
+
+.socialPreviewMeta {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px 16px;
+  background: color-mix(in oklab, var(--card) 96%, transparent);
+}
+
+.socialPreviewUrl {
+  margin: 0;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted-foreground);
+}
+
+.socialPreviewTitle {
+  margin: 0;
+  font-size: 19px;
+  line-height: 1.25;
+  color: var(--foreground);
+}
+
+.socialPreviewDescription {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: color-mix(in oklab, var(--foreground) 74%, var(--muted-foreground));
+}
+
+.socialPreviewFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.socialPreviewBadge,
+.socialPreviewType {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  border-radius: 999px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.socialPreviewBadge {
+  color: var(--primary-foreground);
+  background: linear-gradient(135deg, var(--primary) 0%, color-mix(in oklab, var(--primary) 58%, var(--accent)) 100%);
+}
+
+.socialPreviewType {
+  color: var(--muted-foreground);
+  border: 1px solid color-mix(in oklab, var(--border) 88%, transparent);
+  background: color-mix(in oklab, var(--background) 88%, var(--card));
+}
+
 .hint {
   margin: -4px 0 14px;
   color: var(--muted-foreground);

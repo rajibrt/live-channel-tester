@@ -445,9 +445,11 @@
 }
 
 .grid {
+  --movie-grid-min: 170px;
+  --movie-grid-gap: 10px;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(var(--movie-grid-min), 1fr));
+  gap: var(--movie-grid-gap);
 }
 
 .card {

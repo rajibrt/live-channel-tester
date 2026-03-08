@@ -71,6 +71,7 @@ export default function MovieCard({ movie, isActive, onSelect, onToggleFavorite 
   return (
     <article
       ref={cardRef}
+      data-movie-card="true"
       className={`${styles.card} ${isActive ? styles.cardActive : ""} ${touchOverlayActive ? styles.cardTouchActive : ""}`}
       role="button"
       tabIndex={0}

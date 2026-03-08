@@ -2,8 +2,18 @@ import IptvHomeClient from "../components/iptv/IptvHomeClient";
 import { requireClient } from "../lib/clientAuth";
 import PendingApprovalCard from "../components/client/PendingApprovalCard";
 import { getClientHomeData } from "../lib/clientHomeData";
+import { buildHomePageMetadata, loadSiteSeoSettingsCached } from "../lib/siteSeoSettings";
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata() {
+  try {
+    const settings = await loadSiteSeoSettingsCached();
+    return buildHomePageMetadata(settings);
+  } catch {
+    return buildHomePageMetadata({});
+  }
+}
 
 export default async function HomePage() {
   const current = await requireClient();

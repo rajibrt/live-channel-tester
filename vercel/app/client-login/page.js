@@ -5,6 +5,16 @@ import { redirect } from "next/navigation";
 import PasswordField from "../../components/auth/PasswordField";
 import FacebookHashHandler from "./FacebookHashHandler";
 import { getDictionaryForRequest } from "../../lib/i18n/server";
+import { buildHomePageMetadata, loadSiteSeoSettingsCached } from "../../lib/siteSeoSettings";
+
+export async function generateMetadata() {
+  try {
+    const settings = await loadSiteSeoSettingsCached();
+    return buildHomePageMetadata(settings);
+  } catch {
+    return buildHomePageMetadata({});
+  }
+}
 
 export default async function ClientLoginPage({ searchParams }) {
   const { t } = await getDictionaryForRequest();
