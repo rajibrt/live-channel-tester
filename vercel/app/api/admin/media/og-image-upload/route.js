@@ -10,6 +10,25 @@ function safeName(name) {
     .replace(/_+/g, "_");
 }
 
+async function ensureBucket(supabase, bucket) {
+  const { error } = await supabase.storage.createBucket(bucket, {
+    public: true,
+    fileSizeLimit: 5 * 1024 * 1024,
+    allowedMimeTypes: ["image/png", "image/jpeg", "image/webp", "image/jpg"],
+  });
+
+  const message = String(error?.message || "").toLowerCase();
+  const alreadyExists =
+    !error ||
+    message.includes("already exists") ||
+    message.includes("duplicate") ||
+    message.includes("exists");
+
+  if (!alreadyExists) {
+    throw new Error(`Open Graph bucket setup failed: ${error.message}`);
+  }
+}
+
 export async function POST(request) {
   const auth = await requireAdminApi();
   if (!auth.ok) return auth.response;
@@ -30,8 +49,9 @@ export async function POST(request) {
       return NextResponse.json({ error: "Image too large. Max 5MB." }, { status: 400 });
     }
 
-    const bucket = process.env.OG_IMAGE_BUCKET || process.env.LOGO_BUCKET || "logos";
+    const bucket = process.env.OG_IMAGE_BUCKET || "og-images";
     const supabase = getSupabaseAdmin();
+    await ensureBucket(supabase, bucket);
     const ext = safeName(file.name || "og-image.png").split(".").pop() || "png";
     const filePath = `open-graph/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
     const bytes = Buffer.from(await file.arrayBuffer());
