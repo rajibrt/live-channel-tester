@@ -60,6 +60,7 @@ function toDigits(value) {
 export default function PendingApprovalCard({
   isRejected = false,
   initialMobile = '',
+  requiresAdminApproval = true,
 }) {
   const [mobile, setMobile] = useState(String(initialMobile || ''))
   const [approvalMessage, setApprovalMessage] = useState('')
@@ -116,6 +117,20 @@ export default function PendingApprovalCard({
       const messageText = String(payload?.message_text || '').trim()
       setMessengerUrl(nextUrl)
       setApprovalMessage(messageText)
+
+      if (payload?.approved) {
+        setApprovalMessage('')
+        setSuccess('মোবাইল নম্বর সাবমিট হয়েছে। আপনার অ্যাকাউন্ট এখন অ্যাক্টিভ।')
+        showToast({
+          type: 'success',
+          title: 'অ্যাকাউন্ট অ্যাক্টিভ হয়েছে',
+          description: 'আপনাকে এখন হোমপেজে নেওয়া হচ্ছে।',
+        })
+        window.setTimeout(() => {
+          window.location.assign(String(payload?.redirect_to || '/'))
+        }, 700)
+        return
+      }
 
       if (messageText && navigator?.clipboard?.writeText) {
         try {
@@ -191,15 +206,23 @@ export default function PendingApprovalCard({
   return (
     <>
       <h1 style={{ margin: '0 0 10px', fontSize: '26px' }}>
-        {isRejected ? 'প্রোফাইল এখনো অনুমোদিত হয়নি' : 'প্রোফাইল রিভিউতে আছে'}
+        {requiresAdminApproval
+          ? isRejected
+            ? 'প্রোফাইল এখনো অনুমোদিত হয়নি'
+            : 'প্রোফাইল রিভিউতে আছে'
+          : 'মোবাইল নম্বর দিয়ে অ্যাকাউন্ট চালু করুন'}
       </h1>
       <p style={{ margin: '0 0 8px', color: 'var(--muted-foreground)' }}>
-        {isRejected
-          ? 'আপনার প্রোফাইল এখনো অনুমোদন পায়নি। মোবাইল নম্বর দিয়ে আবার রিকোয়েস্ট দিন।'
-          : 'আপনার অ্যাকাউন্ট তৈরি হয়েছে, কিন্তু অ্যাডমিন অনুমোদন এখনো বাকি আছে।'}
+        {requiresAdminApproval
+          ? isRejected
+            ? 'আপনার প্রোফাইল এখনো অনুমোদন পায়নি। মোবাইল নম্বর দিয়ে আবার রিকোয়েস্ট দিন।'
+            : 'আপনার অ্যাকাউন্ট তৈরি হয়েছে, কিন্তু অ্যাডমিন অনুমোদন এখনো বাকি আছে।'
+          : 'Facebook দিয়ে প্রথমবার ঢোকার পরে শুধু একবার মোবাইল নম্বর দিলেই আপনার অ্যাকাউন্ট অ্যাক্টিভ হয়ে যাবে।'}
       </p>
       <p style={{ margin: '0 0 14px', color: 'var(--muted-foreground)' }}>
-        অনুমোদন সম্পন্ন না হওয়া পর্যন্ত চ্যানেল দেখা বন্ধ থাকবে।
+        {requiresAdminApproval
+          ? 'অনুমোদন সম্পন্ন না হওয়া পর্যন্ত চ্যানেল দেখা বন্ধ থাকবে।'
+          : 'এই ধাপ শেষ হলেই আপনি অটোমেটিকভাবে ওয়েবসাইটে ঢুকে যাবেন।'}
       </p>
 
       <div
@@ -217,9 +240,15 @@ export default function PendingApprovalCard({
         <strong style={{ color: 'var(--foreground)' }}>কি কি করতে হবে:</strong>
         <ol style={{ margin: '8px 0 0 18px', padding: 0 }}>
           <li>আপনার একটিভ মোবাইল নম্বর লিখে `Submit` করুন।</li>
-          <li>অটোমেটিক কপি হওয়া মেসেজটি রেখে দিন (প্রয়োজনে আবার কপি করুন)।</li>
-          <li>`WEBTVBD Facebook Inbox` বাটনে ক্লিক করে ইনবক্স খুলুন।</li>
-          <li>কপি করা মেসেজ ইনবক্সে পেস্ট করে পাঠান।</li>
+          {requiresAdminApproval ? (
+            <>
+              <li>অটোমেটিক কপি হওয়া মেসেজটি রেখে দিন (প্রয়োজনে আবার কপি করুন)।</li>
+              <li>`WEBTVBD Facebook Inbox` বাটনে ক্লিক করে ইনবক্স খুলুন।</li>
+              <li>কপি করা মেসেজ ইনবক্সে পেস্ট করে পাঠান।</li>
+            </>
+          ) : (
+            <li>সাবমিট শেষ হলেই অ্যাকাউন্ট অ্যাক্টিভ হয়ে আপনি সরাসরি সাইটে ঢুকে যাবেন।</li>
+          )}
         </ol>
       </div>
 
@@ -265,11 +294,15 @@ export default function PendingApprovalCard({
             opacity: busy || !canSubmit ? 0.65 : 1,
           }}
         >
-          {busy ? 'সাবমিট হচ্ছে...' : 'অ্যাপ্রুভাল রিকোয়েস্ট সাবমিট করুন'}
+          {busy
+            ? 'সাবমিট হচ্ছে...'
+            : requiresAdminApproval
+              ? 'অ্যাপ্রুভাল রিকোয়েস্ট সাবমিট করুন'
+              : 'মোবাইল নম্বর সাবমিট করুন'}
         </button>
       </form>
 
-      {approvalMessage ? (
+      {requiresAdminApproval && approvalMessage ? (
         <div style={{ display: 'grid', gap: '8px', marginBottom: '12px' }}>
           <label
             style={{
@@ -349,38 +382,40 @@ export default function PendingApprovalCard({
           marginBottom: '8px',
         }}
       >
-        <a
-          href={actionMessengerUrl}
-          target='_blank'
-          rel='noopener noreferrer'
-          style={{
-            border: '1px solid #1877F2',
-            borderRadius: '10px',
-            padding: '10px 14px',
-            fontWeight: 600,
-            textDecoration: 'none',
-            background: '#1877F2',
-            color: '#ffffff',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '8px',
-          }}
-        >
-          <svg
-            width='16'
-            height='16'
-            viewBox='0 0 24 24'
-            aria-hidden='true'
-            focusable='false'
-            style={{ display: 'block' }}
+        {requiresAdminApproval ? (
+          <a
+            href={actionMessengerUrl}
+            target='_blank'
+            rel='noopener noreferrer'
+            style={{
+              border: '1px solid #1877F2',
+              borderRadius: '10px',
+              padding: '10px 14px',
+              fontWeight: 600,
+              textDecoration: 'none',
+              background: '#1877F2',
+              color: '#ffffff',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+            }}
           >
-            <path
-              fill='currentColor'
-              d='M24 12.073C24 5.404 18.627 0 12 0S0 5.404 0 12.073c0 6.022 4.388 11.014 10.125 11.927v-8.437H7.078v-3.49h3.047V9.413c0-3.02 1.792-4.687 4.533-4.687 1.313 0 2.686.236 2.686.236v2.965h-1.514c-1.49 0-1.956.93-1.956 1.885v2.261h3.328l-.532 3.49h-2.796V24C19.612 23.087 24 18.095 24 12.073z'
-            />
-          </svg>
-          WEBTVBD Facebook Inbox
-        </a>
+            <svg
+              width='16'
+              height='16'
+              viewBox='0 0 24 24'
+              aria-hidden='true'
+              focusable='false'
+              style={{ display: 'block' }}
+            >
+              <path
+                fill='currentColor'
+                d='M24 12.073C24 5.404 18.627 0 12 0S0 5.404 0 12.073c0 6.022 4.388 11.014 10.125 11.927v-8.437H7.078v-3.49h3.047V9.413c0-3.02 1.792-4.687 4.533-4.687 1.313 0 2.686.236 2.686.236v2.965h-1.514c-1.49 0-1.956.93-1.956 1.885v2.261h3.328l-.532 3.49h-2.796V24C19.612 23.087 24 18.095 24 12.073z'
+              />
+            </svg>
+            WEBTVBD Facebook Inbox
+          </a>
+        ) : null}
         <form action='/api/client/auth/logout' method='post'>
           <button
             type='submit'
@@ -402,31 +437,33 @@ export default function PendingApprovalCard({
           </button>
         </form>
       </div>
-      <div
-        style={{
-          marginTop: '4px',
-          padding: '10px 12px',
-          borderRadius: '10px',
-          border: '1px solid #f59e0b',
-          background: 'color-mix(in oklab, #f59e0b 18%, var(--card))',
-          color: '#fde68a',
-          fontSize: '15px',
-          fontWeight: 700,
-          lineHeight: 1.5,
-          display: 'flex',
-          alignItems: 'flex-start',
-          gap: '8px',
-        }}
-      >
-        <AlertTriangle
-          size={18}
-          style={{ marginTop: '2px', flex: '0 0 auto' }}
-        />
-        <span>
-          গুরুত্বপূর্ণ: WebTVBD ইনবক্সে মেসেজ না পাঠালে আপনার অ্যাকাউন্ট
-          অ্যাক্টিভ করা হবে না।
-        </span>
-      </div>
+      {requiresAdminApproval ? (
+        <div
+          style={{
+            marginTop: '4px',
+            padding: '10px 12px',
+            borderRadius: '10px',
+            border: '1px solid #f59e0b',
+            background: 'color-mix(in oklab, #f59e0b 18%, var(--card))',
+            color: '#fde68a',
+            fontSize: '15px',
+            fontWeight: 700,
+            lineHeight: 1.5,
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '8px',
+          }}
+        >
+          <AlertTriangle
+            size={18}
+            style={{ marginTop: '2px', flex: '0 0 auto' }}
+          />
+          <span>
+            গুরুত্বপূর্ণ: WebTVBD ইনবক্সে মেসেজ না পাঠালে আপনার অ্যাকাউন্ট
+            অ্যাক্টিভ করা হবে না।
+          </span>
+        </div>
+      ) : null}
 
       {toast.open ? (
         <div

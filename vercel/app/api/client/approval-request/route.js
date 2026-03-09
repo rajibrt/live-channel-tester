@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
+import { loadClientAccessSettings } from "../../../../lib/clientAccessSettings";
 import { requireClientApi } from "../../../../lib/clientApi";
-import { formatSmtpError, loadEmailSettings, sendApprovalRequestAdminEmail } from "../../../../lib/emailDelivery";
+import {
+  formatSmtpError,
+  loadEmailSettings,
+  sendApprovalRequestAdminEmail,
+  sendClientWelcomeEmail,
+} from "../../../../lib/emailDelivery";
 import { getSupabaseAdmin } from "../../../../lib/supabaseAdmin";
 
 function resolveFacebookInboxUrl() {
@@ -52,6 +58,11 @@ export async function POST(request) {
   }
 
   const admin = getSupabaseAdmin();
+  const accessSettings = await loadClientAccessSettings(admin).catch(() => null);
+  const requiresAdminApproval =
+    accessSettings?.facebook_first_login_requires_admin_approval !== false;
+  const authProvider = String(current?.client?.auth_provider || "password").toLowerCase();
+  const shouldAutoApprove = authProvider === "facebook" && !requiresAdminApproval;
   const nowIso = new Date().toISOString();
   const requestedAtText = new Date(nowIso).toLocaleString("en-US", { timeZone: "Asia/Dhaka" });
   const fullName = String(current?.client?.full_name || "").trim();
@@ -63,42 +74,88 @@ export async function POST(request) {
     requestedAt: requestedAtText,
   });
 
+  const updatePayload = {
+    mobile_number: mobile.raw,
+    mobile_login_key: mobile.key,
+    updated_at: nowIso,
+  };
+  if (shouldAutoApprove) {
+    updatePayload.approval_status = "approved";
+    updatePayload.approved_at = nowIso;
+    updatePayload.approved_by_admin = null;
+    updatePayload.approval_note = "Automatically approved after Facebook mobile verification.";
+  }
+
   const { error: updateErr } = await admin
     .from("client_users")
-    .update({
-      mobile_number: mobile.raw,
-      mobile_login_key: mobile.key,
-      updated_at: nowIso,
-    })
+    .update(updatePayload)
     .eq("user_id", current.user.id);
   if (updateErr) {
     return NextResponse.json({ error: updateErr.message || "Failed to save mobile number." }, { status: 500 });
   }
 
-  await admin.from("admin_notifications").insert({
-    type: "client_approval_request",
-    title: "Client submitted approval request",
-    message: `${fullName || email} requested approval with mobile ${mobile.raw}.`,
-    payload_json: {
-      user_id: current.user.id,
-      full_name: fullName,
-      email,
-      mobile_number: mobile.raw,
-      via: "pending_card",
-      requested_at: nowIso,
-      message_text: messageText,
-    },
-  });
-
   await admin.from("client_activity_events").insert({
     user_id: current.user.id,
-    event_type: "approval_request_submitted",
+    event_type: shouldAutoApprove ? "facebook_mobile_auto_approved" : "approval_request_submitted",
     event_data: {
       mobile_number: mobile.raw,
       requested_at: nowIso,
       via: "pending_card",
+      auto_approved: shouldAutoApprove,
     },
   });
+
+  if (!shouldAutoApprove) {
+    await admin.from("admin_notifications").insert({
+      type: "client_approval_request",
+      title: "Client submitted approval request",
+      message: `${fullName || email} requested approval with mobile ${mobile.raw}.`,
+      payload_json: {
+        user_id: current.user.id,
+        full_name: fullName,
+        email,
+        mobile_number: mobile.raw,
+        via: "pending_card",
+        requested_at: nowIso,
+        message_text: messageText,
+      },
+    });
+  }
+
+  if (shouldAutoApprove) {
+    let welcomeEmail = { sent: false, skipped: true, reason: "Not triggered." };
+    try {
+      const emailSettings = await loadEmailSettings(admin);
+      welcomeEmail = await sendClientWelcomeEmail({
+        settings: emailSettings,
+        forceSend: false,
+        clientUser: {
+          ...current?.client,
+          user_id: current.user.id,
+          email,
+          full_name: fullName,
+          mobile_number: mobile.raw,
+          approval_status: "approved",
+          approved_at: nowIso,
+          auth_provider: authProvider,
+        },
+      });
+    } catch (err) {
+      welcomeEmail = {
+        sent: false,
+        skipped: false,
+        error: err?.message || "Failed to send welcome email.",
+      };
+    }
+
+    return NextResponse.json({
+      ok: true,
+      approved: true,
+      redirect_to: "/",
+      welcome_email: welcomeEmail,
+      message: "Your account is now active.",
+    });
+  }
 
   let emailNotification = { sent: false, skipped: true, reason: "Not attempted." };
   try {
@@ -130,6 +187,7 @@ export async function POST(request) {
 
   return NextResponse.json({
     ok: true,
+    approved: false,
     messenger_url: resolveFacebookInboxUrl(),
     message_text: messageText,
     email_notification: emailNotification,

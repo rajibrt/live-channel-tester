@@ -3,6 +3,7 @@ import { permanentRedirect } from "next/navigation";
 import IptvHomeClient from "../../../components/iptv/IptvHomeClient";
 import PendingApprovalCard from "../../../components/client/PendingApprovalCard";
 import { getCurrentClient } from "../../../lib/clientAuth";
+import { loadClientAccessSettingsCached } from "../../../lib/clientAccessSettings";
 import { getClientHomeData } from "../../../lib/clientHomeData";
 import { buildChannelParam, parseChannelParam } from "../../../lib/channelSlug";
 import { buildChannelSeoMeta, getChannelById } from "../../../lib/channelSeo";
@@ -155,6 +156,7 @@ export default async function WatchChannelPage({ params }) {
   const isApproved = approvalStatus === "approved";
   if (!isApproved) {
     const isRejected = approvalStatus === "rejected";
+    const accessSettings = await loadClientAccessSettingsCached().catch(() => null);
     return (
       <main
         style={{
@@ -179,6 +181,7 @@ export default async function WatchChannelPage({ params }) {
           <PendingApprovalCard
             isRejected={isRejected}
             initialMobile={String(current?.client?.mobile_number || "")}
+            requiresAdminApproval={accessSettings?.facebook_first_login_requires_admin_approval !== false}
           />
         </section>
       </main>

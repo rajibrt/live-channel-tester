@@ -2,6 +2,7 @@
 
 import styles from "../page.module.css";
 import ManageAdminUsers from "./ManageAdminUsers";
+import ManageClientAccessSettings from "./ManageClientAccessSettings";
 import ManageEmailSettings from "./ManageEmailSettings";
 import ManageSiteSeoSettings from "./ManageSiteSeoSettings";
 import Link from "next/link";
@@ -11,6 +12,7 @@ import { useI18n } from "../../../components/i18n/LanguageProvider";
 function normalizeTab(value) {
   const tab = String(value || "").trim().toLowerCase();
   if (tab === "email") return "email";
+  if (tab === "client-access") return "client-access";
   if (tab === "seo") return "seo";
   return "admins";
 }
@@ -38,6 +40,13 @@ export default function SettingsPage() {
           {t("settings.tabEmail")}
         </Link>
         <Link
+          href="/dashboard/settings?tab=client-access"
+          className={`${styles.settingsTab} ${activeTab === "client-access" ? styles.settingsTabActive : ""}`}
+          prefetch={false}
+        >
+          {t("settings.tabClientAccess")}
+        </Link>
+        <Link
           href="/dashboard/settings?tab=seo"
           className={`${styles.settingsTab} ${activeTab === "seo" ? styles.settingsTabActive : ""}`}
           prefetch={false}
@@ -47,6 +56,7 @@ export default function SettingsPage() {
       </div>
       {activeTab === "admins" ? <ManageAdminUsers /> : null}
       {activeTab === "email" ? <ManageEmailSettings /> : null}
+      {activeTab === "client-access" ? <ManageClientAccessSettings /> : null}
       {activeTab === "seo" ? <ManageSiteSeoSettings /> : null}
     </section>
   );

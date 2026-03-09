@@ -188,7 +188,7 @@ function nextPoolIndex(pool, lastHash) {
   if (!lastHash) return 0;
   const idx = pool.findIndex((row) => row.hash === lastHash);
   if (idx < 0) return 0;
-  return (idx + 1) % pool.length;
+  return idx;
 }
 
 function shouldRotateForError(message) {

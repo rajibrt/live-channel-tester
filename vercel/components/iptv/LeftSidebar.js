@@ -53,6 +53,7 @@ export default function LeftSidebar({
   const movieAllCount = Number(movieStats?.all || 0);
   const movieFavoriteCount = Number(movieStats?.favorites || 0);
   const movieRecentCount = Number(movieStats?.recent || 0);
+  const movieWatchedCount = Number(movieStats?.watched || 0);
   const labelClass = `${styles.sidebarLabel} ${homeMode === "movies" ? styles.sidebarLabelCompact : ""}`;
   const rowClass = `${styles.linkBtn} ${homeMode === "movies" ? styles.linkBtnCompact : ""} focus-visible:ring-0`;
   const countClass = `${styles.linkCount} ${homeMode === "movies" ? styles.linkCountCompact : ""}`;
@@ -216,6 +217,19 @@ export default function LeftSidebar({
               <Icon name="Clock" size={16} />
               <span>Recently Watched</span>
               <span className={countClass}>{movieRecentCount}</span>
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                onSelectMovieMode?.("watched");
+              }}
+              className={`justify-start ${rowClass} ${movieMode === "watched" ? styles.linkBtnActive : ""}`}
+            >
+              <Icon name="Eye" size={16} />
+              <span>Watched List</span>
+              <span className={countClass}>{movieWatchedCount}</span>
             </Button>
             <h3 className={labelClass}>Movie Categories</h3>
             {filteredMovieCategories.map((category) => (

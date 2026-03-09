@@ -1,6 +1,7 @@
 import IptvHomeClient from "../components/iptv/IptvHomeClient";
 import { requireClient } from "../lib/clientAuth";
 import PendingApprovalCard from "../components/client/PendingApprovalCard";
+import { loadClientAccessSettingsCached } from "../lib/clientAccessSettings";
 import { getClientHomeData } from "../lib/clientHomeData";
 import { buildHomePageMetadata, loadSiteSeoSettingsCached } from "../lib/siteSeoSettings";
 
@@ -21,6 +22,7 @@ export default async function HomePage() {
   const isApproved = approvalStatus === "approved";
   if (!isApproved) {
     const isRejected = approvalStatus === "rejected";
+    const accessSettings = await loadClientAccessSettingsCached().catch(() => null);
     return (
       <main
         style={{
@@ -45,6 +47,7 @@ export default async function HomePage() {
           <PendingApprovalCard
             isRejected={isRejected}
             initialMobile={String(current?.client?.mobile_number || "")}
+            requiresAdminApproval={accessSettings?.facebook_first_login_requires_admin_approval !== false}
           />
         </section>
       </main>

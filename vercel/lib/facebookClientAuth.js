@@ -1,4 +1,5 @@
 import { createAdminNotification } from "./adminNotifications";
+import { loadEmailSettings, sendApprovalRequestAdminEmail } from "./emailDelivery";
 import { getSupabaseAdmin } from "./supabaseAdmin";
 
 function normalizeEmail(value) {
@@ -179,6 +180,44 @@ export async function upsertFacebookClientLogin({ user, via = "facebook_oauth", 
       },
       { onConflict: "user_id" }
     );
+
+    await createAdminNotification({
+      type: "client_facebook_signup",
+      title: "New Facebook client access created",
+      message: `${fullName || loginEmail} created a client account with Facebook.`,
+      payload: {
+        user_id: userId,
+        email: loginEmail,
+        full_name: fullName,
+        mobile_number: mobile.raw,
+        auth_provider: "facebook",
+        provider_user_id: providerUserId,
+        avatar_url: avatarUrl,
+        facebook_profile_url: profileUrl,
+        created_at: now,
+      },
+    }).catch(() => {});
+
+    try {
+      const emailSettings = await loadEmailSettings(admin);
+      await sendApprovalRequestAdminEmail({
+        requestUser: {
+          user_id: userId,
+          full_name: fullName,
+          email: loginEmail,
+          mobile_number: mobile.raw,
+          auth_provider: "facebook",
+          requested_at: now,
+        },
+        settings: emailSettings,
+        forceSend: true,
+      });
+    } catch (err) {
+      console.error("facebook signup admin email failed", {
+        userId,
+        message: err?.message || "unknown error",
+      });
+    }
   }
 
   const profile = upsertRes.data || {};
@@ -194,20 +233,6 @@ export async function upsertFacebookClientLogin({ user, via = "facebook_oauth", 
       ...requestMeta,
     },
   });
-
-  if (!existing?.user_id && approvalStatus !== "approved") {
-    await createAdminNotification({
-      type: "client_approval_pending",
-      title: "New client approval pending",
-      message: `${fullName || loginEmail} signed up with Facebook and is waiting for approval.`,
-      payload: {
-        user_id: userId,
-        email: loginEmail,
-        full_name: fullName,
-        auth_provider: "facebook",
-      },
-    });
-  }
 
   return {
     ok: true,

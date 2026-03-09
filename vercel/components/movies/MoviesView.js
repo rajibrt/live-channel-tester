@@ -170,6 +170,7 @@ export default function MoviesView({
       .filter((movie) => Number(movie?.progress?.positionSeconds || 0) > 0)
       .sort((a, b) => new Date(b?.progress?.updatedAt || 0).getTime() - new Date(a?.progress?.updatedAt || 0).getTime());
     if (normalizedMode === "favorites") return movies.filter((movie) => Boolean(movie?.isFavorite));
+    if (normalizedMode === "watched") return movies.filter((movie) => String(movie?.watchState || "") === "watched");
     if (normalizedMode === "recent") return recentMovies;
     return movies;
   }, [movies, normalizedMode]);
@@ -415,9 +416,20 @@ export default function MoviesView({
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ favorite: nextFavorite }),
-    }).catch(() => {
-      setMovies((prev) => prev.map((row) => (String(row?.id || "") === id ? { ...row, isFavorite: !nextFavorite } : row)));
-    });
+    })
+      .then(async (res) => {
+        if (res.ok) return;
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(payload?.error || `Favorite save failed: HTTP ${res.status}`);
+      })
+      .catch((err) => {
+        console.warn("movie favorite save failed", {
+          movieId: id,
+          requestedFavorite: nextFavorite,
+          message: String(err?.message || err || "unknown"),
+        });
+        setMovies((prev) => prev.map((row) => (String(row?.id || "") === id ? { ...row, isFavorite: !nextFavorite } : row)));
+      });
 
     onTrackActivity?.("movie_favorite_toggle", {
       movie_id: id,

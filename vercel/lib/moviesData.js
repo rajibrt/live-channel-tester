@@ -272,6 +272,19 @@ export async function getMoviesCatalogForUser(userId) {
   const progressRows = Array.isArray(progressRes?.data) ? progressRes.data : [];
   const favoriteRows = Array.isArray(favoritesRes?.data) ? favoritesRes.data : [];
 
+  if (progressRes?.error) {
+    console.error("movie progress load failed", {
+      userId: String(userId || ""),
+      message: String(progressRes.error.message || progressRes.error),
+    });
+  }
+  if (favoritesRes?.error) {
+    console.error("movie favorites load failed", {
+      userId: String(userId || ""),
+      message: String(favoritesRes.error.message || favoritesRes.error),
+    });
+  }
+
   const categoryById = new Map(
     categories.map((row) => [
       Number(row?.id),

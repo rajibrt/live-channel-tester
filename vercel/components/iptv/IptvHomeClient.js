@@ -81,7 +81,7 @@ export default function IptvHomeClient({
       const raw = String(window.localStorage.getItem(LAST_MOVIE_FILTER_KEY) || "");
       const parsed = raw ? JSON.parse(raw) : {};
       const nextMode = String(parsed?.mode || "all").trim().toLowerCase();
-      return nextMode === "favorites" || nextMode === "recent" ? nextMode : "all";
+      return nextMode === "favorites" || nextMode === "recent" || nextMode === "watched" ? nextMode : "all";
     } catch {
       return "all";
     }
@@ -224,7 +224,11 @@ export default function IptvHomeClient({
     if (queryMode === "movies") {
       setHomeMode("movies");
       setMovieViewMode("browse");
-      setMovieMode(queryMovieMode === "favorites" || queryMovieMode === "recent" ? queryMovieMode : "all");
+      setMovieMode(
+        queryMovieMode === "favorites" || queryMovieMode === "recent" || queryMovieMode === "watched"
+          ? queryMovieMode
+          : "all"
+      );
       setSelectedMovieCategory(queryMovieCategory);
       setSelectedMovieGenre(queryMovieGenre);
       setSelectedMovieLanguage(queryMovieLanguage);
@@ -623,6 +627,7 @@ export default function IptvHomeClient({
       all: list.length,
       favorites: list.filter((movie) => Boolean(movie?.isFavorite)).length,
       recent: list.filter((movie) => Number(movie?.progress?.positionSeconds || 0) > 0).length,
+      watched: list.filter((movie) => String(movie?.watchState || "") === "watched").length,
     };
   }, [initialMovies]);
   const movieCategoriesWithCount = useMemo(() => {
@@ -814,7 +819,7 @@ export default function IptvHomeClient({
     setMovieViewMode("browse");
     const modeKey = String(nextMode || "all").trim().toLowerCase();
     const next = clearMovieSidebarFilters({
-      mode: modeKey === "favorites" || modeKey === "recent" ? modeKey : "all",
+      mode: modeKey === "favorites" || modeKey === "recent" || modeKey === "watched" ? modeKey : "all",
       category: "",
       genre: "",
       language: "",
@@ -1112,7 +1117,9 @@ export default function IptvHomeClient({
               }}
               onSelectModeFilter={(nextMode) => {
                 const modeKey = String(nextMode || "all").trim().toLowerCase();
-                setMovieMode(modeKey === "favorites" || modeKey === "recent" ? modeKey : "all");
+                setMovieMode(
+                  modeKey === "favorites" || modeKey === "recent" || modeKey === "watched" ? modeKey : "all"
+                );
                 pushMovieListUrl(modeKey, selectedMovieCategory, selectedMovieGenre, selectedMovieLanguage, selectedMovieYear, movieFilterView);
               }}
               onResetFilters={() => {

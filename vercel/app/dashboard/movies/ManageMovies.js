@@ -1670,7 +1670,7 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
           </div>
         </div>
         <p className={styles.hint}>
-          প্রতি লাইনে একটি OMDb API key দিন। দৈনিক limit (1000/key) শেষ হলে auto-rotate করে পরের key ব্যবহার হবে।
+          প্রতি লাইনে একটি OMDb API key দিন। একটি key limit (1000/day) শেষ বা invalid না হওয়া পর্যন্ত সেটাই ব্যবহার হবে, তারপর পরের key শুরু হবে।
         </p>
         <label className={styles.field}>
           <span>OMDb API Keys (one per line)</span>
