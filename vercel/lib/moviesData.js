@@ -256,21 +256,23 @@ export async function getMoviesCatalogForUser(userId) {
       ? admin
           .from("movie_watch_progress")
           .select("movie_id,position_seconds,duration_seconds,progress_percent,is_completed,updated_at")
-          .in("movie_id", movieIds)
           .eq("user_id", userId)
       : Promise.resolve({ data: [] }),
     userId
       ? admin
           .from("movie_favorites")
           .select("movie_id")
-          .in("movie_id", movieIds)
           .eq("user_id", userId)
       : Promise.resolve({ data: [] }),
   ]);
 
   const categories = Array.isArray(categoriesRes?.data) ? categoriesRes.data : [];
-  const progressRows = Array.isArray(progressRes?.data) ? progressRes.data : [];
-  const favoriteRows = Array.isArray(favoritesRes?.data) ? favoritesRes.data : [];
+  const progressRows = Array.isArray(progressRes?.data)
+    ? progressRes.data.filter((row) => movieIdSet.has(Number(row?.movie_id)))
+    : [];
+  const favoriteRows = Array.isArray(favoritesRes?.data)
+    ? favoritesRes.data.filter((row) => movieIdSet.has(Number(row?.movie_id)))
+    : [];
 
   if (progressRes?.error) {
     console.error("movie progress load failed", {

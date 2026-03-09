@@ -136,6 +136,7 @@ export default function IptvHomeClient({
       return "categories";
     }
   });
+  const [movieSnapshot, setMovieSnapshot] = useState(() => (Array.isArray(initialMovies) ? initialMovies : []));
   const [movieSidebarResetToken, setMovieSidebarResetToken] = useState(0);
   const [movieViewMode, setMovieViewMode] = useState(() => (moviesViewVariant === "watch" ? "watch" : "browse"));
   const [activeMovieSlug, setActiveMovieSlug] = useState(() => String(initialSelectedMovieSlug || "").trim().toLowerCase());
@@ -198,6 +199,10 @@ export default function IptvHomeClient({
       screen: w > 0 && h > 0 ? `${w}x${h}` : "",
     };
   }, []);
+
+  useEffect(() => {
+    setMovieSnapshot(Array.isArray(initialMovies) ? initialMovies : []);
+  }, [initialMovies]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -621,17 +626,24 @@ export default function IptvHomeClient({
 
   const recentSet = useMemo(() => new Set(recent), [recent]);
   const liveCount = useMemo(() => allChannels.filter((item) => item.isLive).length, [allChannels]);
+  const tvStats = useMemo(() => {
+    return {
+      all: allChannels.length,
+      favorites: allChannels.filter((channel) => favorites.includes(normalizeChannelId(channel?.id))).length,
+      recent: allChannels.filter((channel) => recentSet.has(normalizeChannelId(channel?.id))).length,
+    };
+  }, [allChannels, favorites, recentSet]);
   const movieStats = useMemo(() => {
-    const list = Array.isArray(initialMovies) ? initialMovies : [];
+    const list = Array.isArray(movieSnapshot) ? movieSnapshot : [];
     return {
       all: list.length,
       favorites: list.filter((movie) => Boolean(movie?.isFavorite)).length,
       recent: list.filter((movie) => Number(movie?.progress?.positionSeconds || 0) > 0).length,
       watched: list.filter((movie) => String(movie?.watchState || "") === "watched").length,
     };
-  }, [initialMovies]);
+  }, [movieSnapshot]);
   const movieCategoriesWithCount = useMemo(() => {
-    const list = Array.isArray(initialMovies) ? initialMovies : [];
+    const list = Array.isArray(movieSnapshot) ? movieSnapshot : [];
     const counts = new Map();
     for (const movie of list) {
       const slugs = Array.isArray(movie?.categorySlugs) ? movie.categorySlugs : [];
@@ -649,9 +661,9 @@ export default function IptvHomeClient({
         count: Number(counts.get(slug) || 0),
       };
     });
-  }, [initialMovieCategories, initialMovies]);
+  }, [initialMovieCategories, movieSnapshot]);
   const movieGenresWithCount = useMemo(() => {
-    const list = Array.isArray(initialMovies) ? initialMovies : [];
+    const list = Array.isArray(movieSnapshot) ? movieSnapshot : [];
     const byKey = new Map();
     for (const movie of list) {
       const genres = Array.isArray(movie?.imdbGenres) ? movie.imdbGenres : [];
@@ -667,9 +679,9 @@ export default function IptvHomeClient({
       }
     }
     return Array.from(byKey.values()).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
-  }, [initialMovies]);
+  }, [movieSnapshot]);
   const movieLanguagesWithCount = useMemo(() => {
-    const list = Array.isArray(initialMovies) ? initialMovies : [];
+    const list = Array.isArray(movieSnapshot) ? movieSnapshot : [];
     const byKey = new Map();
     for (const movie of list) {
       const languages = Array.isArray(movie?.imdbLanguages) ? movie.imdbLanguages : [];
@@ -685,9 +697,9 @@ export default function IptvHomeClient({
       }
     }
     return Array.from(byKey.values()).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
-  }, [initialMovies]);
+  }, [movieSnapshot]);
   const movieYearsWithCount = useMemo(() => {
-    const list = Array.isArray(initialMovies) ? initialMovies : [];
+    const list = Array.isArray(movieSnapshot) ? movieSnapshot : [];
     const byYear = new Map();
     for (const movie of list) {
       const year = Number(movie?.releaseYear || 0);
@@ -698,7 +710,7 @@ export default function IptvHomeClient({
     return Array.from(byYear.entries())
       .map(([key, count]) => ({ key, name: key, count }))
       .sort((a, b) => Number(b.key) - Number(a.key));
-  }, [initialMovies]);
+  }, [movieSnapshot]);
 
   const visibleChannels = useMemo(() => {
     let list = allChannels;
@@ -990,6 +1002,7 @@ export default function IptvHomeClient({
             selectedMovieYear={selectedMovieYear}
             mode={mode}
             movieMode={movieMode}
+            tvStats={tvStats}
             movieFilterView={movieFilterView}
             movieStats={movieStats}
             homeMode={homeMode}
@@ -1145,6 +1158,7 @@ export default function IptvHomeClient({
                 setMovieViewMode("browse");
                 pushMovieListUrl(movieMode, selectedMovieCategory, selectedMovieGenre, selectedMovieLanguage, selectedMovieYear, movieFilterView);
               }}
+              onMoviesSnapshotChange={setMovieSnapshot}
               onTrackActivity={trackActivity}
             />
           )}

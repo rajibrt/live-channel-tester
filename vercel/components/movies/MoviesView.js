@@ -80,6 +80,7 @@ export default function MoviesView({
   showInlineFilters = true,
   onOpenMovieWatch,
   onBackToMovieList,
+  onMoviesSnapshotChange,
   onTrackActivity,
 }) {
   const [movies, setMovies] = useState(() => (Array.isArray(initialMovies) ? initialMovies : []));
@@ -114,6 +115,10 @@ export default function MoviesView({
     () => movies.find((movie) => String(movie?.id || "") === String(selectedMovieId || "")) || null,
     [movies, selectedMovieId]
   );
+
+  useEffect(() => {
+    onMoviesSnapshotChange?.(movies);
+  }, [movies, onMoviesSnapshotChange]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -328,13 +333,26 @@ export default function MoviesView({
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (variant !== "watch") return;
-    const media = window.matchMedia("(max-width: 1023px)");
-    if (!media.matches) return;
     const player = watchPlayerColRef.current;
     if (!player) return;
-    const navbarOffset = 74;
-    const top = Math.max(0, player.getBoundingClientRect().top + window.scrollY - navbarOffset);
-    window.scrollTo({ top, behavior: "smooth" });
+    const navbarOffset = 92;
+    let rafId = 0;
+    let timerId = 0;
+
+    const scrollPlayerIntoView = () => {
+      const top = Math.max(0, player.getBoundingClientRect().top + window.scrollY - navbarOffset);
+      window.scrollTo({ top, behavior: "smooth" });
+    };
+
+    rafId = window.requestAnimationFrame(() => {
+      scrollPlayerIntoView();
+      timerId = window.setTimeout(scrollPlayerIntoView, 140);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(rafId);
+      window.clearTimeout(timerId);
+    };
   }, [variant, selectedMovieId]);
 
   useEffect(() => {

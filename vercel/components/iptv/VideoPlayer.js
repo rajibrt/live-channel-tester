@@ -52,6 +52,8 @@ export default function VideoPlayer({
   const videoRef = useRef(null);
   const shellRef = useRef(null);
   const hlsRef = useRef(null);
+  const onPlaybackAttemptRef = useRef(onPlaybackAttempt);
+  const onPlaybackFailureRef = useRef(onPlaybackFailure);
   const hlsNativeFallbackTriedRef = useRef(false);
   const hudTimerRef = useRef(null);
   const fsPanelsTimerRef = useRef(null);
@@ -158,6 +160,14 @@ export default function VideoPlayer({
   }, [status, errorMessage]);
 
   useEffect(() => {
+    onPlaybackAttemptRef.current = onPlaybackAttempt;
+  }, [onPlaybackAttempt]);
+
+  useEffect(() => {
+    onPlaybackFailureRef.current = onPlaybackFailure;
+  }, [onPlaybackFailure]);
+
+  useEffect(() => {
     setLogoFailed(false);
   }, [channel?.logoUrl, channel?.id]);
 
@@ -222,7 +232,7 @@ export default function VideoPlayer({
     setErrorMessage("");
 
     const reportAttempt = () => {
-      onPlaybackAttempt?.({
+      onPlaybackAttemptRef.current?.({
         channel_id: String(channel?.id || ""),
         channel_name: String(channel?.name || ""),
         stream_url: String(channel?.streamUrl || ""),
@@ -232,7 +242,7 @@ export default function VideoPlayer({
     const reportFailure = (reason, details = {}) => {
       if (failureReported || cancelled) return;
       failureReported = true;
-      onPlaybackFailure?.({
+      onPlaybackFailureRef.current?.({
         channel_id: String(channel?.id || ""),
         channel_name: String(channel?.name || ""),
         stream_url: String(channel?.streamUrl || ""),
@@ -354,7 +364,7 @@ export default function VideoPlayer({
         hlsRef.current = null;
       }
     };
-  }, [channel, onPlaybackAttempt, onPlaybackFailure]);
+  }, [channel?.id, channel?.name, channel?.streamUrl]);
 
   useEffect(() => {
     const adjustVolume = (delta) => {

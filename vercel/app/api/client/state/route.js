@@ -35,7 +35,7 @@ export async function GET() {
 
   const admin = getSupabaseAdmin();
   const userId = auth.current.user.id;
-  const [{ data: stateData }, { data: favoriteRows }] = await Promise.all([
+  const [{ data: stateData }, { data: favoriteRows }, { data: recentRows }] = await Promise.all([
     admin
       .from("client_state")
       .select("favorites,recent,last_channel_id,theme,cookie_prefs")
@@ -46,16 +46,35 @@ export async function GET() {
       .select("channel_id")
       .eq("user_id", userId)
       .order("created_at", { ascending: false }),
+    admin
+      .from("client_recent_history")
+      .select("channel_id,watched_at,id,source")
+      .eq("user_id", userId)
+      .order("watched_at", { ascending: false })
+      .order("id", { ascending: false })
+      .limit(100),
   ]);
 
   const favoriteIdsFromTable = Array.isArray(favoriteRows) ? favoriteRows.map((row) => String(row?.channel_id || "")) : [];
   const effectiveFavorites = favoriteIdsFromTable.length
     ? toStringArray(favoriteIdsFromTable, 200)
     : toStringArray(stateData?.favorites, 200);
+  const effectiveRecentFromHistory = (() => {
+    const seen = new Set();
+    const out = [];
+    for (const row of Array.isArray(recentRows) ? recentRows : []) {
+      const channelId = String(row?.channel_id || "").trim();
+      if (!channelId || seen.has(channelId)) continue;
+      seen.add(channelId);
+      out.push(channelId);
+      if (out.length >= 200) break;
+    }
+    return out;
+  })();
 
   return NextResponse.json({
     favorites: effectiveFavorites,
-    recent: toStringArray(stateData?.recent, 200),
+    recent: effectiveRecentFromHistory.length ? effectiveRecentFromHistory : toStringArray(stateData?.recent, 200),
     last_channel_id: String(stateData?.last_channel_id || ""),
     theme: normalizeTheme(stateData?.theme),
     cookie_prefs: normalizeCookiePrefs(stateData?.cookie_prefs),

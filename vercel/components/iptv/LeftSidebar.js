@@ -17,6 +17,7 @@ export default function LeftSidebar({
   selectedMovieLanguage = "",
   selectedMovieYear = "",
   mode,
+  tvStats = {},
   movieMode = "all",
   movieFilterView = "categories",
   movieStats = {},
@@ -50,6 +51,9 @@ export default function LeftSidebar({
   const filteredMovieYears = movieYears.filter((yearRow) =>
     String(yearRow?.name || "").toLowerCase().includes(search.toLowerCase())
   );
+  const tvAllCount = Number(tvStats?.all || 0);
+  const tvFavoriteCount = Number(tvStats?.favorites || 0);
+  const tvRecentCount = Number(tvStats?.recent || 0);
   const movieAllCount = Number(movieStats?.all || 0);
   const movieFavoriteCount = Number(movieStats?.favorites || 0);
   const movieRecentCount = Number(movieStats?.recent || 0);
@@ -128,6 +132,7 @@ export default function LeftSidebar({
             >
               <Icon name="MonitorPlay" size={16} />
               <span>All Channels</span>
+              <span className={countClass}>{tvAllCount}</span>
             </Button>
             <Button
               type="button"
@@ -141,6 +146,7 @@ export default function LeftSidebar({
             >
               <Icon name="Heart" size={16} />
               <span>Favourites</span>
+              <span className={countClass}>{tvFavoriteCount}</span>
             </Button>
             <Button
               type="button"
@@ -154,6 +160,7 @@ export default function LeftSidebar({
             >
               <Icon name="Clock" size={16} />
               <span>Recently Watched</span>
+              <span className={countClass}>{tvRecentCount}</span>
             </Button>
             <h3 className={labelClass}>Categories</h3>
             {filteredCategories.map((category) => (
