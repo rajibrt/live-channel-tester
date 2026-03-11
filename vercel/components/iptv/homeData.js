@@ -1,5 +1,8 @@
+import { unstable_cache } from "next/cache";
 import { getSupabaseAdmin } from "../../lib/supabaseAdmin";
 import { normalizeStreamUrl } from "../../lib/streamUrl";
+
+const HOME_IPTV_REVALIDATE_SECONDS = 60;
 
 function norm(value) {
   return String(value || "").trim();
@@ -39,7 +42,7 @@ function pickIcon(categoryName) {
   return "Globe";
 }
 
-export async function getHomeIptvData() {
+async function loadHomeIptvData() {
   const supabase = getSupabaseAdmin();
 
   const { data: links, error: linksErr } = await supabase
@@ -188,4 +191,12 @@ export async function getHomeIptvData() {
       generated_at: new Date().toISOString(),
     },
   };
+}
+
+const getCachedHomeIptvData = unstable_cache(loadHomeIptvData, ["home-iptv-data"], {
+  revalidate: HOME_IPTV_REVALIDATE_SECONDS,
+});
+
+export async function getHomeIptvData() {
+  return getCachedHomeIptvData();
 }
