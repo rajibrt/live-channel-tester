@@ -2,8 +2,12 @@ import { getHomeIptvData } from "../components/iptv/homeData";
 import { getMoviesCatalogForUser } from "./moviesData";
 import { getSupabaseAdmin } from "./supabaseAdmin";
 
-export async function getClientHomeData(userId) {
-  const [data, movieData] = await Promise.all([getHomeIptvData(), getMoviesCatalogForUser(userId)]);
+export async function getClientHomeData(userId, options = {}) {
+  const includeMovies = options?.includeMovies === true;
+  const [data, movieData] = await Promise.all([
+    getHomeIptvData(),
+    includeMovies ? getMoviesCatalogForUser(userId) : Promise.resolve(null),
+  ]);
   const admin = getSupabaseAdmin();
 
   const [{ data: stateRow }, { data: favoriteRows }, { data: recentRows }] = await Promise.all([
@@ -50,9 +54,9 @@ export async function getClientHomeData(userId) {
   return {
     channels: data.channels,
     categories: data.categories,
-    movies: movieData.movies,
-    movieCategories: movieData.categories,
-    continueWatching: movieData.continueWatching,
+    movies: movieData?.movies || [],
+    movieCategories: movieData?.categories || [],
+    continueWatching: movieData?.continueWatching || [],
     initialClientState: {
       favorites: initialFavorites,
       recent: initialRecentFromHistory.length

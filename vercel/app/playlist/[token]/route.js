@@ -39,6 +39,15 @@ async function fetchAllRows(supabase, table, columns, { orderBy = "id", ascendin
   return out;
 }
 
+function toPositiveIntSet(rows, key = "id") {
+  const out = new Set();
+  for (const row of rows || []) {
+    const value = Number(row?.[key]);
+    if (Number.isInteger(value) && value > 0) out.add(value);
+  }
+  return out;
+}
+
 export async function GET(_request, context) {
   const { token } = await context.params;
   const normalizedToken = normalizeTokenParam(token);
@@ -99,27 +108,37 @@ export async function GET(_request, context) {
       ascending: false,
       filters: [{ op: "eq", col: "is_published", val: true }],
     });
-    const movieIds = movies.map((row) => Number(row?.id)).filter((id) => Number.isInteger(id) && id > 0);
-    if (movieIds.length) {
-      sources = await fetchAllRows(supabase, "movie_sources", "id,movie_id,source_url,is_active,sort_order", {
-        orderBy: "id",
-        ascending: true,
-        filters: [
-          { op: "eq", col: "is_active", val: true },
-          { op: "in", col: "movie_id", val: movieIds },
-        ],
-      });
-      mapRows = await fetchAllRows(supabase, "movie_category_map", "movie_id,category_id", {
-        orderBy: "movie_id",
-        ascending: true,
-        filters: [{ op: "in", col: "movie_id", val: movieIds }],
-      });
+    const movieIdSet = toPositiveIntSet(movies, "id");
+    if (movieIdSet.size) {
+      const [allSources, allMapRows, allCategories] = await Promise.all([
+        fetchAllRows(supabase, "movie_sources", "id,movie_id,source_url,is_active,sort_order", {
+          orderBy: "movie_id",
+          ascending: true,
+          filters: [{ op: "eq", col: "is_active", val: true }],
+        }),
+        fetchAllRows(supabase, "movie_category_map", "movie_id,category_id", {
+          orderBy: "movie_id",
+          ascending: true,
+        }),
+        fetchAllRows(supabase, "movie_categories", "id,name,position", {
+          orderBy: "position",
+          ascending: true,
+        }),
+      ]);
+      sources = (allSources || []).filter((row) => movieIdSet.has(Number(row?.movie_id)));
+      mapRows = (allMapRows || []).filter((row) => movieIdSet.has(Number(row?.movie_id)));
+      categories = allCategories;
+    } else {
       categories = await fetchAllRows(supabase, "movie_categories", "id,name,position", {
         orderBy: "position",
         ascending: true,
       });
     }
-  } catch {
+  } catch (error) {
+    console.error("playlist movie fetch failed", {
+      token: normalizedToken,
+      message: String(error?.message || error),
+    });
     return new Response("Failed to fetch movies", { status: 500 });
   }
 

@@ -47,7 +47,7 @@ export default async function MovieWatchPage({ params }) {
     );
   }
 
-  const boot = await getClientHomeData(current.user.id);
+  const boot = await getClientHomeData(current.user.id, { includeMovies: true });
 
   return (
     <IptvHomeClient

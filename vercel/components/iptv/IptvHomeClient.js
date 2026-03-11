@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import LeftSidebar from "./LeftSidebar";
 import RightPanel from "./RightPanel";
@@ -9,7 +10,9 @@ import CookieConsentBanner from "./CookieConsentBanner";
 import styles from "./iptv.module.css";
 import { usePersistentArray } from "./usePersistentArray";
 import { buildWatchPath } from "../../lib/channelSlug";
-import MoviesView from "../movies/MoviesView";
+const MoviesView = dynamic(() => import("../movies/MoviesView"), {
+  loading: () => null,
+});
 
 const LAST_CHANNEL_KEY = "iptv:v1:last-channel-id";
 const LAST_MODE_KEY = "iptv:v1:last-mode";
@@ -41,6 +44,10 @@ export default function IptvHomeClient({
   currentClient = {},
   initialSelectedChannelId = "",
 }) {
+  const hasInitialMovieBootstrap =
+    (Array.isArray(initialMovies) && initialMovies.length > 0) ||
+    (Array.isArray(initialMovieCategories) && initialMovieCategories.length > 0) ||
+    (Array.isArray(initialContinueWatching) && initialContinueWatching.length > 0);
   const initialTheme = String(initialClientState?.theme || "").trim().toLowerCase();
   const [isDark, setIsDark] = useState(() => {
     if (initialTheme === "dark") return true;
@@ -137,6 +144,12 @@ export default function IptvHomeClient({
     }
   });
   const [movieSnapshot, setMovieSnapshot] = useState(() => (Array.isArray(initialMovies) ? initialMovies : []));
+  const [movieCatalog, setMovieCatalog] = useState(() => ({
+    movies: Array.isArray(initialMovies) ? initialMovies : [],
+    categories: Array.isArray(initialMovieCategories) ? initialMovieCategories : [],
+    continueWatching: Array.isArray(initialContinueWatching) ? initialContinueWatching : [],
+  }));
+  const [movieCatalogStatus, setMovieCatalogStatus] = useState(() => (hasInitialMovieBootstrap ? "ready" : "idle"));
   const [movieSidebarResetToken, setMovieSidebarResetToken] = useState(0);
   const [movieViewMode, setMovieViewMode] = useState(() => (moviesViewVariant === "watch" ? "watch" : "browse"));
   const [activeMovieSlug, setActiveMovieSlug] = useState(() => String(initialSelectedMovieSlug || "").trim().toLowerCase());
@@ -165,6 +178,7 @@ export default function IptvHomeClient({
   const [isTvDevice, setIsTvDevice] = useState(false);
   const [forceTvMode, setForceTvMode] = useState(false);
   const [hasRestoredChannel, setHasRestoredChannel] = useState(false);
+  const movieCatalogRequestRef = useRef(false);
   const watchSessionRef = useRef({ channelId: "", channelName: "", startedAt: 0 });
   const deviceMeta = useMemo(() => {
     if (typeof window === "undefined") return {};
@@ -201,8 +215,55 @@ export default function IptvHomeClient({
   }, []);
 
   useEffect(() => {
-    setMovieSnapshot(Array.isArray(initialMovies) ? initialMovies : []);
-  }, [initialMovies]);
+    const nextMovies = Array.isArray(initialMovies) ? initialMovies : [];
+    const nextCategories = Array.isArray(initialMovieCategories) ? initialMovieCategories : [];
+    const nextContinueWatching = Array.isArray(initialContinueWatching) ? initialContinueWatching : [];
+    setMovieCatalog({
+      movies: nextMovies,
+      categories: nextCategories,
+      continueWatching: nextContinueWatching,
+    });
+    setMovieSnapshot(nextMovies);
+    if (nextMovies.length || nextCategories.length || nextContinueWatching.length) {
+      movieCatalogRequestRef.current = false;
+      setMovieCatalogStatus("ready");
+    }
+  }, [initialMovies, initialMovieCategories, initialContinueWatching]);
+
+  const ensureMovieCatalogLoaded = useCallback(() => {
+    if (movieCatalogRequestRef.current || movieCatalogStatus === "ready") return;
+    movieCatalogRequestRef.current = true;
+    setMovieCatalogStatus("loading");
+    fetch("/api/client/movies/bootstrap", {
+      method: "GET",
+      credentials: "same-origin",
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`Movie bootstrap failed with ${response.status}`);
+        const payload = await response.json().catch(() => ({}));
+        const nextMovies = Array.isArray(payload?.movies) ? payload.movies : [];
+        const nextCategories = Array.isArray(payload?.categories) ? payload.categories : [];
+        const nextContinueWatching = Array.isArray(payload?.continueWatching) ? payload.continueWatching : [];
+        setMovieCatalog({
+          movies: nextMovies,
+          categories: nextCategories,
+          continueWatching: nextContinueWatching,
+        });
+        setMovieSnapshot(nextMovies);
+        setMovieCatalogStatus("ready");
+      })
+      .catch(() => {
+        movieCatalogRequestRef.current = false;
+        setMovieCatalogStatus("error");
+      });
+  }, [movieCatalogStatus]);
+
+  useEffect(() => {
+    const shouldLoadMovies =
+      homeMode === "movies" || moviesViewVariant === "watch" || Boolean(String(initialSelectedMovieSlug || "").trim());
+    if (!shouldLoadMovies || movieCatalogStatus === "ready") return;
+    ensureMovieCatalogLoaded();
+  }, [ensureMovieCatalogLoaded, homeMode, initialSelectedMovieSlug, movieCatalogStatus, moviesViewVariant]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -653,7 +714,7 @@ export default function IptvHomeClient({
         counts.set(key, (counts.get(key) || 0) + 1);
       }
     }
-    return (Array.isArray(initialMovieCategories) ? initialMovieCategories : []).map((category) => {
+    return (Array.isArray(movieCatalog.categories) ? movieCatalog.categories : []).map((category) => {
       const slug = String(category?.slug || "").trim().toLowerCase();
       return {
         ...category,
@@ -661,7 +722,7 @@ export default function IptvHomeClient({
         count: Number(counts.get(slug) || 0),
       };
     });
-  }, [initialMovieCategories, movieSnapshot]);
+  }, [movieCatalog.categories, movieSnapshot]);
   const movieGenresWithCount = useMemo(() => {
     const list = Array.isArray(movieSnapshot) ? movieSnapshot : [];
     const byKey = new Map();
@@ -1086,81 +1147,92 @@ export default function IptvHomeClient({
               </div>
             </>
           ) : (
-            <MoviesView
-              variant={movieViewMode}
-              externalFilterResetToken={movieSidebarResetToken}
-              initialMovies={initialMovies}
-              movieCategories={initialMovieCategories}
-              initialContinueWatching={initialContinueWatching}
-              initialSelectedMovieSlug={activeMovieSlug || initialSelectedMovieSlug}
-              filterMode={movieMode}
-              filterCategorySlug={selectedMovieCategory}
-              filterGenreSlug={selectedMovieGenre}
-              filterLanguageSlug={selectedMovieLanguage}
-              filterYear={selectedMovieYear}
-              genreOptions={movieGenresWithCount}
-              languageOptions={movieLanguagesWithCount}
-              yearOptions={movieYearsWithCount}
-              onSelectGenreFilter={(genreKey) => {
-                const nextGenre = String(genreKey || "").trim().toLowerCase();
-                setMovieFilterView("genres");
-                setMovieMode("all");
-                setSelectedMovieGenre(nextGenre);
-                pushMovieListUrl("all", selectedMovieCategory, nextGenre, selectedMovieLanguage, selectedMovieYear, "genres");
-              }}
-              onSelectLanguageFilter={(languageKey) => {
-                const nextLanguage = String(languageKey || "").trim().toLowerCase();
-                setMovieFilterView("genres");
-                setMovieMode("all");
-                setSelectedMovieLanguage(nextLanguage);
-                pushMovieListUrl("all", selectedMovieCategory, selectedMovieGenre, nextLanguage, selectedMovieYear, "genres");
-              }}
-              onSelectYearFilter={(yearValue) => {
-                const nextYear = String(yearValue || "").trim();
-                setMovieFilterView("genres");
-                setMovieMode("all");
-                setSelectedMovieYear(nextYear);
-                pushMovieListUrl("all", selectedMovieCategory, selectedMovieGenre, selectedMovieLanguage, nextYear, "genres");
-              }}
-              onSelectCategoryFilter={(categoryValue) => {
-                const nextCategory = String(categoryValue || "").trim().toLowerCase();
-                setMovieMode("all");
-                setSelectedMovieCategory(nextCategory);
-                pushMovieListUrl("all", nextCategory, selectedMovieGenre, selectedMovieLanguage, selectedMovieYear, movieFilterView);
-              }}
-              onSelectModeFilter={(nextMode) => {
-                const modeKey = String(nextMode || "all").trim().toLowerCase();
-                setMovieMode(
-                  modeKey === "favorites" || modeKey === "recent" || modeKey === "watched" ? modeKey : "all"
-                );
-                pushMovieListUrl(modeKey, selectedMovieCategory, selectedMovieGenre, selectedMovieLanguage, selectedMovieYear, movieFilterView);
-              }}
-              onResetFilters={() => {
-                setMovieMode("all");
-                setSelectedMovieCategory("");
-                setSelectedMovieGenre("");
-                setSelectedMovieLanguage("");
-                setSelectedMovieYear("");
-                setMovieFilterView("categories");
-                pushMovieListUrl("all", "", "", "", "", "categories");
-              }}
-              showInlineFilters={false}
-              onOpenMovieWatch={(slug) => {
-                const normalizedSlug = String(slug || "").trim().toLowerCase();
-                if (!normalizedSlug) return;
-                setHomeMode("movies");
-                setMovieViewMode("watch");
-                setActiveMovieSlug(normalizedSlug);
-                pushMovieWatchUrl(normalizedSlug);
-              }}
-              onBackToMovieList={() => {
-                setHomeMode("movies");
-                setMovieViewMode("browse");
-                pushMovieListUrl(movieMode, selectedMovieCategory, selectedMovieGenre, selectedMovieLanguage, selectedMovieYear, movieFilterView);
-              }}
-              onMoviesSnapshotChange={setMovieSnapshot}
-              onTrackActivity={trackActivity}
-            />
+            movieCatalogStatus !== "ready" ? (
+              <section
+                aria-live="polite"
+                style={{ minHeight: "40dvh", display: "grid", placeItems: "center", padding: "24px" }}
+              >
+                <p style={{ margin: 0, color: "var(--muted-foreground)" }}>
+                  {movieCatalogStatus === "error" ? "Movies failed to load. Please try again." : "Loading movies..."}
+                </p>
+              </section>
+            ) : (
+              <MoviesView
+                variant={movieViewMode}
+                externalFilterResetToken={movieSidebarResetToken}
+                initialMovies={movieCatalog.movies}
+                movieCategories={movieCatalog.categories}
+                initialContinueWatching={movieCatalog.continueWatching}
+                initialSelectedMovieSlug={activeMovieSlug || initialSelectedMovieSlug}
+                filterMode={movieMode}
+                filterCategorySlug={selectedMovieCategory}
+                filterGenreSlug={selectedMovieGenre}
+                filterLanguageSlug={selectedMovieLanguage}
+                filterYear={selectedMovieYear}
+                genreOptions={movieGenresWithCount}
+                languageOptions={movieLanguagesWithCount}
+                yearOptions={movieYearsWithCount}
+                onSelectGenreFilter={(genreKey) => {
+                  const nextGenre = String(genreKey || "").trim().toLowerCase();
+                  setMovieFilterView("genres");
+                  setMovieMode("all");
+                  setSelectedMovieGenre(nextGenre);
+                  pushMovieListUrl("all", selectedMovieCategory, nextGenre, selectedMovieLanguage, selectedMovieYear, "genres");
+                }}
+                onSelectLanguageFilter={(languageKey) => {
+                  const nextLanguage = String(languageKey || "").trim().toLowerCase();
+                  setMovieFilterView("genres");
+                  setMovieMode("all");
+                  setSelectedMovieLanguage(nextLanguage);
+                  pushMovieListUrl("all", selectedMovieCategory, selectedMovieGenre, nextLanguage, selectedMovieYear, "genres");
+                }}
+                onSelectYearFilter={(yearValue) => {
+                  const nextYear = String(yearValue || "").trim();
+                  setMovieFilterView("genres");
+                  setMovieMode("all");
+                  setSelectedMovieYear(nextYear);
+                  pushMovieListUrl("all", selectedMovieCategory, selectedMovieGenre, selectedMovieLanguage, nextYear, "genres");
+                }}
+                onSelectCategoryFilter={(categoryValue) => {
+                  const nextCategory = String(categoryValue || "").trim().toLowerCase();
+                  setMovieMode("all");
+                  setSelectedMovieCategory(nextCategory);
+                  pushMovieListUrl("all", nextCategory, selectedMovieGenre, selectedMovieLanguage, selectedMovieYear, movieFilterView);
+                }}
+                onSelectModeFilter={(nextMode) => {
+                  const modeKey = String(nextMode || "all").trim().toLowerCase();
+                  setMovieMode(
+                    modeKey === "favorites" || modeKey === "recent" || modeKey === "watched" ? modeKey : "all"
+                  );
+                  pushMovieListUrl(modeKey, selectedMovieCategory, selectedMovieGenre, selectedMovieLanguage, selectedMovieYear, movieFilterView);
+                }}
+                onResetFilters={() => {
+                  setMovieMode("all");
+                  setSelectedMovieCategory("");
+                  setSelectedMovieGenre("");
+                  setSelectedMovieLanguage("");
+                  setSelectedMovieYear("");
+                  setMovieFilterView("categories");
+                  pushMovieListUrl("all", "", "", "", "", "categories");
+                }}
+                showInlineFilters={false}
+                onOpenMovieWatch={(slug) => {
+                  const normalizedSlug = String(slug || "").trim().toLowerCase();
+                  if (!normalizedSlug) return;
+                  setHomeMode("movies");
+                  setMovieViewMode("watch");
+                  setActiveMovieSlug(normalizedSlug);
+                  pushMovieWatchUrl(normalizedSlug);
+                }}
+                onBackToMovieList={() => {
+                  setHomeMode("movies");
+                  setMovieViewMode("browse");
+                  pushMovieListUrl(movieMode, selectedMovieCategory, selectedMovieGenre, selectedMovieLanguage, selectedMovieYear, movieFilterView);
+                }}
+                onMoviesSnapshotChange={setMovieSnapshot}
+                onTrackActivity={trackActivity}
+              />
+            )
           )}
         </section>
 
