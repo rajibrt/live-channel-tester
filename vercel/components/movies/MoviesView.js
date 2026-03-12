@@ -56,6 +56,23 @@ function buildPageItems(currentPage, totalPages) {
   return out;
 }
 
+function mergeMoviePatch(movie, patch = {}) {
+  const nextProgress = patch.progress
+    ? {
+        ...(movie?.progress || {}),
+        ...(patch.progress || {}),
+        updatedAt: String(patch?.progress?.updatedAt || movie?.progress?.updatedAt || new Date().toISOString()),
+      }
+    : movie?.progress;
+
+  return {
+    ...movie,
+    ...(patch || {}),
+    progress: nextProgress,
+    watchState: nextProgress ? deriveWatchState(nextProgress) : movie?.watchState,
+  };
+}
+
 export default function MoviesView({
   variant = "browse",
   externalFilterResetToken = 0,
@@ -90,6 +107,9 @@ export default function MoviesView({
   onTrackActivity,
 }) {
   const [movies, setMovies] = useState(() => (Array.isArray(initialMovies) ? initialMovies : []));
+  const [continueItems, setContinueItems] = useState(() =>
+    Array.isArray(initialContinueWatching) ? initialContinueWatching : []
+  );
   const [search, setSearch] = useState("");
   const [moviesPage, setMoviesPage] = useState(() => Math.max(1, Number(initialPage || 1)));
   const [moviesPageSize, setMoviesPageSize] = useState(() => Math.max(1, Number(initialPageSize || DEFAULT_MOVIES_PAGE_SIZE)));
@@ -98,7 +118,6 @@ export default function MoviesView({
   const moviesSectionRef = useRef(null);
   const watchPlayerColRef = useRef(null);
   const hasFilterScrollMountedRef = useRef(false);
-  const hasTriggeredInitialPageLoadRef = useRef(false);
   const [categorySlug, setCategorySlug] = useState("all");
   const [selectedMovieId, setSelectedMovieId] = useState(() => {
     const preferred = Array.isArray(initialContinueWatching) && initialContinueWatching.length ? initialContinueWatching[0] : null;
@@ -109,6 +128,14 @@ export default function MoviesView({
   const [playerStartFrom, setPlayerStartFrom] = useState(null);
   const [playerReplayToken, setPlayerReplayToken] = useState(0);
   const selectedMovieSlug = text(initialSelectedMovieSlug).toLowerCase();
+
+  useEffect(() => {
+    setMovies(Array.isArray(initialMovies) ? initialMovies : []);
+  }, [initialMovies]);
+
+  useEffect(() => {
+    setContinueItems(Array.isArray(initialContinueWatching) ? initialContinueWatching : []);
+  }, [initialContinueWatching]);
 
   useEffect(() => {
     setMoviesPage(Math.max(1, Number(initialPage || 1)));
@@ -276,11 +303,11 @@ export default function MoviesView({
   }, [applyMovieFilters, modeScopedMovies]);
 
   const continueWatching = useMemo(() => {
-    return movies
-      .filter((movie) => movie.watchState === "continue")
+    return continueItems
+      .filter((movie) => movie?.watchState === "continue")
       .sort((a, b) => new Date(b?.progress?.updatedAt || 0).getTime() - new Date(a?.progress?.updatedAt || 0).getTime())
       .slice(0, 60);
-  }, [movies]);
+  }, [continueItems]);
 
   const scrollToMoviesSection = useCallback((behavior = "smooth") => {
     if (typeof window === "undefined") return;
@@ -340,15 +367,16 @@ export default function MoviesView({
     setMoviesPage(1);
   }, [search, filterMode, filterCategorySlug, filterGenreSlug, filterLanguageSlug, filterYear, categorySlug, showInlineFilters]);
 
-  useEffect(() => {
-    if (variant !== "browse") return;
-    if (hasClientFilters) return;
-    if (!hasTriggeredInitialPageLoadRef.current) {
-      hasTriggeredInitialPageLoadRef.current = true;
-      return;
-    }
-    onPageChange?.(currentPage, moviesPageSize);
-  }, [currentPage, hasClientFilters, moviesPageSize, onPageChange, variant]);
+  const goToMoviePage = useCallback(
+    (page) => {
+      const targetPage = Math.min(Math.max(1, Number(page || 1)), totalPages);
+      setMoviesPage(targetPage);
+      if (variant === "browse" && !hasClientFilters && targetPage !== currentPage) {
+        onPageChange?.(targetPage, moviesPageSize);
+      }
+    },
+    [currentPage, hasClientFilters, moviesPageSize, onPageChange, totalPages, variant]
+  );
 
   useEffect(() => {
     if (moviesPage > totalPages) setMoviesPage(totalPages);
@@ -426,21 +454,12 @@ export default function MoviesView({
   const upsertMovieProgress = useCallback((movieId, progress) => {
     const id = String(movieId || "");
     if (!id) return;
-    setMovies((prev) =>
-      prev.map((movie) => {
-        if (String(movie?.id || "") !== id) return movie;
-        const nextProgress = {
-          ...(movie.progress || {}),
-          ...(progress || {}),
-          updatedAt: String(progress?.updatedAt || new Date().toISOString()),
-        };
-        return {
-          ...movie,
-          progress: nextProgress,
-          watchState: deriveWatchState(nextProgress),
-        };
-      })
-    );
+    const patch = { progress };
+    setMovies((prev) => prev.map((movie) => (String(movie?.id || "") === id ? mergeMoviePatch(movie, patch) : movie)));
+    setContinueItems((prev) => {
+      const next = prev.map((movie) => (String(movie?.id || "") === id ? mergeMoviePatch(movie, patch) : movie));
+      return next.filter((movie) => movie?.watchState === "continue");
+    });
   }, []);
 
   const handleSelectMovie = (movie) => {
@@ -466,6 +485,9 @@ export default function MoviesView({
     const nextFavorite = !Boolean(movie?.isFavorite);
 
     setMovies((prev) => prev.map((row) => (String(row?.id || "") === id ? { ...row, isFavorite: nextFavorite } : row)));
+    setContinueItems((prev) =>
+      prev.map((row) => (String(row?.id || "") === id ? { ...row, isFavorite: nextFavorite } : row))
+    );
 
     fetch(`/api/client/movies/${encodeURIComponent(id)}/favorite`, {
       method: "POST",
@@ -484,6 +506,9 @@ export default function MoviesView({
           message: String(err?.message || err || "unknown"),
         });
         setMovies((prev) => prev.map((row) => (String(row?.id || "") === id ? { ...row, isFavorite: !nextFavorite } : row)));
+        setContinueItems((prev) =>
+          prev.map((row) => (String(row?.id || "") === id ? { ...row, isFavorite: !nextFavorite } : row))
+        );
       });
 
     onTrackActivity?.("movie_favorite_toggle", {
@@ -800,7 +825,7 @@ export default function MoviesView({
                     <PaginationPrevious
                       disabled={currentPage <= 1}
                       onClick={() => {
-                        setMoviesPage((prev) => Math.max(1, prev - 1));
+                        goToMoviePage(currentPage - 1);
                         scrollToMoviesSection();
                       }}
                     />
@@ -812,7 +837,7 @@ export default function MoviesView({
                           isActive={item === currentPage}
                           size="icon"
                           onClick={() => {
-                            setMoviesPage(item);
+                            goToMoviePage(item);
                             scrollToMoviesSection();
                           }}
                         >
@@ -827,7 +852,7 @@ export default function MoviesView({
                     <PaginationNext
                       disabled={currentPage >= totalPages}
                       onClick={() => {
-                        setMoviesPage((prev) => Math.min(totalPages, prev + 1));
+                        goToMoviePage(currentPage + 1);
                         scrollToMoviesSection();
                       }}
                     />

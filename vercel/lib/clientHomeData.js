@@ -56,6 +56,10 @@ export async function getClientHomeData(userId, options = {}) {
     categories: data.categories,
     movies: movieData?.movies || [],
     movieCategories: movieData?.categories || [],
+    movieGenres: movieData?.genres || [],
+    movieLanguages: movieData?.languages || [],
+    movieYears: movieData?.years || [],
+    movieStats: movieData?.stats || {},
     continueWatching: movieData?.continueWatching || [],
     initialClientState: {
       favorites: initialFavorites,

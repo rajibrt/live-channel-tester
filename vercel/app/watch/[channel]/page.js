@@ -195,6 +195,10 @@ export default async function WatchChannelPage({ params }) {
       initialCategories={boot.categories}
       initialMovies={boot.movies}
       initialMovieCategories={boot.movieCategories}
+      initialMovieGenres={boot.movieGenres}
+      initialMovieLanguages={boot.movieLanguages}
+      initialMovieYears={boot.movieYears}
+      initialMovieStats={boot.movieStats}
       initialContinueWatching={boot.continueWatching}
       moviesViewVariant="browse"
       initialClientState={boot.initialClientState}

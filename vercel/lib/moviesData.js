@@ -406,6 +406,103 @@ async function loadContinueWatchingForUser(admin, userId, limit = 20) {
   return hydrateMoviesForUser(admin, userId, movieRows || [], { orderIds: movieIds });
 }
 
+async function loadMovieSidebarSummaryForUser(admin, userId) {
+  const rows = [];
+  let from = 0;
+  while (true) {
+    const to = from + DB_SCAN_PAGE_SIZE - 1;
+    const { data, error } = await admin
+      .from("movies")
+      .select("id,release_year,imdb_genres,imdb_languages")
+      .eq("is_published", true)
+      .order("updated_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(from, to);
+    if (error) throw new Error(error.message || "Failed to load movie sidebar summary");
+    const chunk = Array.isArray(data) ? data : [];
+    rows.push(...chunk);
+    if (!chunk.length) break;
+    from += chunk.length;
+  }
+
+  const publishedMovieIds = rows
+    .map((row) => Number(row?.id))
+    .filter((movieId) => Number.isInteger(movieId) && movieId > 0);
+  const publishedSet = new Set(publishedMovieIds);
+  const genresByKey = new Map();
+  const languagesByKey = new Map();
+  const yearsByKey = new Map();
+
+  for (const row of rows) {
+    for (const rawGenre of Array.isArray(row?.imdb_genres) ? row.imdb_genres : []) {
+      const name = String(rawGenre || "").trim();
+      const key = name.toLowerCase();
+      if (!key) continue;
+      const current = genresByKey.get(key);
+      genresByKey.set(key, current ? { ...current, count: current.count + 1 } : { key, name, count: 1 });
+    }
+
+    for (const rawLanguage of Array.isArray(row?.imdb_languages) ? row.imdb_languages : []) {
+      const name = String(rawLanguage || "").trim();
+      const key = name.toLowerCase();
+      if (!key) continue;
+      const current = languagesByKey.get(key);
+      languagesByKey.set(key, current ? { ...current, count: current.count + 1 } : { key, name, count: 1 });
+    }
+
+    const year = Number(row?.release_year || 0);
+    if (Number.isFinite(year) && year > 0) {
+      const key = String(Math.floor(year));
+      yearsByKey.set(key, (yearsByKey.get(key) || 0) + 1);
+    }
+  }
+
+  const [progressRows, favoriteRows] = await Promise.all([
+    userId
+      ? admin
+          .from("movie_watch_progress")
+          .select("movie_id,position_seconds,progress_percent,is_completed")
+          .eq("user_id", userId)
+      : Promise.resolve({ data: [] }),
+    userId ? admin.from("movie_favorites").select("movie_id").eq("user_id", userId) : Promise.resolve({ data: [] }),
+  ]);
+
+  const recentMovieIds = new Set();
+  const watchedMovieIds = new Set();
+  for (const row of Array.isArray(progressRows?.data) ? progressRows.data : []) {
+    const movieId = Number(row?.movie_id);
+    if (!publishedSet.has(movieId)) continue;
+    const positionSeconds = Number(row?.position_seconds || 0);
+    const progressPercent = Number(row?.progress_percent || 0);
+    const isCompleted = Boolean(row?.is_completed) || progressPercent >= 95;
+    if (positionSeconds > 0) recentMovieIds.add(movieId);
+    if (isCompleted) watchedMovieIds.add(movieId);
+  }
+
+  const favoriteMovieIds = new Set();
+  for (const row of Array.isArray(favoriteRows?.data) ? favoriteRows.data : []) {
+    const movieId = Number(row?.movie_id);
+    if (!publishedSet.has(movieId)) continue;
+    favoriteMovieIds.add(movieId);
+  }
+
+  return {
+    stats: {
+      all: publishedMovieIds.length,
+      favorites: favoriteMovieIds.size,
+      recent: recentMovieIds.size,
+      watched: watchedMovieIds.size,
+    },
+    genres: Array.from(genresByKey.values()).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" })),
+    languages: Array.from(languagesByKey.values()).sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
+    ),
+    years: Array.from(yearsByKey.entries())
+      .map(([key, count]) => ({ key, name: key, count }))
+      .sort((a, b) => Number(b.key) - Number(a.key)),
+  };
+}
+
 export async function getMovieBySlugForUser(userId, slug) {
   const normalizedSlug = text(slug).toLowerCase();
   if (!normalizedSlug) return null;
@@ -435,6 +532,7 @@ export async function getMoviesPageForUser(userId, options = {}) {
     .select(MOVIE_SELECT_COLUMNS, { count: "exact" })
     .eq("is_published", true)
     .order("updated_at", { ascending: false })
+    .order("id", { ascending: false })
     .range(from, to);
   if (error) throw new Error(error.message || "Failed to load movies");
 
@@ -454,15 +552,20 @@ export async function getMovieCatalogBootstrapForUser(userId, options = {}) {
   const page = clampPage(options?.page);
   const pageSize = clampPageSize(options?.pageSize);
 
-  const [categories, continueWatching, pageData] = await Promise.all([
+  const [categories, continueWatching, pageData, sidebar] = await Promise.all([
     loadCategoryListWithCounts(admin),
     loadContinueWatchingForUser(admin, userId, 20),
     includePage ? getMoviesPageForUser(userId, { page, pageSize }) : Promise.resolve(null),
+    loadMovieSidebarSummaryForUser(admin, userId),
   ]);
 
   return {
     categories,
     continueWatching,
+    stats: sidebar.stats,
+    genres: sidebar.genres,
+    languages: sidebar.languages,
+    years: sidebar.years,
     page: pageData || {
       movies: [],
       page,
@@ -484,6 +587,7 @@ export async function getMoviesCatalogForUser(userId) {
       .select(MOVIE_SELECT_COLUMNS)
       .eq("is_published", true)
       .order("updated_at", { ascending: false })
+      .order("id", { ascending: false })
       .range(from, to);
     if (error) throw new Error(error.message || "Failed to load movies");
     const chunk = Array.isArray(data) ? data : [];

@@ -16,7 +16,10 @@ export async function generateMetadata() {
   }
 }
 
-export default async function HomePage() {
+export default async function HomePage({ searchParams }) {
+  const params = await searchParams;
+  const initialHomeMode = String(params?.mode || "").trim().toLowerCase() === "movies" ? "movies" : "";
+  const initialMoviePage = Math.max(1, Number.parseInt(String(params?.movie_page || "1"), 10) || 1);
   const current = await requireClient();
   const approvalStatus = String(current?.client?.approval_status || "approved").toLowerCase();
   const isApproved = approvalStatus === "approved";
@@ -62,8 +65,14 @@ export default async function HomePage() {
       initialCategories={boot.categories}
       initialMovies={boot.movies}
       initialMovieCategories={boot.movieCategories}
+      initialMovieGenres={boot.movieGenres}
+      initialMovieLanguages={boot.movieLanguages}
+      initialMovieYears={boot.movieYears}
+      initialMovieStats={boot.movieStats}
       initialContinueWatching={boot.continueWatching}
       moviesViewVariant="browse"
+      initialHomeMode={initialHomeMode}
+      initialMoviePage={initialMoviePage}
       initialClientState={boot.initialClientState}
       currentClient={{
         email: String(current.client.email || ""),

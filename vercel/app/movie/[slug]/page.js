@@ -60,6 +60,10 @@ export default async function MovieWatchPage({ params }) {
       initialCategories={boot.categories}
       initialMovies={selectedMovie ? [selectedMovie] : []}
       initialMovieCategories={movieBootstrap.categories}
+      initialMovieGenres={movieBootstrap.genres}
+      initialMovieLanguages={movieBootstrap.languages}
+      initialMovieYears={movieBootstrap.years}
+      initialMovieStats={movieBootstrap.stats}
       initialContinueWatching={movieBootstrap.continueWatching}
       moviesViewVariant="watch"
       initialHomeMode="movies"
