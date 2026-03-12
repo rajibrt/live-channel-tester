@@ -3,6 +3,12 @@ import { isPrivateNetworkUrl, normalizeStreamUrl, toStreamProxyUrl } from "./str
 import { deriveWatchState, isWatchedProgress, normalizeSeconds } from "./movieProgress";
 import { inferVideoQualityLabelFromUrl } from "./videoQuality";
 
+const MOVIE_SELECT_COLUMNS =
+  "id,slug,title,synopsis,poster_url,backdrop_url,release_year,runtime_seconds,is_published,updated_at,imdb_id,imdb_url,imdb_rating,imdb_votes,content_rating,imdb_genres,imdb_directors,imdb_writers,imdb_stars,imdb_release_date,imdb_countries,imdb_languages,video_quality";
+const DEFAULT_MOVIES_PAGE_SIZE = 24;
+const MAX_MOVIES_PAGE_SIZE = 60;
+const DB_SCAN_PAGE_SIZE = 500;
+
 function text(value) {
   return String(value || "").trim();
 }
@@ -157,135 +163,127 @@ function toMovieShape(movie, categoryRows, sourceRows, progressRow, isFavorite) 
   };
 }
 
-export async function getMoviesCatalogForUser(userId) {
-  const admin = getSupabaseAdmin();
-  const pageSize = 500;
-  const movieRows = [];
-  let from = 0;
-  let movieErr = null;
-  while (true) {
-    const to = from + pageSize - 1;
-    const { data, error } = await admin
-      .from("movies")
-      .select(
-        "id,slug,title,synopsis,poster_url,backdrop_url,release_year,runtime_seconds,is_published,updated_at,imdb_id,imdb_url,imdb_rating,imdb_votes,content_rating,imdb_genres,imdb_directors,imdb_writers,imdb_stars,imdb_release_date,imdb_countries,imdb_languages,video_quality"
-      )
-      .eq("is_published", true)
-      .order("updated_at", { ascending: false })
-      .range(from, to);
-    if (error) {
-      movieErr = error;
-      break;
-    }
-    const chunk = Array.isArray(data) ? data : [];
-    movieRows.push(...chunk);
-    if (!chunk.length) break;
-    from += chunk.length;
-  }
+function clampPageSize(value) {
+  const size = Math.floor(Number(value) || DEFAULT_MOVIES_PAGE_SIZE);
+  return Math.max(1, Math.min(MAX_MOVIES_PAGE_SIZE, size));
+}
 
-  if (movieErr || !Array.isArray(movieRows) || !movieRows.length) {
-    const { data: categories } = await admin
-      .from("movie_categories")
-      .select("id,slug,name,position")
-      .order("position", { ascending: true })
-      .order("name", { ascending: true });
+function clampPage(value) {
+  const page = Math.floor(Number(value) || 1);
+  return Math.max(1, page);
+}
 
-    return {
-      movies: [],
-      categories: (categories || []).map((row) => ({
-        id: String(row?.id || ""),
-        slug: text(row?.slug),
-        name: text(row?.name) || "Category",
-        count: 0,
-      })),
-      continueWatching: [],
-    };
-  }
-
-  const movieIds = movieRows.map((row) => Number(row?.id)).filter((id) => Number.isInteger(id) && id > 0);
-  const movieIdSet = new Set(movieIds);
-  const categoriesPromise = admin
+async function loadMovieCategories(admin) {
+  const { data: categories } = await admin
     .from("movie_categories")
     .select("id,slug,name,position")
     .order("position", { ascending: true })
     .order("name", { ascending: true });
-  const mapPromise = (async () => {
-    const rows = [];
-    let offset = 0;
-    while (true) {
-      const { data, error } = await admin
-        .from("movie_category_map")
-        .select("movie_id,category_id")
-        .order("movie_id", { ascending: true })
-        .order("category_id", { ascending: true })
-        .range(offset, offset + pageSize - 1);
-      if (error) throw new Error(error.message || "Failed to load movie/category map");
-      const chunk = Array.isArray(data) ? data : [];
-      rows.push(...chunk);
-      if (!chunk.length) break;
-      offset += chunk.length;
-    }
-    return rows;
-  })();
-  const sourcesPromise = (async () => {
-    const rows = [];
-    let offset = 0;
-    while (true) {
-      const { data, error } = await admin
-        .from("movie_sources")
-        .select("id,movie_id,label,source_url,is_active,sort_order")
-        .eq("is_active", true)
-        .order("movie_id", { ascending: true })
-        .order("sort_order", { ascending: true })
-        .order("id", { ascending: true })
-        .range(offset, offset + pageSize - 1);
-      if (error) throw new Error(error.message || "Failed to load movie sources");
-      const chunk = Array.isArray(data) ? data : [];
-      rows.push(...chunk);
-      if (!chunk.length) break;
-      offset += chunk.length;
-    }
-    return rows;
-  })();
+  return Array.isArray(categories) ? categories : [];
+}
 
-  const [categoriesRes, mapRows, sourceRows, progressRes, favoritesRes] = await Promise.all([
-    categoriesPromise,
-    mapPromise,
-    sourcesPromise,
-    userId
-      ? admin
-          .from("movie_watch_progress")
-          .select("movie_id,position_seconds,duration_seconds,progress_percent,is_completed,updated_at")
-          .eq("user_id", userId)
-      : Promise.resolve({ data: [] }),
-    userId
-      ? admin
-          .from("movie_favorites")
-          .select("movie_id")
-          .eq("user_id", userId)
-      : Promise.resolve({ data: [] }),
-  ]);
+async function loadPublishedMovieIds(admin) {
+  const movieIds = [];
+  let from = 0;
+  while (true) {
+    const to = from + DB_SCAN_PAGE_SIZE - 1;
+    const { data, error } = await admin
+      .from("movies")
+      .select("id")
+      .eq("is_published", true)
+      .order("updated_at", { ascending: false })
+      .range(from, to);
+    if (error) throw new Error(error.message || "Failed to load published movie ids");
+    const chunk = Array.isArray(data) ? data : [];
+    movieIds.push(...chunk.map((row) => Number(row?.id)).filter((id) => Number.isInteger(id) && id > 0));
+    if (!chunk.length) break;
+    from += chunk.length;
+  }
+  return movieIds;
+}
 
-  const categories = Array.isArray(categoriesRes?.data) ? categoriesRes.data : [];
-  const progressRows = Array.isArray(progressRes?.data)
-    ? progressRes.data.filter((row) => movieIdSet.has(Number(row?.movie_id)))
-    : [];
-  const favoriteRows = Array.isArray(favoritesRes?.data)
-    ? favoritesRes.data.filter((row) => movieIdSet.has(Number(row?.movie_id)))
-    : [];
+async function loadMovieCategoryMapRows(admin) {
+  const rows = [];
+  let offset = 0;
+  while (true) {
+    const { data, error } = await admin
+      .from("movie_category_map")
+      .select("movie_id,category_id")
+      .order("movie_id", { ascending: true })
+      .order("category_id", { ascending: true })
+      .range(offset, offset + DB_SCAN_PAGE_SIZE - 1);
+    if (error) throw new Error(error.message || "Failed to load movie/category map");
+    const chunk = Array.isArray(data) ? data : [];
+    rows.push(...chunk);
+    if (!chunk.length) break;
+    offset += chunk.length;
+  }
+  return rows;
+}
 
-  if (progressRes?.error) {
+async function loadMovieSourceRows(admin, movieIds) {
+  if (!Array.isArray(movieIds) || !movieIds.length) return [];
+  const { data, error } = await admin
+    .from("movie_sources")
+    .select("id,movie_id,label,source_url,is_active,sort_order")
+    .eq("is_active", true)
+    .in("movie_id", movieIds)
+    .order("movie_id", { ascending: true })
+    .order("sort_order", { ascending: true })
+    .order("id", { ascending: true });
+  if (error) throw new Error(error.message || "Failed to load movie sources");
+  return Array.isArray(data) ? data : [];
+}
+
+async function loadMovieProgressRows(admin, userId, movieIds) {
+  if (!userId || !Array.isArray(movieIds) || !movieIds.length) return [];
+  const { data, error } = await admin
+    .from("movie_watch_progress")
+    .select("movie_id,position_seconds,duration_seconds,progress_percent,is_completed,updated_at")
+    .eq("user_id", userId)
+    .in("movie_id", movieIds);
+  if (error) {
     console.error("movie progress load failed", {
       userId: String(userId || ""),
-      message: String(progressRes.error.message || progressRes.error),
+      message: String(error.message || error),
     });
+    return [];
   }
-  if (favoritesRes?.error) {
+  return Array.isArray(data) ? data : [];
+}
+
+async function loadMovieFavoriteRows(admin, userId, movieIds) {
+  if (!userId || !Array.isArray(movieIds) || !movieIds.length) return [];
+  const { data, error } = await admin
+    .from("movie_favorites")
+    .select("movie_id")
+    .eq("user_id", userId)
+    .in("movie_id", movieIds);
+  if (error) {
     console.error("movie favorites load failed", {
       userId: String(userId || ""),
-      message: String(favoritesRes.error.message || favoritesRes.error),
+      message: String(error.message || error),
     });
+    return [];
   }
+  return Array.isArray(data) ? data : [];
+}
+
+async function hydrateMoviesForUser(admin, userId, movieRows, options = {}) {
+  const rows = Array.isArray(movieRows) ? movieRows : [];
+  if (!rows.length) return [];
+
+  const requestedOrder = Array.isArray(options?.orderIds) ? options.orderIds : [];
+  const movieIds = rows.map((row) => Number(row?.id)).filter((id) => Number.isInteger(id) && id > 0);
+  const movieIdSet = new Set(movieIds);
+
+  const [categories, mapRows, sourceRows, progressRows, favoriteRows] = await Promise.all([
+    loadMovieCategories(admin),
+    loadMovieCategoryMapRows(admin),
+    loadMovieSourceRows(admin, movieIds),
+    loadMovieProgressRows(admin, userId, movieIds),
+    loadMovieFavoriteRows(admin, userId, movieIds),
+  ]);
 
   const categoryById = new Map(
     categories.map((row) => [
@@ -332,7 +330,7 @@ export async function getMoviesCatalogForUser(userId) {
       .filter((movieId) => Number.isInteger(movieId) && movieId > 0)
   );
 
-  const movies = movieRows.map((movie) =>
+  const rawMovies = rows.map((movie) =>
     toMovieShape(
       movie,
       categoriesByMovie.get(Number(movie.id)) || [],
@@ -342,32 +340,163 @@ export async function getMoviesCatalogForUser(userId) {
     )
   );
 
-  const countsByCategorySlug = new Map();
-  for (const movie of movies) {
-    for (const slug of movie.categorySlugs) {
-      if (!slug) continue;
-      countsByCategorySlug.set(slug, (countsByCategorySlug.get(slug) || 0) + 1);
-    }
+  if (!requestedOrder.length) return rawMovies;
+  const orderMap = new Map(requestedOrder.map((id, index) => [Number(id), index]));
+  return rawMovies.toSorted((a, b) => (orderMap.get(Number(a?.id)) ?? 0) - (orderMap.get(Number(b?.id)) ?? 0));
+}
+
+async function loadCategoryListWithCounts(admin) {
+  const [categories, publishedMovieIds, mapRows] = await Promise.all([
+    loadMovieCategories(admin),
+    loadPublishedMovieIds(admin),
+    loadMovieCategoryMapRows(admin),
+  ]);
+
+  const publishedSet = new Set(publishedMovieIds);
+  const countsByCategoryId = new Map();
+  for (const row of mapRows) {
+    const movieId = Number(row?.movie_id);
+    const categoryId = Number(row?.category_id);
+    if (!Number.isInteger(movieId) || !Number.isInteger(categoryId) || !publishedSet.has(movieId)) continue;
+    countsByCategoryId.set(categoryId, (countsByCategoryId.get(categoryId) || 0) + 1);
   }
 
-  const categoryList = categories.map((row) => {
+  return categories.map((row) => {
     const slug = text(row?.slug) || normalizeCategorySlug(row?.name);
     return {
       id: String(row?.id || ""),
       slug,
       name: text(row?.name) || "Category",
-      count: Number(countsByCategorySlug.get(slug) || 0),
+      count: Number(countsByCategoryId.get(Number(row?.id)) || 0),
     };
   });
+}
 
-  const continueWatching = movies
-    .filter((movie) => movie.watchState === "continue")
-    .sort((a, b) => new Date(b.progress.updatedAt || 0).getTime() - new Date(a.progress.updatedAt || 0).getTime())
-    .slice(0, 20);
+async function loadContinueWatchingForUser(admin, userId, limit = 20) {
+  if (!userId) return [];
+  const { data, error } = await admin
+    .from("movie_watch_progress")
+    .select("movie_id,position_seconds,duration_seconds,progress_percent,is_completed,updated_at")
+    .eq("user_id", userId)
+    .eq("is_completed", false)
+    .gt("position_seconds", 0)
+    .order("updated_at", { ascending: false })
+    .limit(limit);
+  if (error) {
+    console.error("movie continue watching load failed", {
+      userId: String(userId || ""),
+      message: String(error.message || error),
+    });
+    return [];
+  }
 
+  const progressRows = Array.isArray(data) ? data : [];
+  const movieIds = progressRows
+    .map((row) => Number(row?.movie_id))
+    .filter((movieId) => Number.isInteger(movieId) && movieId > 0);
+  if (!movieIds.length) return [];
+
+  const { data: movieRows, error: movieErr } = await admin
+    .from("movies")
+    .select(MOVIE_SELECT_COLUMNS)
+    .eq("is_published", true)
+    .in("id", movieIds);
+  if (movieErr) throw new Error(movieErr.message || "Failed to load continue watching movies");
+
+  return hydrateMoviesForUser(admin, userId, movieRows || [], { orderIds: movieIds });
+}
+
+export async function getMovieBySlugForUser(userId, slug) {
+  const normalizedSlug = text(slug).toLowerCase();
+  if (!normalizedSlug) return null;
+
+  const admin = getSupabaseAdmin();
+  const { data, error } = await admin
+    .from("movies")
+    .select(MOVIE_SELECT_COLUMNS)
+    .eq("is_published", true)
+    .eq("slug", normalizedSlug)
+    .maybeSingle();
+  if (error || !data?.id) return null;
+
+  const movies = await hydrateMoviesForUser(admin, userId, [data]);
+  return movies[0] || null;
+}
+
+export async function getMoviesPageForUser(userId, options = {}) {
+  const admin = getSupabaseAdmin();
+  const page = clampPage(options?.page);
+  const pageSize = clampPageSize(options?.pageSize);
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  const { data, error, count } = await admin
+    .from("movies")
+    .select(MOVIE_SELECT_COLUMNS, { count: "exact" })
+    .eq("is_published", true)
+    .order("updated_at", { ascending: false })
+    .range(from, to);
+  if (error) throw new Error(error.message || "Failed to load movies");
+
+  const movies = await hydrateMoviesForUser(admin, userId, data || []);
   return {
     movies,
-    categories: categoryList,
-    continueWatching,
+    page,
+    pageSize,
+    total: Number(count || 0),
+    totalPages: Math.max(1, Math.ceil(Number(count || 0) / pageSize)),
   };
+}
+
+export async function getMovieCatalogBootstrapForUser(userId, options = {}) {
+  const admin = getSupabaseAdmin();
+  const includePage = options?.includePage !== false;
+  const page = clampPage(options?.page);
+  const pageSize = clampPageSize(options?.pageSize);
+
+  const [categories, continueWatching, pageData] = await Promise.all([
+    loadCategoryListWithCounts(admin),
+    loadContinueWatchingForUser(admin, userId, 20),
+    includePage ? getMoviesPageForUser(userId, { page, pageSize }) : Promise.resolve(null),
+  ]);
+
+  return {
+    categories,
+    continueWatching,
+    page: pageData || {
+      movies: [],
+      page,
+      pageSize,
+      total: 0,
+      totalPages: 1,
+    },
+  };
+}
+
+export async function getMoviesCatalogForUser(userId) {
+  const admin = getSupabaseAdmin();
+  const movieRows = [];
+  let from = 0;
+  while (true) {
+    const to = from + DB_SCAN_PAGE_SIZE - 1;
+    const { data, error } = await admin
+      .from("movies")
+      .select(MOVIE_SELECT_COLUMNS)
+      .eq("is_published", true)
+      .order("updated_at", { ascending: false })
+      .range(from, to);
+    if (error) throw new Error(error.message || "Failed to load movies");
+    const chunk = Array.isArray(data) ? data : [];
+    movieRows.push(...chunk);
+    if (!chunk.length) break;
+    from += chunk.length;
+  }
+
+  const [movies, categories, continueWatching] = await Promise.all([
+    hydrateMoviesForUser(admin, userId, movieRows),
+    loadCategoryListWithCounts(admin),
+    loadContinueWatchingForUser(admin, userId, 20),
+  ]);
+
+  return { movies, categories, continueWatching };
 }

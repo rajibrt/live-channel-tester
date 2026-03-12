@@ -3,6 +3,7 @@ import PendingApprovalCard from "../../../components/client/PendingApprovalCard"
 import { requireClient } from "../../../lib/clientAuth";
 import { loadClientAccessSettingsCached } from "../../../lib/clientAccessSettings";
 import { getClientHomeData } from "../../../lib/clientHomeData";
+import { getMovieBySlugForUser, getMovieCatalogBootstrapForUser } from "../../../lib/moviesData";
 
 export const dynamic = "force-dynamic";
 
@@ -47,15 +48,19 @@ export default async function MovieWatchPage({ params }) {
     );
   }
 
-  const boot = await getClientHomeData(current.user.id, { includeMovies: true });
+  const [boot, selectedMovie, movieBootstrap] = await Promise.all([
+    getClientHomeData(current.user.id),
+    getMovieBySlugForUser(current.user.id, movieSlug),
+    getMovieCatalogBootstrapForUser(current.user.id, { includePage: false }),
+  ]);
 
   return (
     <IptvHomeClient
       initialChannels={boot.channels}
       initialCategories={boot.categories}
-      initialMovies={boot.movies}
-      initialMovieCategories={boot.movieCategories}
-      initialContinueWatching={boot.continueWatching}
+      initialMovies={selectedMovie ? [selectedMovie] : []}
+      initialMovieCategories={movieBootstrap.categories}
+      initialContinueWatching={movieBootstrap.continueWatching}
       moviesViewVariant="watch"
       initialHomeMode="movies"
       initialSelectedMovieSlug={movieSlug}

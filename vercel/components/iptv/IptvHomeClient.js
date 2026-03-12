@@ -18,6 +18,7 @@ const LAST_CHANNEL_KEY = "iptv:v1:last-channel-id";
 const LAST_MODE_KEY = "iptv:v1:last-mode";
 const LAST_MOVIE_FILTER_KEY = "iptv:v1:last-movie-filter";
 const DEVICE_KEY_STORAGE = "iptv:v1:device-key";
+const DEFAULT_MOVIES_PAGE_SIZE = 24;
 
 function normalizeChannelId(value) {
   return String(value || "").trim();
@@ -148,6 +149,10 @@ export default function IptvHomeClient({
     movies: Array.isArray(initialMovies) ? initialMovies : [],
     categories: Array.isArray(initialMovieCategories) ? initialMovieCategories : [],
     continueWatching: Array.isArray(initialContinueWatching) ? initialContinueWatching : [],
+    page: 1,
+    pageSize: DEFAULT_MOVIES_PAGE_SIZE,
+    total: Array.isArray(initialMovies) ? initialMovies.length : 0,
+    totalPages: 1,
   }));
   const [movieCatalogStatus, setMovieCatalogStatus] = useState(() => (hasInitialMovieBootstrap ? "ready" : "idle"));
   const [movieSidebarResetToken, setMovieSidebarResetToken] = useState(0);
@@ -222,6 +227,10 @@ export default function IptvHomeClient({
       movies: nextMovies,
       categories: nextCategories,
       continueWatching: nextContinueWatching,
+      page: 1,
+      pageSize: DEFAULT_MOVIES_PAGE_SIZE,
+      total: nextMovies.length,
+      totalPages: 1,
     });
     setMovieSnapshot(nextMovies);
     if (nextMovies.length || nextCategories.length || nextContinueWatching.length) {
@@ -248,6 +257,10 @@ export default function IptvHomeClient({
           movies: nextMovies,
           categories: nextCategories,
           continueWatching: nextContinueWatching,
+          page: Number(payload?.page || 1),
+          pageSize: Number(payload?.pageSize || DEFAULT_MOVIES_PAGE_SIZE),
+          total: Number(payload?.total || nextMovies.length || 0),
+          totalPages: Number(payload?.totalPages || 1),
         });
         setMovieSnapshot(nextMovies);
         setMovieCatalogStatus("ready");
@@ -257,6 +270,36 @@ export default function IptvHomeClient({
         setMovieCatalogStatus("error");
       });
   }, [movieCatalogStatus]);
+
+  const loadMoviePage = useCallback(async (page, pageSize = DEFAULT_MOVIES_PAGE_SIZE) => {
+    const targetPage = Math.max(1, Number(page || 1));
+    setMovieCatalogStatus("loading");
+    try {
+      const params = new URLSearchParams({
+        page: String(targetPage),
+        pageSize: String(pageSize),
+      });
+      const response = await fetch(`/api/client/movies?${params.toString()}`, {
+        method: "GET",
+        credentials: "same-origin",
+      });
+      if (!response.ok) throw new Error(`Movie page failed with ${response.status}`);
+      const payload = await response.json().catch(() => ({}));
+      const nextMovies = Array.isArray(payload?.movies) ? payload.movies : [];
+      setMovieCatalog((prev) => ({
+        ...prev,
+        movies: nextMovies,
+        page: Number(payload?.page || targetPage),
+        pageSize: Number(payload?.pageSize || pageSize),
+        total: Number(payload?.total || 0),
+        totalPages: Number(payload?.totalPages || 1),
+      }));
+      setMovieSnapshot(nextMovies);
+      setMovieCatalogStatus("ready");
+    } catch {
+      setMovieCatalogStatus("error");
+    }
+  }, []);
 
   useEffect(() => {
     const shouldLoadMovies =
@@ -1163,6 +1206,12 @@ export default function IptvHomeClient({
                 initialMovies={movieCatalog.movies}
                 movieCategories={movieCatalog.categories}
                 initialContinueWatching={movieCatalog.continueWatching}
+                initialPage={movieCatalog.page}
+                initialPageSize={movieCatalog.pageSize}
+                totalMovies={movieCatalog.total}
+                totalMoviePages={movieCatalog.totalPages}
+                isPageLoading={movieCatalogStatus === "loading"}
+                onPageChange={loadMoviePage}
                 initialSelectedMovieSlug={activeMovieSlug || initialSelectedMovieSlug}
                 filterMode={movieMode}
                 filterCategorySlug={selectedMovieCategory}
@@ -1227,6 +1276,11 @@ export default function IptvHomeClient({
                 onBackToMovieList={() => {
                   setHomeMode("movies");
                   setMovieViewMode("browse");
+                  if (movieCatalog.total <= movieCatalog.movies.length) {
+                    setMovieCatalogStatus("idle");
+                  } else {
+                    loadMoviePage(1, movieCatalog.pageSize || DEFAULT_MOVIES_PAGE_SIZE);
+                  }
                   pushMovieListUrl(movieMode, selectedMovieCategory, selectedMovieGenre, selectedMovieLanguage, selectedMovieYear, movieFilterView);
                 }}
                 onMoviesSnapshotChange={setMovieSnapshot}

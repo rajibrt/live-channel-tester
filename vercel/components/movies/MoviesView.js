@@ -62,6 +62,12 @@ export default function MoviesView({
   initialMovies = [],
   movieCategories = [],
   initialContinueWatching = [],
+  initialPage = 1,
+  initialPageSize = DEFAULT_MOVIES_PAGE_SIZE,
+  totalMovies = 0,
+  totalMoviePages = 1,
+  isPageLoading = false,
+  onPageChange,
   initialSelectedMovieSlug = "",
   filterMode = "all",
   filterCategorySlug = "",
@@ -85,13 +91,14 @@ export default function MoviesView({
 }) {
   const [movies, setMovies] = useState(() => (Array.isArray(initialMovies) ? initialMovies : []));
   const [search, setSearch] = useState("");
-  const [moviesPage, setMoviesPage] = useState(1);
-  const [moviesPageSize, setMoviesPageSize] = useState(DEFAULT_MOVIES_PAGE_SIZE);
+  const [moviesPage, setMoviesPage] = useState(() => Math.max(1, Number(initialPage || 1)));
+  const [moviesPageSize, setMoviesPageSize] = useState(() => Math.max(1, Number(initialPageSize || DEFAULT_MOVIES_PAGE_SIZE)));
   const [continuePage, setContinuePage] = useState(1);
   const [isTouchContinueUi, setIsTouchContinueUi] = useState(false);
   const moviesSectionRef = useRef(null);
   const watchPlayerColRef = useRef(null);
   const hasFilterScrollMountedRef = useRef(false);
+  const hasTriggeredInitialPageLoadRef = useRef(false);
   const [categorySlug, setCategorySlug] = useState("all");
   const [selectedMovieId, setSelectedMovieId] = useState(() => {
     const preferred = Array.isArray(initialContinueWatching) && initialContinueWatching.length ? initialContinueWatching[0] : null;
@@ -102,6 +109,14 @@ export default function MoviesView({
   const [playerStartFrom, setPlayerStartFrom] = useState(null);
   const [playerReplayToken, setPlayerReplayToken] = useState(0);
   const selectedMovieSlug = text(initialSelectedMovieSlug).toLowerCase();
+
+  useEffect(() => {
+    setMoviesPage(Math.max(1, Number(initialPage || 1)));
+  }, [initialPage]);
+
+  useEffect(() => {
+    setMoviesPageSize(Math.max(1, Number(initialPageSize || DEFAULT_MOVIES_PAGE_SIZE)));
+  }, [initialPageSize]);
 
   useEffect(() => {
     if (!movies.length) return;
@@ -289,8 +304,19 @@ export default function MoviesView({
     });
   }, []);
 
-  const totalFilteredMovies = filteredMovies.length;
-  const totalPages = Math.max(1, Math.ceil(totalFilteredMovies / moviesPageSize));
+  const hasClientFilters =
+    Boolean(String(search || "").trim()) ||
+    (showInlineFilters ? String(categorySlug || "").trim().toLowerCase() !== "all" : false) ||
+    (!showInlineFilters &&
+      (Boolean(String(filterCategorySlug || "").trim()) ||
+        Boolean(String(filterGenreSlug || "").trim()) ||
+        Boolean(String(filterLanguageSlug || "").trim()) ||
+        Boolean(String(filterYear || "").trim()) ||
+        String(filterMode || "all").toLowerCase() !== "all"));
+  const totalFilteredMovies = hasClientFilters ? filteredMovies.length : Number(totalMovies || filteredMovies.length);
+  const totalPages = hasClientFilters
+    ? Math.max(1, Math.ceil(filteredMovies.length / moviesPageSize))
+    : Math.max(1, Number(totalMoviePages || 1));
   const currentPage = Math.min(Math.max(1, Number(moviesPage || 1)), totalPages);
   const pageItems = useMemo(() => buildPageItems(currentPage, totalPages), [currentPage, totalPages]);
   const totalContinuePages = Math.max(1, Math.ceil(continueWatching.length / CONTINUE_PAGE_SIZE));
@@ -305,13 +331,24 @@ export default function MoviesView({
   }, [continueWatching, currentContinuePage]);
   const continueStripMovies = isTouchContinueUi ? continueWatching : continuePagedMovies;
   const pagedMovies = useMemo(() => {
+    if (!hasClientFilters) return filteredMovies;
     const start = (currentPage - 1) * moviesPageSize;
     return filteredMovies.slice(start, start + moviesPageSize);
-  }, [filteredMovies, currentPage, moviesPageSize]);
+  }, [filteredMovies, currentPage, hasClientFilters, moviesPageSize]);
 
   useEffect(() => {
     setMoviesPage(1);
   }, [search, filterMode, filterCategorySlug, filterGenreSlug, filterLanguageSlug, filterYear, categorySlug, showInlineFilters]);
+
+  useEffect(() => {
+    if (variant !== "browse") return;
+    if (hasClientFilters) return;
+    if (!hasTriggeredInitialPageLoadRef.current) {
+      hasTriggeredInitialPageLoadRef.current = true;
+      return;
+    }
+    onPageChange?.(currentPage, moviesPageSize);
+  }, [currentPage, hasClientFilters, moviesPageSize, onPageChange, variant]);
 
   useEffect(() => {
     if (moviesPage > totalPages) setMoviesPage(totalPages);
@@ -754,7 +791,7 @@ export default function MoviesView({
           <div className={styles.paginationBar}>
             <span className={styles.paginationInfo}>
               Showing {(currentPage - 1) * moviesPageSize + (pagedMovies.length ? 1 : 0)}-
-              {(currentPage - 1) * moviesPageSize + pagedMovies.length} of {totalFilteredMovies}
+              {Math.min((currentPage - 1) * moviesPageSize + pagedMovies.length, totalFilteredMovies)} of {totalFilteredMovies}
             </span>
             <div className={styles.paginationActions}>
               <Pagination className={styles.paginationNav}>
@@ -799,6 +836,11 @@ export default function MoviesView({
               </Pagination>
             </div>
           </div>
+          {isPageLoading && !hasClientFilters ? (
+            <p className={styles.paginationInfo} style={{ marginTop: "10px" }}>
+              Loading page {currentPage}...
+            </p>
+          ) : null}
         </section>
       </div>
       {activeFilterTags.length ? (
