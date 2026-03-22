@@ -129,8 +129,9 @@ function PublicChannelLanding({ channel }) {
   );
 }
 
-export default async function WatchChannelPage({ params }) {
+export default async function WatchChannelPage({ params, searchParams }) {
   const resolved = await params;
+  const query = await searchParams;
   const { id } = parseChannelParam(resolved?.channel);
   const channel = await getChannelById(id);
 
@@ -201,6 +202,14 @@ export default async function WatchChannelPage({ params }) {
       initialMovieStats={boot.movieStats}
       initialContinueWatching={boot.continueWatching}
       moviesViewVariant="browse"
+      initialHomeMode={String(query?.mode || "").trim().toLowerCase() === "movies" ? "movies" : ""}
+      initialMovieMode={String(query?.movie_mode || "").trim().toLowerCase()}
+      initialMovieCategory={String(query?.movie_category || "").trim().toLowerCase()}
+      initialMovieGenre={String(query?.movie_genre || "").trim().toLowerCase()}
+      initialMovieLanguage={String(query?.movie_language || "").trim().toLowerCase()}
+      initialMovieYear={String(query?.movie_year || "").trim()}
+      initialMovieFilterView={String(query?.movie_filter_view || "").trim().toLowerCase() === "genres" ? "genres" : "categories"}
+      initialMoviePage={Math.max(1, Number.parseInt(String(query?.movie_page || "1"), 10) || 1)}
       initialClientState={boot.initialClientState}
       currentClient={{
         email: String(current.client.email || ""),

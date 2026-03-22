@@ -216,6 +216,7 @@ function AnnouncementTicker({
     { ariaHidden = false, chunkRef = null } = {},
   ) => (
     <span
+      key={prefix}
       className={styles.announcementTickerChunk}
       aria-hidden={ariaHidden}
       ref={chunkRef}

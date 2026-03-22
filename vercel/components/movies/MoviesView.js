@@ -118,6 +118,7 @@ export default function MoviesView({
   const moviesSectionRef = useRef(null);
   const watchPlayerColRef = useRef(null);
   const hasFilterScrollMountedRef = useRef(false);
+  const pendingPageScrollRef = useRef(false);
   const [categorySlug, setCategorySlug] = useState("all");
   const [selectedMovieId, setSelectedMovieId] = useState(() => {
     const preferred = Array.isArray(initialContinueWatching) && initialContinueWatching.length ? initialContinueWatching[0] : null;
@@ -331,17 +332,11 @@ export default function MoviesView({
     });
   }, []);
 
-  const hasClientFilters =
+  const hasLocalClientFilters =
     Boolean(String(search || "").trim()) ||
-    (showInlineFilters ? String(categorySlug || "").trim().toLowerCase() !== "all" : false) ||
-    (!showInlineFilters &&
-      (Boolean(String(filterCategorySlug || "").trim()) ||
-        Boolean(String(filterGenreSlug || "").trim()) ||
-        Boolean(String(filterLanguageSlug || "").trim()) ||
-        Boolean(String(filterYear || "").trim()) ||
-        String(filterMode || "all").toLowerCase() !== "all"));
-  const totalFilteredMovies = hasClientFilters ? filteredMovies.length : Number(totalMovies || filteredMovies.length);
-  const totalPages = hasClientFilters
+    (showInlineFilters ? String(categorySlug || "").trim().toLowerCase() !== "all" : false);
+  const totalFilteredMovies = hasLocalClientFilters ? filteredMovies.length : Number(totalMovies || filteredMovies.length);
+  const totalPages = hasLocalClientFilters
     ? Math.max(1, Math.ceil(filteredMovies.length / moviesPageSize))
     : Math.max(1, Number(totalMoviePages || 1));
   const currentPage = Math.min(Math.max(1, Number(moviesPage || 1)), totalPages);
@@ -358,10 +353,10 @@ export default function MoviesView({
   }, [continueWatching, currentContinuePage]);
   const continueStripMovies = isTouchContinueUi ? continueWatching : continuePagedMovies;
   const pagedMovies = useMemo(() => {
-    if (!hasClientFilters) return filteredMovies;
+    if (!hasLocalClientFilters) return filteredMovies;
     const start = (currentPage - 1) * moviesPageSize;
     return filteredMovies.slice(start, start + moviesPageSize);
-  }, [filteredMovies, currentPage, hasClientFilters, moviesPageSize]);
+  }, [filteredMovies, currentPage, hasLocalClientFilters, moviesPageSize]);
 
   useEffect(() => {
     setMoviesPage(1);
@@ -371,11 +366,12 @@ export default function MoviesView({
     (page) => {
       const targetPage = Math.min(Math.max(1, Number(page || 1)), totalPages);
       setMoviesPage(targetPage);
-      if (variant === "browse" && !hasClientFilters && targetPage !== currentPage) {
+      pendingPageScrollRef.current = true;
+      if (variant === "browse" && !hasLocalClientFilters && targetPage !== currentPage) {
         onPageChange?.(targetPage, moviesPageSize);
       }
     },
-    [currentPage, hasClientFilters, moviesPageSize, onPageChange, totalPages, variant]
+    [currentPage, hasLocalClientFilters, moviesPageSize, onPageChange, totalPages, variant]
   );
 
   useEffect(() => {
@@ -433,6 +429,13 @@ export default function MoviesView({
     }
     scrollToMoviesSection();
   }, [filterMode, filterCategorySlug, filterGenreSlug, filterLanguageSlug, filterYear, categorySlug, showInlineFilters, scrollToMoviesSection]);
+
+  useEffect(() => {
+    if (!pendingPageScrollRef.current) return;
+    if (isPageLoading) return;
+    pendingPageScrollRef.current = false;
+    scrollToMoviesSection("smooth");
+  }, [currentPage, isPageLoading, pagedMovies.length, scrollToMoviesSection]);
 
   const activeFilterTags = useMemo(() => {
     const tags = [];
@@ -801,18 +804,30 @@ export default function MoviesView({
         <section className={`${styles.sectionCard} ${styles.sectionMovies}`} ref={moviesSectionRef}>
           <header className={styles.sectionTop}>
             <h3 className={styles.sectionTitle}>Movies</h3>
-            <span className={styles.sectionHint}>
-              {totalFilteredMovies} result{totalFilteredMovies === 1 ? "" : "s"}
-            </span>
+            <div className={styles.sectionTopMeta}>
+              <span className={styles.sectionHint}>
+                {totalFilteredMovies} result{totalFilteredMovies === 1 ? "" : "s"}
+              </span>
+            </div>
           </header>
-          <MovieGrid
-            title=""
-            movies={pagedMovies}
-            selectedMovieId={selectedMovieId}
-            onSelectMovie={handleSelectMovie}
-            onToggleFavorite={handleToggleFavorite}
-            onMetricsChange={handleGridMetricsChange}
-          />
+          <div className={styles.moviesGridWrap}>
+            <MovieGrid
+              title=""
+              movies={pagedMovies}
+              selectedMovieId={selectedMovieId}
+              onSelectMovie={handleSelectMovie}
+              onToggleFavorite={handleToggleFavorite}
+              onMetricsChange={handleGridMetricsChange}
+            />
+            {isPageLoading && !hasLocalClientFilters ? (
+              <div className={styles.gridLoadingOverlay} aria-live="polite">
+                <div className={`${styles.gridLoadingCard} ${styles.gridLoadingCardFloating}`}>
+                  <span className={styles.loadingSpinner} aria-hidden="true" />
+                  <span>Loading page {currentPage}...</span>
+                </div>
+              </div>
+            ) : null}
+          </div>
           <div className={styles.paginationBar}>
             <span className={styles.paginationInfo}>
               Showing {(currentPage - 1) * moviesPageSize + (pagedMovies.length ? 1 : 0)}-
@@ -823,10 +838,9 @@ export default function MoviesView({
                 <PaginationContent>
                   <PaginationItem>
                     <PaginationPrevious
-                      disabled={currentPage <= 1}
+                      disabled={isPageLoading || currentPage <= 1}
                       onClick={() => {
                         goToMoviePage(currentPage - 1);
-                        scrollToMoviesSection();
                       }}
                     />
                   </PaginationItem>
@@ -836,9 +850,9 @@ export default function MoviesView({
                         <PaginationLink
                           isActive={item === currentPage}
                           size="icon"
+                          disabled={isPageLoading}
                           onClick={() => {
                             goToMoviePage(item);
-                            scrollToMoviesSection();
                           }}
                         >
                           {item}
@@ -850,10 +864,9 @@ export default function MoviesView({
                   ))}
                   <PaginationItem>
                     <PaginationNext
-                      disabled={currentPage >= totalPages}
+                      disabled={isPageLoading || currentPage >= totalPages}
                       onClick={() => {
                         goToMoviePage(currentPage + 1);
-                        scrollToMoviesSection();
                       }}
                     />
                   </PaginationItem>
@@ -861,11 +874,6 @@ export default function MoviesView({
               </Pagination>
             </div>
           </div>
-          {isPageLoading && !hasClientFilters ? (
-            <p className={styles.paginationInfo} style={{ marginTop: "10px" }}>
-              Loading page {currentPage}...
-            </p>
-          ) : null}
         </section>
       </div>
       {activeFilterTags.length ? (

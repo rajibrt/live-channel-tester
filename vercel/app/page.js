@@ -19,6 +19,12 @@ export async function generateMetadata() {
 export default async function HomePage({ searchParams }) {
   const params = await searchParams;
   const initialHomeMode = String(params?.mode || "").trim().toLowerCase() === "movies" ? "movies" : "";
+  const initialMovieMode = String(params?.movie_mode || "").trim().toLowerCase();
+  const initialMovieCategory = String(params?.movie_category || "").trim().toLowerCase();
+  const initialMovieGenre = String(params?.movie_genre || "").trim().toLowerCase();
+  const initialMovieLanguage = String(params?.movie_language || "").trim().toLowerCase();
+  const initialMovieYear = String(params?.movie_year || "").trim();
+  const initialMovieFilterView = String(params?.movie_filter_view || "").trim().toLowerCase() === "genres" ? "genres" : "categories";
   const initialMoviePage = Math.max(1, Number.parseInt(String(params?.movie_page || "1"), 10) || 1);
   const current = await requireClient();
   const approvalStatus = String(current?.client?.approval_status || "approved").toLowerCase();
@@ -72,6 +78,12 @@ export default async function HomePage({ searchParams }) {
       initialContinueWatching={boot.continueWatching}
       moviesViewVariant="browse"
       initialHomeMode={initialHomeMode}
+      initialMovieMode={initialMovieMode}
+      initialMovieCategory={initialMovieCategory}
+      initialMovieGenre={initialMovieGenre}
+      initialMovieLanguage={initialMovieLanguage}
+      initialMovieYear={initialMovieYear}
+      initialMovieFilterView={initialMovieFilterView}
       initialMoviePage={initialMoviePage}
       initialClientState={boot.initialClientState}
       currentClient={{

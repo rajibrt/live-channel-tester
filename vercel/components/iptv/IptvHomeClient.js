@@ -72,6 +72,12 @@ export default function IptvHomeClient({
   initialContinueWatching = [],
   moviesViewVariant = "browse",
   initialHomeMode = "",
+  initialMovieMode = "all",
+  initialMovieCategory = "",
+  initialMovieGenre = "",
+  initialMovieLanguage = "",
+  initialMovieYear = "",
+  initialMovieFilterView = "categories",
   initialMoviePage = 1,
   initialSelectedMovieSlug = "",
   initialClientState = {},
@@ -117,6 +123,8 @@ export default function IptvHomeClient({
   });
   const [mode, setMode] = useState("all");
   const [movieMode, setMovieMode] = useState(() => {
+    const seededMode = String(initialMovieMode || "").trim().toLowerCase();
+    if (seededMode === "favorites" || seededMode === "recent" || seededMode === "watched") return seededMode;
     if (typeof window === "undefined") return "all";
     try {
       const raw = String(window.localStorage.getItem(LAST_MOVIE_FILTER_KEY) || "");
@@ -128,6 +136,8 @@ export default function IptvHomeClient({
     }
   });
   const [selectedMovieCategory, setSelectedMovieCategory] = useState(() => {
+    const seededCategory = String(initialMovieCategory || "").trim().toLowerCase();
+    if (seededCategory) return seededCategory;
     if (typeof window === "undefined") return "";
     try {
       const raw = String(window.localStorage.getItem(LAST_MOVIE_FILTER_KEY) || "");
@@ -138,6 +148,8 @@ export default function IptvHomeClient({
     }
   });
   const [selectedMovieGenre, setSelectedMovieGenre] = useState(() => {
+    const seededGenre = String(initialMovieGenre || "").trim().toLowerCase();
+    if (seededGenre) return seededGenre;
     if (typeof window === "undefined") return "";
     try {
       const raw = String(window.localStorage.getItem(LAST_MOVIE_FILTER_KEY) || "");
@@ -148,6 +160,8 @@ export default function IptvHomeClient({
     }
   });
   const [selectedMovieLanguage, setSelectedMovieLanguage] = useState(() => {
+    const seededLanguage = String(initialMovieLanguage || "").trim().toLowerCase();
+    if (seededLanguage) return seededLanguage;
     if (typeof window === "undefined") return "";
     try {
       const raw = String(window.localStorage.getItem(LAST_MOVIE_FILTER_KEY) || "");
@@ -158,6 +172,8 @@ export default function IptvHomeClient({
     }
   });
   const [selectedMovieYear, setSelectedMovieYear] = useState(() => {
+    const seededYear = String(initialMovieYear || "").trim();
+    if (seededYear) return seededYear;
     if (typeof window === "undefined") return "";
     try {
       const raw = String(window.localStorage.getItem(LAST_MOVIE_FILTER_KEY) || "");
@@ -168,6 +184,9 @@ export default function IptvHomeClient({
     }
   });
   const [movieFilterView, setMovieFilterView] = useState(() => {
+    const seededFilterView = String(initialMovieFilterView || "").trim().toLowerCase();
+    if (seededFilterView === "genres") return "genres";
+    if (seededFilterView === "categories") return "categories";
     if (typeof window === "undefined") return "categories";
     try {
       const raw = String(window.localStorage.getItem(LAST_MOVIE_FILTER_KEY) || "");

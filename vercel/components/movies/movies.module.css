@@ -96,6 +96,14 @@
   );
 }
 
+.sectionTopMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .sectionTitle {
   margin: 0;
   font-size: 13px;
@@ -205,6 +213,20 @@
   border: 1px solid color-mix(in oklab, var(--primary) 44%, var(--border));
   color: color-mix(in oklab, var(--primary) 94%, var(--foreground));
   background: color-mix(in oklab, var(--primary) 12%, transparent);
+}
+
+.loadingBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--ring) 42%, var(--border));
+  background: color-mix(in oklab, var(--ring) 14%, transparent);
+  color: color-mix(in oklab, var(--foreground) 96%, transparent);
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .watchPlayerCol,
@@ -436,6 +458,64 @@
   min-width: 0;
   overflow-x: hidden;
   overflow: auto;
+}
+
+.moviesGridWrap {
+  position: relative;
+  min-width: 0;
+}
+
+.gridLoadingOverlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: color-mix(in oklab, var(--background) 18%, transparent);
+  backdrop-filter: blur(2px);
+  z-index: 70;
+  pointer-events: none;
+}
+
+.gridLoadingCard {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 999px;
+  padding: 10px 14px;
+  border: 1px solid color-mix(in oklab, var(--ring) 40%, var(--border));
+  background: color-mix(in oklab, var(--card) 92%, transparent);
+  color: color-mix(in oklab, var(--foreground) 96%, transparent);
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: var(--shadow-lg);
+}
+
+.gridLoadingCardFloating {
+  min-width: min(320px, calc(100vw - 32px));
+  justify-content: center;
+  border-radius: 999px;
+  padding: 16px 24px;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in oklab, var(--card) 94%, transparent) 0%,
+      color-mix(in oklab, var(--background) 90%, transparent) 100%
+    );
+  box-shadow:
+    0 18px 48px color-mix(in oklab, black 35%, transparent),
+    inset 0 0 0 1px color-mix(in oklab, white 10%, transparent);
+}
+
+.loadingSpinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  border: 2px solid color-mix(in oklab, var(--foreground) 18%, transparent);
+  border-top-color: var(--primary);
+  animation: movie-spin 0.8s linear infinite;
+  flex: 0 0 auto;
 }
 
 .gridTitle {
@@ -707,6 +787,12 @@
 .paginationInfo {
   font-size: 12px;
   color: color-mix(in oklab, var(--muted-foreground) 88%, var(--foreground));
+}
+
+@keyframes movie-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .paginationActions {
