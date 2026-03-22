@@ -60,6 +60,10 @@ function buildMovieRequestKey(query) {
   return JSON.stringify(normalized);
 }
 
+function buildMoviePageCacheKey(query) {
+  return buildMovieRequestKey(query);
+}
+
 export default function IptvHomeClient({
   initialChannels = [],
   initialCategories = [],
@@ -246,6 +250,8 @@ export default function IptvHomeClient({
   const [hasRestoredChannel, setHasRestoredChannel] = useState(false);
   const movieCatalogRequestRef = useRef(false);
   const lastLoadedMovieQueryRef = useRef("");
+  const moviePageCacheRef = useRef(new Map());
+  const moviePageRequestRef = useRef(new Map());
   const watchSessionRef = useRef({ channelId: "", channelName: "", startedAt: 0 });
   const deviceMeta = useMemo(() => {
     if (typeof window === "undefined") return {};
@@ -282,6 +288,7 @@ export default function IptvHomeClient({
   }, []);
 
   useEffect(() => {
+    const seededPage = Math.max(1, Number(initialMoviePage || readMoviePageFromUrl() || 1));
     const nextMovies = Array.isArray(initialMovies) ? initialMovies : [];
     const nextCategories = Array.isArray(initialMovieCategories) ? initialMovieCategories : [];
     const nextGenres = Array.isArray(initialMovieGenres) ? initialMovieGenres : [];
@@ -297,18 +304,36 @@ export default function IptvHomeClient({
       years: nextYears,
       stats: nextStats,
       continueWatching: nextContinueWatching,
-      page: Math.max(1, Number(initialMoviePage || readMoviePageFromUrl() || 1)),
+      page: seededPage,
       pageSize: DEFAULT_MOVIES_PAGE_SIZE,
       total: nextMovies.length,
       totalPages: 1,
     });
+    if (nextMovies.length) {
+      const cacheKey = buildMoviePageCacheKey({
+        page: seededPage,
+        pageSize: DEFAULT_MOVIES_PAGE_SIZE,
+        mode: initialMovieMode,
+        category: initialMovieCategory,
+        genre: initialMovieGenre,
+        language: initialMovieLanguage,
+        year: initialMovieYear,
+      });
+      moviePageCacheRef.current.set(cacheKey, {
+        movies: nextMovies,
+        page: seededPage,
+        pageSize: DEFAULT_MOVIES_PAGE_SIZE,
+        total: nextMovies.length,
+        totalPages: 1,
+      });
+    }
     setMovieSnapshot(nextMovies);
     if (nextMovies.length || nextCategories.length || nextGenres.length || nextLanguages.length || nextYears.length || nextContinueWatching.length) {
       movieCatalogRequestRef.current = false;
       setMovieCatalogStatus("ready");
       setMoviePageLoading(false);
     }
-  }, [initialMovieCategories, initialMovieGenres, initialMovieLanguages, initialMoviePage, initialMovieStats, initialMovieYears, initialMovies, initialContinueWatching]);
+  }, [initialMovieCategories, initialMovieGenre, initialMovieGenres, initialMovieLanguage, initialMovieLanguages, initialMovieMode, initialMovieCategory, initialMoviePage, initialMovieStats, initialMovieYear, initialMovieYears, initialMovies, initialContinueWatching]);
 
   const currentMovieRequestKey = useMemo(
     () =>
@@ -368,9 +393,29 @@ export default function IptvHomeClient({
         setMovieCatalogStatus("ready");
         setMoviePageLoading(false);
         setMovieListPage(Number(payload?.page || 1));
+        const loadedPage = Number(payload?.page || 1);
+        const loadedPageSize = Number(payload?.pageSize || DEFAULT_MOVIES_PAGE_SIZE);
+        moviePageCacheRef.current.set(
+          buildMoviePageCacheKey({
+            page: loadedPage,
+            pageSize: loadedPageSize,
+            mode: movieMode,
+            category: selectedMovieCategory,
+            genre: selectedMovieGenre,
+            language: selectedMovieLanguage,
+            year: selectedMovieYear,
+          }),
+          {
+            movies: nextMovies,
+            page: loadedPage,
+            pageSize: loadedPageSize,
+            total: Number(payload?.total || nextMovies.length || 0),
+            totalPages: Number(payload?.totalPages || 1),
+          }
+        );
         lastLoadedMovieQueryRef.current = buildMovieRequestKey({
-          page: Number(payload?.page || 1),
-          pageSize: Number(payload?.pageSize || DEFAULT_MOVIES_PAGE_SIZE),
+          page: loadedPage,
+          pageSize: loadedPageSize,
           mode: movieMode,
           category: selectedMovieCategory,
           genre: selectedMovieGenre,
@@ -385,36 +430,105 @@ export default function IptvHomeClient({
       });
   }, [movieCatalogStatus, movieListPage, movieMode, selectedMovieCategory, selectedMovieGenre, selectedMovieLanguage, selectedMovieYear]);
 
-  const loadMoviePage = useCallback(async (page, pageSize = DEFAULT_MOVIES_PAGE_SIZE) => {
+  const loadMoviePage = useCallback(async (page, pageSize = DEFAULT_MOVIES_PAGE_SIZE, options = {}) => {
     const targetPage = Math.max(1, Number(page || 1));
-    setMoviePageLoading(true);
-    try {
-      const params = new URLSearchParams({
-        page: String(targetPage),
-        pageSize: String(pageSize),
-        mode: String(movieMode || "all"),
-        category: String(selectedMovieCategory || ""),
-        genre: String(selectedMovieGenre || ""),
-        language: String(selectedMovieLanguage || ""),
-        year: String(selectedMovieYear || ""),
-      });
-      const response = await fetch(`/api/client/movies?${params.toString()}`, {
-        method: "GET",
-        credentials: "same-origin",
-      });
-      if (!response.ok) throw new Error(`Movie page failed with ${response.status}`);
-      const payload = await response.json().catch(() => ({}));
-      const nextMovies = Array.isArray(payload?.movies) ? payload.movies : [];
+    const normalizedQuery = {
+      page: targetPage,
+      pageSize,
+      mode: movieMode,
+      category: selectedMovieCategory,
+      genre: selectedMovieGenre,
+      language: selectedMovieLanguage,
+      year: selectedMovieYear,
+    };
+    const cacheKey = buildMoviePageCacheKey(normalizedQuery);
+    const cached = moviePageCacheRef.current.get(cacheKey);
+    if (cached && options?.preferCache !== false) {
       setMovieCatalog((prev) => ({
         ...prev,
-        movies: nextMovies,
-        page: Number(payload?.page || targetPage),
-        pageSize: Number(payload?.pageSize || pageSize),
-        total: Number(payload?.total || 0),
-        totalPages: Number(payload?.totalPages || 1),
+        movies: Array.isArray(cached.movies) ? cached.movies : [],
+        page: Number(cached.page || targetPage),
+        pageSize: Number(cached.pageSize || pageSize),
+        total: Number(cached.total || 0),
+        totalPages: Number(cached.totalPages || 1),
       }));
-      setMovieSnapshot(nextMovies);
+      setMovieSnapshot(Array.isArray(cached.movies) ? cached.movies : []);
       setMoviePageLoading(false);
+      lastLoadedMovieQueryRef.current = buildMovieRequestKey(normalizedQuery);
+      return cached;
+    }
+
+    if (!options?.background) setMoviePageLoading(true);
+
+    const existingRequest = moviePageRequestRef.current.get(cacheKey);
+    if (existingRequest) {
+      const payload = await existingRequest.catch(() => null);
+      if (payload && !options?.background) {
+        const nextMovies = Array.isArray(payload?.movies) ? payload.movies : [];
+        setMovieCatalog((prev) => ({
+          ...prev,
+          movies: nextMovies,
+          page: Number(payload?.page || targetPage),
+          pageSize: Number(payload?.pageSize || pageSize),
+          total: Number(payload?.total || 0),
+          totalPages: Number(payload?.totalPages || 1),
+        }));
+        setMovieSnapshot(nextMovies);
+        setMoviePageLoading(false);
+        lastLoadedMovieQueryRef.current = buildMovieRequestKey(normalizedQuery);
+      }
+      return payload;
+    }
+
+    const requestPromise = (async () => {
+      try {
+        const params = new URLSearchParams({
+          page: String(targetPage),
+          pageSize: String(pageSize),
+          mode: String(movieMode || "all"),
+          category: String(selectedMovieCategory || ""),
+          genre: String(selectedMovieGenre || ""),
+          language: String(selectedMovieLanguage || ""),
+          year: String(selectedMovieYear || ""),
+        });
+        const response = await fetch(`/api/client/movies?${params.toString()}`, {
+          method: "GET",
+          credentials: "same-origin",
+        });
+        if (!response.ok) throw new Error(`Movie page failed with ${response.status}`);
+        const payload = await response.json().catch(() => ({}));
+        const nextMovies = Array.isArray(payload?.movies) ? payload.movies : [];
+        const normalizedPayload = {
+          movies: nextMovies,
+          page: Number(payload?.page || targetPage),
+          pageSize: Number(payload?.pageSize || pageSize),
+          total: Number(payload?.total || 0),
+          totalPages: Number(payload?.totalPages || 1),
+        };
+        moviePageCacheRef.current.set(cacheKey, normalizedPayload);
+        return normalizedPayload;
+      } finally {
+        moviePageRequestRef.current.delete(cacheKey);
+      }
+    })();
+
+    moviePageRequestRef.current.set(cacheKey, requestPromise);
+
+    try {
+      const payload = await requestPromise;
+      if (!options?.background) {
+        const nextMovies = Array.isArray(payload?.movies) ? payload.movies : [];
+        setMovieCatalog((prev) => ({
+          ...prev,
+          movies: nextMovies,
+          page: Number(payload?.page || targetPage),
+          pageSize: Number(payload?.pageSize || pageSize),
+          total: Number(payload?.total || 0),
+          totalPages: Number(payload?.totalPages || 1),
+        }));
+        setMovieSnapshot(nextMovies);
+        setMoviePageLoading(false);
+      }
       lastLoadedMovieQueryRef.current = buildMovieRequestKey({
         page: Number(payload?.page || targetPage),
         pageSize: Number(payload?.pageSize || pageSize),
@@ -424,8 +538,10 @@ export default function IptvHomeClient({
         language: selectedMovieLanguage,
         year: selectedMovieYear,
       });
+      return payload;
     } catch {
-      setMoviePageLoading(false);
+      if (!options?.background) setMoviePageLoading(false);
+      return null;
     }
   }, [movieMode, selectedMovieCategory, selectedMovieGenre, selectedMovieLanguage, selectedMovieYear]);
 
@@ -442,6 +558,15 @@ export default function IptvHomeClient({
     if (lastLoadedMovieQueryRef.current === currentMovieRequestKey) return;
     loadMoviePage(movieListPage, movieCatalog.pageSize || DEFAULT_MOVIES_PAGE_SIZE);
   }, [currentMovieRequestKey, homeMode, loadMoviePage, movieCatalog.pageSize, movieCatalogStatus, movieListPage, moviePageLoading, movieViewMode]);
+
+  useEffect(() => {
+    if (homeMode !== "movies" || movieViewMode !== "browse") return;
+    if (movieCatalogStatus !== "ready" || moviePageLoading) return;
+    const nextPage = Math.max(1, Number(movieCatalog.page || 1)) + 1;
+    const totalPages = Math.max(1, Number(movieCatalog.totalPages || 1));
+    if (nextPage > totalPages) return;
+    loadMoviePage(nextPage, movieCatalog.pageSize || DEFAULT_MOVIES_PAGE_SIZE, { background: true });
+  }, [homeMode, loadMoviePage, movieCatalog.page, movieCatalog.pageSize, movieCatalog.totalPages, movieCatalogStatus, moviePageLoading, movieViewMode]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1408,8 +1533,9 @@ export default function IptvHomeClient({
                 onBackToMovieList={() => {
                   setHomeMode("movies");
                   setMovieViewMode("browse");
-                  setMovieListPage(1);
-                  loadMoviePage(1, movieCatalog.pageSize || DEFAULT_MOVIES_PAGE_SIZE);
+                  const returnPage = Math.max(1, Number(movieListPage || 1));
+                  setMovieListPage(returnPage);
+                  loadMoviePage(returnPage, movieCatalog.pageSize || DEFAULT_MOVIES_PAGE_SIZE);
                   pushMovieListUrl(
                     movieMode,
                     selectedMovieCategory,
@@ -1417,7 +1543,7 @@ export default function IptvHomeClient({
                     selectedMovieLanguage,
                     selectedMovieYear,
                     movieFilterView,
-                    1
+                    returnPage
                   );
                 }}
                 onMoviesSnapshotChange={setMovieSnapshot}
