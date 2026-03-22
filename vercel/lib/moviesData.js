@@ -137,10 +137,12 @@ function toMovieShape(movie, categoryRows, sourceRows, progressRow, isFavorite) 
     videoQuality: text(movie?.video_quality) || inferVideoQualityLabelFromUrl(firstSource?.source_url || ""),
     categories: (Array.isArray(categoryRows) ? categoryRows : []).map((row) => ({
       id: String(row?.id || ""),
-      slug: text(row?.slug),
+      slug: normalizeCategorySlug(row?.slug || row?.name || ""),
       name: text(row?.name) || "Category",
     })),
-    categorySlugs: (Array.isArray(categoryRows) ? categoryRows : []).map((row) => text(row?.slug)).filter(Boolean),
+    categorySlugs: (Array.isArray(categoryRows) ? categoryRows : [])
+      .map((row) => normalizeCategorySlug(row?.slug || row?.name || ""))
+      .filter(Boolean),
     source: firstSource
       ? {
           id: String(firstSource.id),
@@ -173,6 +175,71 @@ function clampPage(value) {
   return Math.max(1, page);
 }
 
+function normalizeMovieFilterOptions(options = {}) {
+  const mode = text(options?.mode).toLowerCase();
+  const category = text(options?.category).toLowerCase();
+  const genre = text(options?.genre).toLowerCase();
+  const language = text(options?.language).toLowerCase();
+  const year = text(options?.year);
+  return {
+    mode: mode === "favorites" || mode === "recent" || mode === "watched" ? mode : "all",
+    category,
+    genre,
+    language,
+    year,
+  };
+}
+
+function hasMoviePageFilters(options = {}) {
+  const filters = normalizeMovieFilterOptions(options);
+  return Boolean(
+    filters.category || filters.genre || filters.language || filters.year || filters.mode !== "all"
+  );
+}
+
+function filterMovieCatalogRows(movies, options = {}) {
+  const filters = normalizeMovieFilterOptions(options);
+  const list = Array.isArray(movies) ? movies : [];
+
+  let scoped = list;
+  if (filters.mode === "favorites") {
+    scoped = scoped.filter((movie) => Boolean(movie?.isFavorite));
+  } else if (filters.mode === "recent") {
+    scoped = scoped
+      .filter((movie) => Number(movie?.progress?.positionSeconds || 0) > 0)
+      .sort((a, b) => new Date(b?.progress?.updatedAt || 0).getTime() - new Date(a?.progress?.updatedAt || 0).getTime());
+  } else if (filters.mode === "watched") {
+    scoped = scoped.filter((movie) => String(movie?.watchState || "") === "watched");
+  }
+
+  return scoped.filter((movie) => {
+    if (filters.category) {
+      const categorySlugs = Array.isArray(movie?.categorySlugs) ? movie.categorySlugs : [];
+      if (!categorySlugs.includes(filters.category)) return false;
+    }
+
+    if (filters.genre) {
+      const genreMatch = (Array.isArray(movie?.imdbGenres) ? movie.imdbGenres : []).some(
+        (entry) => text(entry).toLowerCase() === filters.genre
+      );
+      if (!genreMatch) return false;
+    }
+
+    if (filters.language) {
+      const languageMatch = (Array.isArray(movie?.imdbLanguages) ? movie.imdbLanguages : []).some(
+        (entry) => text(entry).toLowerCase() === filters.language
+      );
+      if (!languageMatch) return false;
+    }
+
+    if (filters.year && String(movie?.releaseYear || "") !== filters.year) {
+      return false;
+    }
+
+    return true;
+  });
+}
+
 async function loadMovieCategories(admin) {
   const { data: categories } = await admin
     .from("movie_categories")
@@ -200,6 +267,27 @@ async function loadPublishedMovieIds(admin) {
     from += chunk.length;
   }
   return movieIds;
+}
+
+async function loadPublishedMovieRows(admin) {
+  const rows = [];
+  let from = 0;
+  while (true) {
+    const to = from + DB_SCAN_PAGE_SIZE - 1;
+    const { data, error } = await admin
+      .from("movies")
+      .select(MOVIE_SELECT_COLUMNS)
+      .eq("is_published", true)
+      .order("updated_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(from, to);
+    if (error) throw new Error(error.message || "Failed to load movies");
+    const chunk = Array.isArray(data) ? data : [];
+    rows.push(...chunk);
+    if (!chunk.length) break;
+    from += chunk.length;
+  }
+  return rows;
 }
 
 async function loadMovieCategoryMapRows(admin) {
@@ -290,7 +378,7 @@ async function hydrateMoviesForUser(admin, userId, movieRows, options = {}) {
       Number(row?.id),
       {
         id: String(row?.id || ""),
-        slug: text(row?.slug) || normalizeCategorySlug(row?.name),
+        slug: normalizeCategorySlug(row?.slug || row?.name || ""),
         name: text(row?.name) || "Category",
       },
     ])
@@ -362,7 +450,7 @@ async function loadCategoryListWithCounts(admin) {
   }
 
   return categories.map((row) => {
-    const slug = text(row?.slug) || normalizeCategorySlug(row?.name);
+    const slug = normalizeCategorySlug(row?.slug || row?.name || "");
     return {
       id: String(row?.id || ""),
       slug,
@@ -521,9 +609,107 @@ export async function getMovieBySlugForUser(userId, slug) {
 }
 
 export async function getMoviesPageForUser(userId, options = {}) {
+  const filters = normalizeMovieFilterOptions(options);
   const admin = getSupabaseAdmin();
   const page = clampPage(options?.page);
   const pageSize = clampPageSize(options?.pageSize);
+
+  if (hasMoviePageFilters(filters)) {
+    const [movieRows, categories, mapRows, progressRes, favoriteRes] = await Promise.all([
+      loadPublishedMovieRows(admin),
+      loadMovieCategories(admin),
+      loadMovieCategoryMapRows(admin),
+      userId
+        ? admin
+            .from("movie_watch_progress")
+            .select("movie_id,position_seconds,duration_seconds,progress_percent,is_completed,updated_at")
+            .eq("user_id", userId)
+        : Promise.resolve({ data: [] }),
+      userId ? admin.from("movie_favorites").select("movie_id").eq("user_id", userId) : Promise.resolve({ data: [] }),
+    ]);
+
+    const categoryById = new Map(
+      categories.map((row) => [Number(row?.id), normalizeCategorySlug(row?.slug || row?.name || "")])
+    );
+    const categorySlugsByMovie = new Map();
+    for (const row of mapRows) {
+      const movieId = Number(row?.movie_id);
+      const categorySlug = categoryById.get(Number(row?.category_id));
+      if (!Number.isInteger(movieId) || !categorySlug) continue;
+      const list = categorySlugsByMovie.get(movieId) || [];
+      list.push(categorySlug);
+      categorySlugsByMovie.set(movieId, list);
+    }
+
+    const progressByMovie = new Map();
+    for (const row of Array.isArray(progressRes?.data) ? progressRes.data : []) {
+      const movieId = Number(row?.movie_id);
+      if (!Number.isInteger(movieId)) continue;
+      progressByMovie.set(movieId, row);
+    }
+
+    const favoriteSet = new Set(
+      (Array.isArray(favoriteRes?.data) ? favoriteRes.data : [])
+        .map((row) => Number(row?.movie_id))
+        .filter((movieId) => Number.isInteger(movieId))
+    );
+
+    const filteredRows = movieRows
+      .map((row) => {
+        const movieId = Number(row?.id);
+        const progress = progressByMovie.get(movieId) || null;
+        const progressPercent = Number(progress?.progress_percent || 0);
+        const isCompleted = Boolean(progress?.is_completed) || progressPercent >= 95;
+        return {
+          row,
+          movieId,
+          categorySlugs: categorySlugsByMovie.get(movieId) || [],
+          imdbGenres: toStringList(row?.imdb_genres),
+          imdbLanguages: toStringList(row?.imdb_languages),
+          releaseYear: Number.isFinite(Number(row?.release_year)) ? Number(row.release_year) : null,
+          isFavorite: favoriteSet.has(movieId),
+          positionSeconds: Number(progress?.position_seconds || 0),
+          progressPercent,
+          watchState: deriveWatchState({
+            positionSeconds: Number(progress?.position_seconds || 0),
+            progressPercent: isCompleted ? 100 : progressPercent,
+          }),
+          progressUpdatedAt: text(progress?.updated_at),
+        };
+      })
+      .filter((movie) => {
+        if (filters.mode === "favorites" && !movie.isFavorite) return false;
+        if (filters.mode === "recent" && movie.positionSeconds <= 0) return false;
+        if (filters.mode === "watched" && movie.watchState !== "watched") return false;
+        if (filters.category && !movie.categorySlugs.includes(filters.category)) return false;
+        if (filters.genre && !movie.imdbGenres.some((entry) => text(entry).toLowerCase() === filters.genre)) return false;
+        if (filters.language && !movie.imdbLanguages.some((entry) => text(entry).toLowerCase() === filters.language)) return false;
+        if (filters.year && String(movie.releaseYear || "") !== filters.year) return false;
+        return true;
+      });
+
+    const orderedRows =
+      filters.mode === "recent"
+        ? filteredRows.toSorted(
+            (a, b) => new Date(b.progressUpdatedAt || 0).getTime() - new Date(a.progressUpdatedAt || 0).getTime()
+          )
+        : filteredRows;
+
+    const total = orderedRows.length;
+    const from = (page - 1) * pageSize;
+    const pagedRows = orderedRows.slice(from, from + pageSize);
+    const pagedMovieRows = pagedRows.map((item) => item.row);
+    const pagedOrderIds = pagedRows.map((item) => item.movieId);
+    const pagedMovies = await hydrateMoviesForUser(admin, userId, pagedMovieRows, { orderIds: pagedOrderIds });
+    return {
+      movies: pagedMovies,
+      page,
+      pageSize,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    };
+  }
+
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
@@ -555,7 +741,7 @@ export async function getMovieCatalogBootstrapForUser(userId, options = {}) {
   const [categories, continueWatching, pageData, sidebar] = await Promise.all([
     loadCategoryListWithCounts(admin),
     loadContinueWatchingForUser(admin, userId, 20),
-    includePage ? getMoviesPageForUser(userId, { page, pageSize }) : Promise.resolve(null),
+    includePage ? getMoviesPageForUser(userId, { ...options, page, pageSize }) : Promise.resolve(null),
     loadMovieSidebarSummaryForUser(admin, userId),
   ]);
 

@@ -15,7 +15,15 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const page = toPositiveInt(searchParams.get("page"), 1);
   const pageSize = toPositiveInt(searchParams.get("pageSize"), 24);
-  const data = await getMoviesPageForUser(auth.current.user.id, { page, pageSize });
+  const data = await getMoviesPageForUser(auth.current.user.id, {
+    page,
+    pageSize,
+    mode: String(searchParams.get("mode") || ""),
+    category: String(searchParams.get("category") || ""),
+    genre: String(searchParams.get("genre") || ""),
+    language: String(searchParams.get("language") || ""),
+    year: String(searchParams.get("year") || ""),
+  });
 
   return NextResponse.json({
     movies: data.movies,

@@ -43,6 +43,23 @@ function readMoviePageFromUrl() {
   }
 }
 
+function buildMovieRequestQuery({ page = 1, pageSize = DEFAULT_MOVIES_PAGE_SIZE, mode = "all", category = "", genre = "", language = "", year = "" } = {}) {
+  return {
+    page: Math.max(1, Number(page || 1)),
+    pageSize: Math.max(1, Number(pageSize || DEFAULT_MOVIES_PAGE_SIZE)),
+    mode: String(mode || "all").trim().toLowerCase(),
+    category: String(category || "").trim().toLowerCase(),
+    genre: String(genre || "").trim().toLowerCase(),
+    language: String(language || "").trim().toLowerCase(),
+    year: String(year || "").trim(),
+  };
+}
+
+function buildMovieRequestKey(query) {
+  const normalized = buildMovieRequestQuery(query);
+  return JSON.stringify(normalized);
+}
+
 export default function IptvHomeClient({
   initialChannels = [],
   initialCategories = [],
@@ -209,6 +226,7 @@ export default function IptvHomeClient({
   const [forceTvMode, setForceTvMode] = useState(false);
   const [hasRestoredChannel, setHasRestoredChannel] = useState(false);
   const movieCatalogRequestRef = useRef(false);
+  const lastLoadedMovieQueryRef = useRef("");
   const watchSessionRef = useRef({ channelId: "", channelName: "", startedAt: 0 });
   const deviceMeta = useMemo(() => {
     if (typeof window === "undefined") return {};
@@ -273,6 +291,20 @@ export default function IptvHomeClient({
     }
   }, [initialMovieCategories, initialMovieGenres, initialMovieLanguages, initialMoviePage, initialMovieStats, initialMovieYears, initialMovies, initialContinueWatching]);
 
+  const currentMovieRequestKey = useMemo(
+    () =>
+      buildMovieRequestKey({
+        page: movieListPage,
+        pageSize: movieCatalog.pageSize || DEFAULT_MOVIES_PAGE_SIZE,
+        mode: movieMode,
+        category: selectedMovieCategory,
+        genre: selectedMovieGenre,
+        language: selectedMovieLanguage,
+        year: selectedMovieYear,
+      }),
+    [movieCatalog.pageSize, movieListPage, movieMode, selectedMovieCategory, selectedMovieGenre, selectedMovieLanguage, selectedMovieYear]
+  );
+
   const ensureMovieCatalogLoaded = useCallback(() => {
     if (movieCatalogRequestRef.current || movieCatalogStatus === "ready") return;
     movieCatalogRequestRef.current = true;
@@ -280,6 +312,11 @@ export default function IptvHomeClient({
     const params = new URLSearchParams({
       page: String(Math.max(1, Number(movieListPage || 1))),
       pageSize: String(DEFAULT_MOVIES_PAGE_SIZE),
+      mode: String(movieMode || "all"),
+      category: String(selectedMovieCategory || ""),
+      genre: String(selectedMovieGenre || ""),
+      language: String(selectedMovieLanguage || ""),
+      year: String(selectedMovieYear || ""),
     });
     fetch(`/api/client/movies/bootstrap?${params.toString()}`, {
       method: "GET",
@@ -312,13 +349,22 @@ export default function IptvHomeClient({
         setMovieCatalogStatus("ready");
         setMoviePageLoading(false);
         setMovieListPage(Number(payload?.page || 1));
+        lastLoadedMovieQueryRef.current = buildMovieRequestKey({
+          page: Number(payload?.page || 1),
+          pageSize: Number(payload?.pageSize || DEFAULT_MOVIES_PAGE_SIZE),
+          mode: movieMode,
+          category: selectedMovieCategory,
+          genre: selectedMovieGenre,
+          language: selectedMovieLanguage,
+          year: selectedMovieYear,
+        });
       })
       .catch(() => {
         movieCatalogRequestRef.current = false;
         setMovieCatalogStatus("error");
         setMoviePageLoading(false);
       });
-  }, [movieCatalogStatus, movieListPage]);
+  }, [movieCatalogStatus, movieListPage, movieMode, selectedMovieCategory, selectedMovieGenre, selectedMovieLanguage, selectedMovieYear]);
 
   const loadMoviePage = useCallback(async (page, pageSize = DEFAULT_MOVIES_PAGE_SIZE) => {
     const targetPage = Math.max(1, Number(page || 1));
@@ -327,6 +373,11 @@ export default function IptvHomeClient({
       const params = new URLSearchParams({
         page: String(targetPage),
         pageSize: String(pageSize),
+        mode: String(movieMode || "all"),
+        category: String(selectedMovieCategory || ""),
+        genre: String(selectedMovieGenre || ""),
+        language: String(selectedMovieLanguage || ""),
+        year: String(selectedMovieYear || ""),
       });
       const response = await fetch(`/api/client/movies?${params.toString()}`, {
         method: "GET",
@@ -345,10 +396,19 @@ export default function IptvHomeClient({
       }));
       setMovieSnapshot(nextMovies);
       setMoviePageLoading(false);
+      lastLoadedMovieQueryRef.current = buildMovieRequestKey({
+        page: Number(payload?.page || targetPage),
+        pageSize: Number(payload?.pageSize || pageSize),
+        mode: movieMode,
+        category: selectedMovieCategory,
+        genre: selectedMovieGenre,
+        language: selectedMovieLanguage,
+        year: selectedMovieYear,
+      });
     } catch {
       setMoviePageLoading(false);
     }
-  }, []);
+  }, [movieMode, selectedMovieCategory, selectedMovieGenre, selectedMovieLanguage, selectedMovieYear]);
 
   useEffect(() => {
     const shouldLoadMovies =
@@ -360,11 +420,9 @@ export default function IptvHomeClient({
   useEffect(() => {
     if (homeMode !== "movies" || movieViewMode !== "browse") return;
     if (movieCatalogStatus !== "ready" || moviePageLoading) return;
-    const targetPage = Math.max(1, Number(movieListPage || 1));
-    const currentPage = Math.max(1, Number(movieCatalog.page || 1));
-    if (targetPage === currentPage) return;
-    loadMoviePage(targetPage, movieCatalog.pageSize || DEFAULT_MOVIES_PAGE_SIZE);
-  }, [homeMode, loadMoviePage, movieCatalog.page, movieCatalog.pageSize, movieCatalogStatus, movieListPage, moviePageLoading, movieViewMode]);
+    if (lastLoadedMovieQueryRef.current === currentMovieRequestKey) return;
+    loadMoviePage(movieListPage, movieCatalog.pageSize || DEFAULT_MOVIES_PAGE_SIZE);
+  }, [currentMovieRequestKey, homeMode, loadMoviePage, movieCatalog.pageSize, movieCatalogStatus, movieListPage, moviePageLoading, movieViewMode]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
