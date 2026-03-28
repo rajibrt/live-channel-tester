@@ -3,6 +3,9 @@ import Script from "next/script";
 import { cookies } from "next/headers";
 import PublicAdSenseScript from "../components/ads/PublicAdSenseScript";
 import { LanguageProvider } from "../components/i18n/LanguageProvider";
+import PublicSiteHeader from "../components/site/PublicSiteHeader";
+import PublicSiteFooter from "../components/site/PublicSiteFooter";
+import { getCurrentClient } from "../lib/clientAuth";
 import { DEFAULT_LOCALE, SUPPORTED_LOCALES } from "../lib/i18n/dictionaries";
 import { getBaseUrl } from "../lib/siteUrl";
 
@@ -34,6 +37,7 @@ export default async function RootLayout({ children }) {
   const cookieStore = await cookies();
   const cookieLocale = String(cookieStore.get("lang")?.value || "").trim().toLowerCase();
   const initialLocale = SUPPORTED_LOCALES.includes(cookieLocale) ? cookieLocale : DEFAULT_LOCALE;
+  const currentClient = await getCurrentClient().catch(() => null);
   const themeInitScript = `
     (function () {
       try {
@@ -89,7 +93,9 @@ export default async function RootLayout({ children }) {
       <body>
         <LanguageProvider initialLocale={initialLocale}>
           <PublicAdSenseScript />
+          {!currentClient ? <PublicSiteHeader /> : null}
           {children}
+          {!currentClient ? <PublicSiteFooter /> : null}
         </LanguageProvider>
         <Script id="statcounter-config" strategy="afterInteractive">
           {`

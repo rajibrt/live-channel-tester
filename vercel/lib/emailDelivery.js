@@ -483,6 +483,112 @@ export async function sendApprovalRequestAdminEmail({ requestUser, settings, for
   return { sent: true, skipped: false, to: recipient, message_id: res.messageId };
 }
 
+export function buildPasswordResetEmail({
+  settings,
+  recipientName = "",
+  resetUrl = "",
+  loginUrl = "",
+  audience = "client",
+}) {
+  const cfg = normalizeEmailSettings(settings || {});
+  const brand = cfg.brand_name || "WEBTVBD";
+  const siteUrl = cfg.site_url || "";
+  const logoUrl = resolveLogoUrl(cfg);
+  const fullName = toCleanString(recipientName || "", 200) || "User";
+  const safeResetUrl = toUrl(resetUrl);
+  const safeLoginUrl = toUrl(loginUrl);
+  const safeSiteUrl = toUrl(siteUrl);
+  const subject =
+    audience === "admin"
+      ? `${brand} admin password reset`
+      : `${brand} client password reset`;
+  const heading =
+    audience === "admin"
+      ? "Reset your admin password"
+      : "Reset your client password";
+  const intro =
+    audience === "admin"
+      ? "A password reset was requested for your admin account."
+      : "A password reset was requested for your client account.";
+  const note =
+    audience === "admin"
+      ? "If you did not request this, you can ignore this email and your current admin password will remain unchanged."
+      : "If you did not request this, you can ignore this email and your current client password will remain unchanged.";
+
+  const html = `<!doctype html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body style="margin:0;padding:0;background:#edf2fb;font-family:Arial,sans-serif;color:#14243d;">
+    <div style="padding:16px;">
+      <div style="max-width:680px;width:100%;margin:0 auto;background:#fff;border:1px solid #d7e0f4;border-radius:16px;padding:20px;">
+        <div style="margin:0 0 14px;padding:14px;border-radius:12px;background:linear-gradient(135deg,#f6f9ff,#ecf2ff);border:1px solid #e5ecff;">
+          ${logoUrl ? `<div style="padding:0 0 10px;"><img src="${escapeHtml(logoUrl)}" alt="${escapeHtml(brand)}" style="height:38px;max-width:220px;object-fit:contain;display:block;" /></div>` : `<div style="padding:0 0 8px;font-size:18px;font-weight:700;color:#11223b;">${escapeHtml(brand)}</div>`}
+          <h2 style="margin:0;font-size:28px;line-height:1.2;color:#0d2a52;">${escapeHtml(heading)}</h2>
+        </div>
+        <p style="margin:0 0 10px;font-size:15px;line-height:1.6;color:#1d3355;">Hello ${escapeHtml(fullName)},</p>
+        <p style="margin:0 0 10px;font-size:15px;line-height:1.6;color:#1d3355;">${escapeHtml(intro)}</p>
+        ${
+          safeResetUrl
+            ? `<p style="margin:16px 0 0;"><a href="${escapeHtml(safeResetUrl)}" style="display:inline-block;padding:12px 18px;background:linear-gradient(135deg,#0f4fcc,#2162df);color:#fff;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px;line-height:1;">Reset Password</a></p>`
+            : ""
+        }
+        ${
+          safeResetUrl
+            ? `<p style="margin:14px 0 0;font-size:13px;line-height:1.7;color:#536b8c;">If the button does not work, copy and open this link:<br /><a href="${escapeHtml(safeResetUrl)}" style="color:#2058cd;word-break:break-word;overflow-wrap:anywhere;">${escapeHtml(safeResetUrl)}</a></p>`
+            : ""
+        }
+        <p style="margin:16px 0 0;font-size:14px;line-height:1.7;color:#42597a;">${escapeHtml(note)}</p>
+        <p style="margin:16px 0 0;font-size:14px;line-height:1.7;color:#42597a;">
+          ${safeLoginUrl ? `Login page: <a href="${escapeHtml(safeLoginUrl)}" style="color:#2058cd;">${escapeHtml(safeLoginUrl)}</a><br />` : ""}
+          ${safeSiteUrl ? `Website: <a href="${escapeHtml(safeSiteUrl)}" style="color:#2058cd;">${escapeHtml(safeSiteUrl)}</a>` : ""}
+        </p>
+      </div>
+    </div>
+  </body>
+</html>`;
+
+  const text = [
+    heading,
+    "",
+    `Hello ${fullName},`,
+    intro,
+    safeResetUrl ? `Reset link: ${safeResetUrl}` : null,
+    note,
+    safeLoginUrl ? `Login page: ${safeLoginUrl}` : null,
+    safeSiteUrl ? `Website: ${safeSiteUrl}` : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  return { subject, html, text };
+}
+
+export async function sendPasswordResetEmail({
+  settings,
+  to,
+  recipientName = "",
+  resetUrl = "",
+  loginUrl = "",
+  audience = "client",
+}) {
+  const cfg = normalizeEmailSettings(settings || {});
+  const recipient = normalizeEmail(to || "");
+  if (!isDeliverableEmail(recipient)) {
+    return { sent: false, skipped: true, reason: "Recipient email is missing or not deliverable." };
+  }
+  const { subject, html, text } = buildPasswordResetEmail({
+    settings: cfg,
+    recipientName,
+    resetUrl,
+    loginUrl,
+    audience,
+  });
+  const res = await sendSmtpEmail({ settings: cfg, to: recipient, subject, html, text });
+  return { sent: true, skipped: false, to: recipient, message_id: res.messageId };
+}
+
 export function buildTestEmail({ settings, recipient }) {
   const cfg = normalizeEmailSettings(settings || {});
   const brand = cfg.brand_name || "WEBTVBD";

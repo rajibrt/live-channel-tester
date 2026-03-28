@@ -1,16 +1,17 @@
 import { NextResponse } from "next/server";
-import { getSupabaseAdmin } from "../../../../lib/supabaseAdmin";
-import { getRequestBaseUrl } from "../../../../lib/siteUrl";
-import { loadEmailSettings, sendPasswordResetEmail } from "../../../../lib/emailDelivery";
+import { getSupabaseAdmin } from "../../../../../lib/supabaseAdmin";
+import { getRequestBaseUrl } from "../../../../../lib/siteUrl";
+import { loadEmailSettings, sendPasswordResetEmail } from "../../../../../lib/emailDelivery";
 
 export async function POST(request) {
   const baseUrl = getRequestBaseUrl(request);
   const toRedirectUrl = (path) => new URL(path, `${baseUrl}/`);
   const form = await request.formData();
   const email = String(form.get("email") || "").trim().toLowerCase();
-  const loginUrl = toRedirectUrl("/login?reset=sent");
+  const loginUrl = toRedirectUrl("/client-login?reset=sent");
+
   if (!email) {
-    return NextResponse.redirect(toRedirectUrl("/login?reset=invalid"), { status: 302 });
+    return NextResponse.redirect(toRedirectUrl("/client-login?reset=invalid"), { status: 302 });
   }
 
   try {
@@ -20,7 +21,7 @@ export async function POST(request) {
       type: "recovery",
       email,
       options: {
-        redirectTo: toRedirectUrl("/admin-reset-password").toString(),
+        redirectTo: toRedirectUrl("/client-reset-password").toString(),
       },
     });
     if (error) throw error;
@@ -31,8 +32,8 @@ export async function POST(request) {
       to: email,
       recipientName: data?.user?.user_metadata?.full_name || data?.user?.email || "",
       resetUrl,
-      loginUrl: toRedirectUrl("/login").toString(),
-      audience: "admin",
+      loginUrl: loginUrl.toString(),
+      audience: "client",
     });
   } catch {
     // Keep response uniform so the endpoint does not reveal whether the email exists.

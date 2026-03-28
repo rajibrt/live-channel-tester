@@ -1,5 +1,6 @@
+import PublicHomePage from "../components/site/PublicHomePage";
 import IptvHomeClient from "../components/iptv/IptvHomeClient";
-import { requireClient } from "../lib/clientAuth";
+import { getCurrentClient } from "../lib/clientAuth";
 import PendingApprovalCard from "../components/client/PendingApprovalCard";
 import { loadClientAccessSettingsCached } from "../lib/clientAccessSettings";
 import { getClientHomeData } from "../lib/clientHomeData";
@@ -26,7 +27,11 @@ export default async function HomePage({ searchParams }) {
   const initialMovieYear = String(params?.movie_year || "").trim();
   const initialMovieFilterView = String(params?.movie_filter_view || "").trim().toLowerCase() === "genres" ? "genres" : "categories";
   const initialMoviePage = Math.max(1, Number.parseInt(String(params?.movie_page || "1"), 10) || 1);
-  const current = await requireClient();
+  const current = await getCurrentClient();
+  if (!current) {
+    return <PublicHomePage />;
+  }
+
   const approvalStatus = String(current?.client?.approval_status || "approved").toLowerCase();
   const isApproved = approvalStatus === "approved";
   if (!isApproved) {

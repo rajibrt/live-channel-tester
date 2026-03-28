@@ -122,6 +122,10 @@
   line-height: 1.55;
 }
 
+.visualPublicLinks {
+  display: none;
+}
+
 .formPane {
   display: flex;
   align-items: center;
@@ -138,6 +142,95 @@
   padding: clamp(22px, 4vw, 38px);
   box-shadow: 0 24px 56px rgba(16, 24, 40, 0.1);
   animation: rise 0.75s ease-out;
+}
+
+.formHeaderRow {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 14px;
+}
+
+.authModeSwitch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 6px;
+  margin-bottom: 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+}
+
+.authModeLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: #475569;
+  font: inherit;
+  text-decoration: none;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    transform 0.22s ease,
+    color 0.22s ease,
+    background-color 0.22s ease,
+    box-shadow 0.22s ease;
+}
+
+.authModeLink:hover {
+  color: #0f172a;
+  transform: translateY(-1px);
+}
+
+.authModeLinkActive {
+  color: #0f172a;
+  background: #ffffff;
+  box-shadow:
+    0 10px 24px rgba(15, 23, 42, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  animation: authTabPulse 0.28s ease-out;
+}
+
+.authPanels {
+  position: relative;
+}
+
+.authTabPanel {
+  display: none;
+}
+
+.authTabPanelActive {
+  display: block;
+  animation: authPanelIn 0.28s ease-out;
+}
+
+.localeToggleBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid #d8deeb;
+  border-radius: 999px;
+  background: #fff;
+  color: #0f172a;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    transform 0.16s ease,
+    box-shadow 0.16s ease,
+    border-color 0.16s ease;
+}
+
+.localeToggleBtn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+  border-color: #c5d0e5;
 }
 
 .formTag {
@@ -379,6 +472,114 @@
   font-size: 14px;
 }
 
+.registerBlock {
+  display: grid;
+  gap: 12px;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid #e5eaf3;
+}
+
+.registerTag {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.registerTitle {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.15;
+  color: #0f172a;
+}
+
+.registerText {
+  margin: 0;
+  color: #64748b;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.inlineSwitchNote {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 18px;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.inlineSwitchLink {
+  color: #0f172a;
+  font-weight: 700;
+  text-decoration: none;
+  transition:
+    color 0.18s ease,
+    transform 0.18s ease;
+}
+
+.inlineSwitchLink:hover {
+  color: #1d4ed8;
+  transform: translateX(1px);
+}
+
+.inlineSwitchButton {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #0f172a;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    color 0.18s ease,
+    transform 0.18s ease;
+}
+
+.inlineSwitchButton:hover {
+  color: #1d4ed8;
+  transform: translateX(1px);
+}
+
+.publicLinks {
+  display: grid;
+  gap: 12px;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid #e5eaf3;
+}
+
+.publicLinksLabel {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.publicLinksNav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+}
+
+.publicLinksNav a {
+  color: #334155;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.publicLinksNav a:hover {
+  color: #0f172a;
+  text-decoration: underline;
+}
+
 .errorNote {
   margin: 0 0 8px;
   padding: 10px 12px;
@@ -482,6 +683,120 @@
   background: #f8fafc;
 }
 
+.modalText {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+@media (min-width: 1021px) {
+  .visualPublicLinks {
+    display: grid;
+    gap: 10px;
+    margin-top: 22px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+  }
+
+  .visualPublicLinks .publicLinksLabel {
+    color: rgba(226, 232, 240, 0.75);
+  }
+
+  .visualPublicLinks .publicLinksNav a {
+    color: rgba(241, 245, 249, 0.92);
+  }
+
+  .visualPublicLinks .publicLinksNav a:hover {
+    color: #ffffff;
+  }
+
+  .formPane {
+    padding: 24px clamp(16px, 3vw, 42px);
+  }
+
+  .formShell {
+    width: min(420px, 100%);
+    max-height: calc(100dvh - 48px);
+    padding: 20px 22px;
+    border-radius: 22px;
+    overflow: auto;
+  }
+
+  .formHeaderRow {
+    margin-bottom: 10px;
+  }
+
+  .localeToggleBtn {
+    min-height: 38px;
+    padding: 0 13px;
+  }
+
+  .authModeSwitch {
+    margin-bottom: 12px;
+    padding: 5px;
+  }
+
+  .authModeLink {
+    min-height: 40px;
+  }
+
+  .formTag {
+    margin-bottom: 5px;
+  }
+
+  .formTitle {
+    font-size: clamp(24px, 1.9vw, 32px);
+  }
+
+  .formText {
+    margin: 8px 0 14px;
+    font-size: 14px;
+    line-height: 1.45;
+  }
+
+  .form {
+    gap: 12px;
+  }
+
+  .field {
+    gap: 6px;
+    font-size: 13px;
+  }
+
+  .field input {
+    padding: 10px 12px;
+    border-radius: 11px;
+  }
+
+  .passwordInputWrap input {
+    padding-right: 42px;
+  }
+
+  .submit {
+    padding: 11px 12px;
+  }
+
+  .divider {
+    margin: 16px 0 12px;
+    font-size: 13px;
+  }
+
+  .socialBtn {
+    padding: 10px 12px;
+  }
+
+  .note,
+  .inlineSwitchNote {
+    margin-top: 14px;
+    font-size: 13px;
+  }
+
+  .publicLinks {
+    display: none;
+  }
+}
+
 @media (max-width: 1020px) {
   .page {
     grid-template-columns: 1fr;
@@ -516,6 +831,10 @@
 
   .formPane {
     padding: 18px 16px 28px;
+  }
+
+  .publicLinksNav {
+    gap: 8px 12px;
   }
 }
 
@@ -604,6 +923,11 @@
     gap: 10px;
   }
 
+  .inlineSwitchNote {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
   .field {
     gap: 6px;
     font-size: 12px;
@@ -679,6 +1003,28 @@
   to {
     transform: translateY(0);
     opacity: 1;
+  }
+}
+
+@keyframes authPanelIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes authTabPulse {
+  from {
+    transform: scale(0.985);
+  }
+
+  to {
+    transform: scale(1);
   }
 }
 

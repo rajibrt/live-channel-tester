@@ -7,6 +7,7 @@ import { loadClientAccessSettingsCached } from "../../../lib/clientAccessSetting
 import { getClientHomeData } from "../../../lib/clientHomeData";
 import { buildChannelParam, parseChannelParam } from "../../../lib/channelSlug";
 import { buildChannelSeoMeta, getChannelById } from "../../../lib/channelSeo";
+import { getLocaleFromRequest } from "../../../lib/i18n/server";
 import { getBaseUrl } from "../../../lib/siteUrl";
 
 export const dynamic = "force-dynamic";
@@ -44,8 +45,30 @@ export async function generateMetadata({ params }) {
   };
 }
 
-function PublicChannelLanding({ channel }) {
+function PublicChannelLanding({ channel, locale = "en" }) {
   const seo = buildChannelSeoMeta(channel);
+  const copy =
+    locale === "bn"
+      ? {
+          category: "ক্যাটাগরি",
+          liveAvailable: "লাইভ স্ট্রিম WEBTVBD-তে উপলভ্য।",
+          sourceTitle: "সোর্স নোটিশ",
+          sourceBody:
+            "WEBTVBD এখানে দেখানো লাইভ স্ট্রিম লিংক হোস্ট, আপলোড বা মালিকানা দাবি করে না। স্ট্রিম রেফারেন্সগুলো পাবলিক বা থার্ড-পার্টি সোর্স থেকে আসতে পারে এবং ভিজিটরদের সহজে কনটেন্ট খুঁজে পাওয়ার জন্য শুধু গুছিয়ে দেখানো হয়।",
+          login: "দেখতে লগইন করুন",
+          home: "হোম খুলুন",
+          notFound: "চ্যানেল পাওয়া যায়নি।",
+        }
+      : {
+          category: "Category",
+          liveAvailable: "Live stream available on WEBTVBD.",
+          sourceTitle: "Source Notice",
+          sourceBody:
+            "WEBTVBD does not host, upload, or claim ownership of the live stream links shown here. Stream references may come from publicly available or third-party sources and are listed only to help visitors discover and access content more easily.",
+          login: "Login to Watch",
+          home: "Open Home",
+          notFound: "Channel not found.",
+        };
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "TVChannel",
@@ -88,8 +111,34 @@ function PublicChannelLanding({ channel }) {
       >
         <h1 style={{ margin: 0, fontSize: "clamp(1.5rem, 4vw, 2rem)" }}>{String(channel?.name || "Channel")}</h1>
         <p style={{ margin: 0, color: "var(--muted-foreground)" }}>
-          Category: {String(channel?.category || "Live TV")} | Live stream available on WEBTVBD.
+          {copy.category}: {String(channel?.category || "Live TV")} | {copy.liveAvailable}
         </p>
+        <section
+          style={{
+            display: "grid",
+            gap: "8px",
+            padding: "16px 18px",
+            border: "1px solid color-mix(in oklab, var(--primary) 44%, var(--border))",
+            borderRadius: "14px",
+            background:
+              "linear-gradient(135deg, color-mix(in oklab, var(--primary) 18%, transparent), transparent 68%), color-mix(in oklab, var(--card) 96%, transparent)",
+            boxShadow: "var(--shadow-lg)",
+          }}
+        >
+          <p
+            style={{
+              margin: 0,
+              fontSize: "0.82rem",
+              fontWeight: 800,
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              color: "color-mix(in oklab, var(--primary) 76%, var(--foreground))",
+            }}
+          >
+            {copy.sourceTitle}
+          </p>
+          <p style={{ margin: 0, lineHeight: 1.75 }}>{copy.sourceBody}</p>
+        </section>
         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
           <Link
             href="/client-login"
@@ -105,7 +154,7 @@ function PublicChannelLanding({ channel }) {
               fontWeight: 700,
             }}
           >
-            Login to Watch
+            {copy.login}
           </Link>
           <Link
             href="/"
@@ -121,7 +170,7 @@ function PublicChannelLanding({ channel }) {
               fontWeight: 600,
             }}
           >
-            Open Home
+            {copy.home}
           </Link>
         </div>
       </section>
@@ -134,11 +183,12 @@ export default async function WatchChannelPage({ params, searchParams }) {
   const query = await searchParams;
   const { id } = parseChannelParam(resolved?.channel);
   const channel = await getChannelById(id);
+  const locale = await getLocaleFromRequest();
 
   if (!channel) {
     return (
       <main style={{ minHeight: "100dvh", display: "grid", placeItems: "center", color: "var(--foreground)" }}>
-        <p>Channel not found.</p>
+        <p>{locale === "bn" ? "চ্যানেল পাওয়া যায়নি।" : "Channel not found."}</p>
       </main>
     );
   }
@@ -150,7 +200,7 @@ export default async function WatchChannelPage({ params, searchParams }) {
 
   const current = await getCurrentClient();
   if (!current) {
-    return <PublicChannelLanding channel={channel} />;
+    return <PublicChannelLanding channel={channel} locale={locale} />;
   }
 
   const approvalStatus = String(current?.client?.approval_status || "approved").toLowerCase();

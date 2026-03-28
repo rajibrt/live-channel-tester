@@ -14,6 +14,22 @@ export function getBaseUrl() {
   return fromEnv || "https://webtvbd.com";
 }
 
+export function getRequestBaseUrl(request) {
+  try {
+    const forwardedProto = String(request?.headers?.get("x-forwarded-proto") || "").trim();
+    const forwardedHost = String(request?.headers?.get("x-forwarded-host") || "").trim();
+    const host = String(request?.headers?.get("host") || "").trim();
+    const resolvedHost = forwardedHost || host;
+    if (!resolvedHost) return getBaseUrl();
+    const protocol =
+      forwardedProto ||
+      (resolvedHost.includes("localhost") || resolvedHost.startsWith("127.0.0.1") ? "http" : "https");
+    return `${protocol}://${resolvedHost}`.replace(/\/+$/, "");
+  } catch {
+    return getBaseUrl();
+  }
+}
+
 export function toAbsoluteUrl(pathOrUrl) {
   const value = String(pathOrUrl || "").trim();
   if (!value) return "";

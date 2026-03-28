@@ -1,11 +1,11 @@
 import Image from "next/image";
+import Link from "next/link";
 import styles from "../login/page.module.css";
 import { getCurrentClient } from "../../lib/clientAuth";
 import { redirect } from "next/navigation";
-import PasswordField from "../../components/auth/PasswordField";
-import FacebookHashHandler from "./FacebookHashHandler";
 import { getDictionaryForRequest } from "../../lib/i18n/server";
 import { buildHomePageMetadata, loadSiteSeoSettingsCached } from "../../lib/siteSeoSettings";
+import ClientAuthTabs from "./ClientAuthTabs";
 
 export async function generateMetadata() {
   try {
@@ -22,9 +22,16 @@ export default async function ClientLoginPage({ searchParams }) {
   if (current) redirect("/");
 
   const params = await searchParams;
+  const requestedTab = String(params?.tab || "").trim().toLowerCase();
   const errorCode = String(params?.error || "").trim().toLowerCase();
+  const registerErrorCode = String(params?.register_error || "").trim().toLowerCase();
+  const resetState = String(params?.reset || "").trim().toLowerCase();
+  const registered = String(params?.registered || "").trim() === "1";
   const hasError = Boolean(errorCode);
+  const hasRegisterError = Boolean(registerErrorCode);
+  const hasResetInfo = resetState === "sent" || resetState === "updated" || resetState === "invalid";
   const pending = String(params?.pending || "").trim() === "1";
+  const initialTab = hasRegisterError || requestedTab === "signup" ? "signup" : "login";
   const errorMessage =
     errorCode === "inactive"
       ? t("auth.clientInactive")
@@ -33,14 +40,34 @@ export default async function ClientLoginPage({ searchParams }) {
         : errorCode === "facebook_callback"
           ? t("auth.facebookCallbackFailed")
           : errorCode === "facebook_profile"
-            ? t("auth.facebookProfileFailed")
+          ? t("auth.facebookProfileFailed")
             : t("auth.loginFailed");
+  const resetMessage =
+    resetState === "sent"
+      ? t("auth.ifEmailExistsResetSent")
+      : resetState === "updated"
+        ? t("auth.resetClientPasswordUpdated")
+        : resetState === "invalid"
+          ? t("auth.resetClientInvalid")
+          : "";
+  const registerErrorMessage =
+    registerErrorCode === "mobile_exists"
+      ? t("auth.registerMobileExists")
+      : registerErrorCode === "email_exists"
+        ? t("auth.registerEmailExists")
+      : registerErrorCode === "password_mismatch"
+        ? t("settings.passwordMismatch")
+      : registerErrorCode === "create_failed"
+        ? t("auth.registerCreateFailed")
+        : registerErrorCode === "profile_failed"
+          ? t("auth.registerProfileFailed")
+          : t("auth.registerInvalid");
 
   return (
     <main className={styles.page}>
       <section className={styles.visualPane}>
         <div className={styles.visualGlow} />
-        <div className={styles.visualBrand}>
+        <Link href="/" className={styles.visualBrand} aria-label={t("publicSite.navHome")}>
           <Image
             src="/logo.png"
             alt={t("auth.webtvLogoAlt")}
@@ -50,71 +77,40 @@ export default async function ClientLoginPage({ searchParams }) {
             priority
           />
           <p className={styles.visualBrandSlogan}>{t("auth.tvBeyondBorders")}</p>
-        </div>
+        </Link>
         <div className={styles.visualCopy}>
           <p className={styles.visualTag}>{t("auth.clientAccess")}</p>
           <h1 className={styles.visualTitle}>{t("auth.viewerPortal")}</h1>
           <p className={styles.visualText}>
             {t("auth.clientPortalDesc")}
           </p>
+          <div className={styles.visualPublicLinks}>
+            <p className={styles.publicLinksLabel}>Public pages</p>
+            <nav className={styles.publicLinksNav} aria-label="Public information pages">
+              <Link href="/about">About</Link>
+              <Link href="/contact">Contact</Link>
+              <Link href="/privacy-policy">Privacy Policy</Link>
+              <Link href="/cookie-policy">Cookie Policy</Link>
+              <Link href="/terms">Terms</Link>
+              <Link href="/dmca">DMCA</Link>
+            </nav>
+          </div>
         </div>
       </section>
 
       <section className={styles.formPane}>
-        <div className={styles.formShell}>
-          <FacebookHashHandler />
-          <p className={styles.formTag}>{t("auth.signIn")}</p>
-          <h2 className={styles.formTitle}>{t("auth.clientLogin")}</h2>
-          <p className={styles.formText}>{t("auth.clientLoginDesc")}</p>
-
-          {hasError ? (
-            <p className={`${styles.note} ${styles.errorNote}`} role="alert">
-              {errorMessage}
-            </p>
-          ) : null}
-          {pending ? (
-            <p className={styles.note} role="status">
-              {t("auth.profilePendingApproval")}
-            </p>
-          ) : null}
-
-          <form method="post" action="/api/client/auth/login" className={styles.form} autoComplete="off">
-            <label className={styles.field}>
-              <span>{t("auth.emailOrMobile")}</span>
-              <input
-                name="identifier"
-                type="text"
-                required
-                placeholder={t("auth.clientIdentifierPlaceholder")}
-                autoComplete="off"
-                autoCapitalize="off"
-                autoCorrect="off"
-                spellCheck={false}
-              />
-            </label>
-
-            <PasswordField
-              styles={styles}
-              autoComplete="off"
-              label={t("settings.password")}
-              placeholder={t("auth.passwordPlaceholder")}
-              showLabel={t("settings.showPassword")}
-              hideLabel={t("settings.hidePassword")}
-            />
-
-            <button type="submit" className={styles.submit}>{t("auth.signIn")}</button>
-          </form>
-
-          <p className={styles.divider}>{t("auth.orContinueWithLower")}</p>
-          <a href="/api/client/auth/facebook/start" className={`${styles.socialBtn} ${styles.facebookBtn}`}>
-            <span className={styles.socialIcon} aria-hidden="true">
-              <svg viewBox="0 0 24 24" focusable="false">
-                <path d="M14 8h3V4h-3c-2.8 0-5 2.2-5 5v3H6v4h3v4h4v-4h3.1l.9-4H13V9c0-.6.4-1 1-1z" />
-              </svg>
-            </span>
-            <span>{t("auth.continueWithFacebook")}</span>
-          </a>
-        </div>
+        <ClientAuthTabs
+          initialTab={initialTab}
+          hasLoginError={hasError}
+          loginErrorMessage={errorMessage}
+          pending={pending}
+          registered={registered}
+          hasResetInfo={hasResetInfo}
+          resetMessage={resetMessage}
+          resetInvalid={resetState === "invalid"}
+          hasRegisterError={hasRegisterError}
+          registerErrorMessage={registerErrorMessage}
+        />
       </section>
     </main>
   );

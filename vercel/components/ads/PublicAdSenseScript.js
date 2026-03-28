@@ -12,7 +12,13 @@ function shouldDisableAds(pathname) {
     path.startsWith("/dashboard") ||
     path.startsWith("/login") ||
     path.startsWith("/client-login") ||
-    path.startsWith("/admin-reset-password")
+    path.startsWith("/admin-reset-password") ||
+    path.startsWith("/privacy-policy") ||
+    path.startsWith("/cookie-policy") ||
+    path.startsWith("/terms") ||
+    path.startsWith("/dmca") ||
+    path.startsWith("/about") ||
+    path.startsWith("/contact")
   );
 }
 
