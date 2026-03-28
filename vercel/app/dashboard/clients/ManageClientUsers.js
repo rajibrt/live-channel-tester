@@ -16,6 +16,15 @@ import {
   AlertDialogTrigger,
 } from "../../../components/ui/alert-dialog";
 import { Button } from "../../../components/ui/button";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "../../../components/ui/pagination";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../../components/ui/table";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../../../components/ui/tooltip";
 import { Switch } from "../../../components/ui/switch";
@@ -128,6 +137,22 @@ function TruncatedTooltipCell({ text = "-", className = "", asButton = false, on
   );
 }
 
+function buildPaginationItems(currentPage, totalPages) {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  if (currentPage <= 4) {
+    return [1, 2, 3, 4, 5, "start-ellipsis", totalPages];
+  }
+
+  if (currentPage >= totalPages - 3) {
+    return [1, "end-ellipsis", totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+  }
+
+  return [1, "left-ellipsis", currentPage - 1, currentPage, currentPage + 1, "right-ellipsis", totalPages];
+}
+
 export default function ManageClientUsers({ initialItems = [], initialActiveViewers = [] }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -139,6 +164,8 @@ export default function ManageClientUsers({ initialItems = [], initialActiveView
   const [activityFilter, setActivityFilter] = useState("all");
   const [watchTierFilter, setWatchTierFilter] = useState("all");
   const [sortMode, setSortMode] = useState("created_desc");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [form, setForm] = useState(EMPTY_FORM);
   const [editForm, setEditForm] = useState(EMPTY_EDIT_FORM);
   const [showPassword, setShowPassword] = useState(false);
@@ -261,6 +288,24 @@ export default function ManageClientUsers({ initialItems = [], initialActiveView
       sortMode !== "created_desc",
     [searchTerm, statusFilter, approvalFilter, activityFilter, watchTierFilter, sortMode]
   );
+  const totalFilteredItems = filteredItems.length;
+  const totalPages = Math.max(1, Math.ceil(totalFilteredItems / pageSize));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const pageStart = (safeCurrentPage - 1) * pageSize;
+  const paginatedItems = filteredItems.slice(pageStart, pageStart + pageSize);
+  const showingFrom = totalFilteredItems ? pageStart + 1 : 0;
+  const showingTo = totalFilteredItems ? Math.min(pageStart + paginatedItems.length, totalFilteredItems) : 0;
+  const paginationItems = useMemo(() => buildPaginationItems(safeCurrentPage, totalPages), [safeCurrentPage, totalPages]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter, approvalFilter, activityFilter, watchTierFilter, sortMode]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   function openEdit(row) {
     setError("");
@@ -1129,7 +1174,7 @@ export default function ManageClientUsers({ initialItems = [], initialActiveView
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredItems.map((row) => (
+              {paginatedItems.map((row) => (
                 <TableRow key={row.user_id}>
                   <TableCell className={styles.colClientName}>
                     <TruncatedTooltipCell text={row.full_name || "-"} asButton onClick={() => openView(row)} />
@@ -1209,13 +1254,90 @@ export default function ManageClientUsers({ initialItems = [], initialActiveView
                   </TableCell>
                 </TableRow>
               ))}
-            {!filteredItems.length ? (
+            {!totalFilteredItems ? (
               <TableRow>
                 <TableCell colSpan={9} className={styles.pending}>No users found for this filter.</TableCell>
               </TableRow>
             ) : null}
             </TableBody>
           </Table>
+        </div>
+        <div className={styles.paginationBar}>
+          <div className={styles.paginationInfo}>
+            <span>
+              Showing {showingFrom}-{showingTo} of {totalFilteredItems} users
+            </span>
+            <label className={styles.pageSizeControl}>
+              <span>Rows per page</span>
+              <select
+                value={pageSize}
+                onChange={(event) => {
+                  setPageSize(Number(event.target.value));
+                  setCurrentPage(1);
+                }}
+              >
+                {[10, 25, 50, 100, 200].map((size) => (
+                  <option key={size} value={size}>
+                    {size}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className={styles.paginationActions}>
+            <span className={styles.paginationPageInfo}>
+              Page {safeCurrentPage} of {totalPages}
+            </span>
+            <Pagination className={styles.paginationNavInline}>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationLink
+                    size="default"
+                    onClick={() => setCurrentPage(1)}
+                    disabled={safeCurrentPage <= 1}
+                  >
+                    First
+                  </PaginationLink>
+                </PaginationItem>
+                <PaginationItem>
+                  <PaginationPrevious
+                    onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                    disabled={safeCurrentPage <= 1}
+                  />
+                </PaginationItem>
+                {paginationItems.map((item) => (
+                  <PaginationItem key={String(item)}>
+                    {typeof item === "number" ? (
+                      <PaginationLink
+                        isActive={item === safeCurrentPage}
+                        size="icon"
+                        onClick={() => setCurrentPage(item)}
+                      >
+                        {item}
+                      </PaginationLink>
+                    ) : (
+                      <PaginationEllipsis />
+                    )}
+                  </PaginationItem>
+                ))}
+                <PaginationItem>
+                  <PaginationNext
+                    onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                    disabled={safeCurrentPage >= totalPages}
+                  />
+                </PaginationItem>
+                <PaginationItem>
+                  <PaginationLink
+                    size="default"
+                    onClick={() => setCurrentPage(totalPages)}
+                    disabled={safeCurrentPage >= totalPages}
+                  >
+                    Last
+                  </PaginationLink>
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          </div>
         </div>
       </TooltipProvider>
 

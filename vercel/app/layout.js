@@ -1,6 +1,7 @@
 import "./globals.css";
 import Script from "next/script";
 import { cookies } from "next/headers";
+import PublicAdSenseScript from "../components/ads/PublicAdSenseScript";
 import { LanguageProvider } from "../components/i18n/LanguageProvider";
 import { DEFAULT_LOCALE, SUPPORTED_LOCALES } from "../lib/i18n/dictionaries";
 import { getBaseUrl } from "../lib/siteUrl";
@@ -87,6 +88,7 @@ export default async function RootLayout({ children }) {
       </head>
       <body>
         <LanguageProvider initialLocale={initialLocale}>
+          <PublicAdSenseScript />
           {children}
         </LanguageProvider>
         <Script id="statcounter-config" strategy="afterInteractive">

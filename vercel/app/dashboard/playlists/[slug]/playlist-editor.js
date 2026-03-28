@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import styles from "../../page.module.css";
 import {
@@ -281,8 +283,9 @@ function InlineEditableInput({ value, className, onCommit }) {
 }
 
 export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl = "", initialChannels, initialGroups = [] }) {
+  const router = useRouter();
   const [channels, setChannels] = useState(() => cloneChannels(initialChannels));
-  const [initial] = useState(() => cloneChannels(initialChannels));
+  const [savedSnapshot, setSavedSnapshot] = useState(() => cloneChannels(initialChannels));
   const initialGroupOrder = useMemo(() => {
     const seen = new Set();
     const arr = [];
@@ -304,9 +307,8 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
       });
     return arr;
   }, [initialChannels, initialGroups]);
-  const [groupOrder, setGroupOrder] = useState(() => {
-    return initialGroupOrder;
-  });
+  const [groupOrder, setGroupOrder] = useState(() => initialGroupOrder);
+  const [savedGroupOrder, setSavedGroupOrder] = useState(() => initialGroupOrder);
   const [selectedGroup, setSelectedGroup] = useState(groupOrder[0] || "Uncategorized");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -332,6 +334,12 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
   const [healthError, setHealthError] = useState("");
   const [healthSummary, setHealthSummary] = useState("");
   const [healthRows, setHealthRows] = useState([]);
+  const [healthSearch, setHealthSearch] = useState("");
+  const [healthGroupFilter, setHealthGroupFilter] = useState("ALL");
+  const [healthCheckedFilter, setHealthCheckedFilter] = useState("ALL");
+  const [healthPlaylistStatusFilter, setHealthPlaylistStatusFilter] = useState("ALL");
+  const [healthSorting, setHealthSorting] = useState([]);
+  const [healthRowSelection, setHealthRowSelection] = useState({});
   const [healthActionLoading, setHealthActionLoading] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState({
     open: false,
@@ -356,6 +364,124 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
       onConfirm: typeof onConfirm === "function" ? onConfirm : null,
     });
   };
+
+  const confirmLeaveEditor = useCallback(
+    (onConfirmLeave) => {
+      openConfirm({
+        title: "Leave playlist editor?",
+        description: "Playlist changes may be lost if you leave before saving.",
+        confirmText: "Leave page",
+        onConfirm: () => {
+          if (typeof onConfirmLeave === "function") onConfirmLeave();
+        },
+      });
+    },
+    []
+  );
+
+  const openPreview = useCallback((title, url) => {
+    setPreviewError("");
+    setPreviewLoading(false);
+    setPreview({ title: title || "Stream", url: url || "" });
+  }, []);
+
+  const updateHealthRowUrl = useCallback((id, nextUrl) => {
+    const normalized = String(nextUrl || "");
+    setHealthRows((prev) =>
+      prev.map((row) => (Number(row.id) === Number(id) ? { ...row, url: normalized } : row))
+    );
+    setChannels((prev) =>
+      prev.map((channel) => (Number(channel.id) === Number(id) ? { ...channel, stream_url: normalized } : channel))
+    );
+  }, []);
+
+  const useHttpForHealthRow = useCallback((id) => {
+    setHealthRows((prev) => {
+      const current = prev.find((row) => Number(row.id) === Number(id));
+      if (!current) return prev;
+      const raw = String(current.url || "").trim();
+      const nextUrl = /^https:\/\//i.test(raw)
+        ? raw.replace(/^https:\/\//i, "http://")
+        : /^http:\/\//i.test(raw)
+        ? raw
+        : raw
+        ? `http://${raw.replace(/^\/+/, "")}`
+        : "";
+      setChannels((channelsPrev) =>
+        channelsPrev.map((channel) =>
+          Number(channel.id) === Number(id) ? { ...channel, stream_url: nextUrl } : channel
+        )
+      );
+      return prev.map((row) => (Number(row.id) === Number(id) ? { ...row, url: nextUrl } : row));
+    });
+  }, []);
+
+  const toggleHealthRowPlaylistLive = useCallback((id, checked) => {
+    const nextStatus = checked ? "LIVE" : "DEAD";
+    setHealthRows((prev) =>
+      prev.map((row) =>
+        Number(row.id) === Number(id)
+          ? { ...row, status_before: nextStatus, manual_live: checked }
+          : row
+      )
+    );
+    setChannels((prev) =>
+      prev.map((channel) =>
+        Number(channel.id) === Number(id) ? { ...channel, status: nextStatus } : channel
+      )
+    );
+  }, []);
+
+  const deleteHealthRowsLocally = useCallback((ids) => {
+    const idSet = new Set(ids.map((id) => Number(id)));
+    setChannels((prev) => prev.filter((channel) => !idSet.has(Number(channel.id))));
+    setHealthRows((prev) => prev.filter((row) => !idSet.has(Number(row.id))));
+    setHealthRowSelection((prev) => {
+      const next = { ...prev };
+      ids.forEach((id) => delete next[String(id)]);
+      return next;
+    });
+  }, []);
+
+  const applyHealthSelectionAction = useCallback((kind, ids) => {
+    const normalizedIds = [...new Set((ids || []).map((id) => Number(id)).filter((id) => Number.isFinite(id)))];
+    if (!normalizedIds.length) {
+      setHealthError("Select at least one checked row first.");
+      return;
+    }
+
+    if (kind === "delete") {
+      openConfirm({
+        title: `Delete ${normalizedIds.length} selected channel(s)?`,
+        description: "This will remove the selected channels from the playlist.",
+        confirmText: "Delete selected",
+        onConfirm: () => {
+          deleteHealthRowsLocally(normalizedIds);
+          setSuccess(`Removed ${normalizedIds.length} selected channel(s) from the playlist.`);
+          setHealthSummary(`Selected rows removed: ${normalizedIds.length}. Click Save updates to persist changes.`);
+        },
+      });
+      return;
+    }
+
+    const nextStatus = kind === "live" ? "LIVE" : "DEAD";
+    const isLive = nextStatus === "LIVE";
+    const idSet = new Set(normalizedIds);
+    setChannels((prev) =>
+      prev.map((channel) =>
+        idSet.has(Number(channel.id)) ? { ...channel, status: nextStatus } : channel
+      )
+    );
+    setHealthRows((prev) =>
+      prev.map((row) =>
+        idSet.has(Number(row.id))
+          ? { ...row, status_before: nextStatus, manual_live: isLive }
+          : row
+      )
+    );
+    setSuccess(`Updated ${normalizedIds.length} selected channel(s) to ${nextStatus}.`);
+    setHealthSummary(`Selected rows set to ${nextStatus}. Click Save updates to persist changes.`);
+  }, [deleteHealthRowsLocally]);
 
   useEffect(() => {
     if (!preview) return undefined;
@@ -765,13 +891,14 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
   };
 
   const resetAll = () => {
-    setChannels(cloneChannels(initial));
+    setChannels(cloneChannels(savedSnapshot));
     const seen = [];
-    initial.forEach((c) => {
+    savedSnapshot.forEach((c) => {
       if (!seen.includes(c.category)) seen.push(c.category);
     });
-    setGroupOrder(seen);
-    setSelectedGroup(seen[0] || "Uncategorized");
+    const nextOrder = savedGroupOrder.length ? savedGroupOrder : seen;
+    setGroupOrder(nextOrder);
+    setSelectedGroup(nextOrder[0] || "Uncategorized");
     setError("");
     setSuccess("");
   };
@@ -827,6 +954,11 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
       });
       const out = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(out?.error || "Failed to save updates.");
+      const nextSavedSnapshot = cloneChannels(payload);
+      setChannels(nextSavedSnapshot);
+      setSavedSnapshot(nextSavedSnapshot);
+      setGroupOrder(normalizedOrder);
+      setSavedGroupOrder(normalizedOrder);
       setSuccess(`Updated ${out.updated_channels || 0} channels successfully.${out.group_order_saved ? " Group order saved." : ""}`);
     } catch (e) {
       setError(e?.message || "Failed to save updates.");
@@ -847,12 +979,84 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
     return changedMeta;
   }).length;
   const groupOrderChanged =
-    groupOrder.length !== initialGroupOrder.length ||
-    groupOrder.some((name, idx) => name !== initialGroupOrder[idx]);
+    groupOrder.length !== savedGroupOrder.length ||
+    groupOrder.some((name, idx) => name !== savedGroupOrder[idx]);
   const totalChangedCount = changedCount + (groupOrderChanged ? 1 : 0);
+
+  useEffect(() => {
+    if (!totalChangedCount) return undefined;
+
+    const currentHref = window.location.href;
+
+    const handleBeforeUnload = (event) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    const handlePopState = () => {
+      window.history.pushState({ playlistEditorGuard: true }, "", currentHref);
+      confirmLeaveEditor(() => {
+        window.history.back();
+      });
+    };
+
+    const handleDocumentClick = (event) => {
+      const anchor = event.target instanceof Element ? event.target.closest("a[href]") : null;
+      if (!anchor) return;
+      const href = anchor.getAttribute("href") || "";
+      if (!href || href.startsWith("#")) return;
+      if (anchor.hasAttribute("download")) return;
+      if (anchor.getAttribute("target") === "_blank") return;
+
+      const targetUrl = new URL(href, window.location.href);
+      if (targetUrl.href === window.location.href) return;
+
+      event.preventDefault();
+      confirmLeaveEditor(() => {
+        if (targetUrl.origin === window.location.origin) {
+          router.push(`${targetUrl.pathname}${targetUrl.search}${targetUrl.hash}`);
+          return;
+        }
+        window.location.assign(targetUrl.href);
+      });
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    window.history.pushState({ playlistEditorGuard: true }, "", currentHref);
+    window.addEventListener("popstate", handlePopState);
+    document.addEventListener("click", handleDocumentClick, true);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener("popstate", handlePopState);
+      document.removeEventListener("click", handleDocumentClick, true);
+    };
+  }, [confirmLeaveEditor, router, totalChangedCount]);
 
   const checkedDeadRows = healthRows.filter((x) => x.check_status === "DEAD");
   const checkedLiveRows = healthRows.filter((x) => x.check_status === "LIVE");
+  const healthGroupOptions = useMemo(() => {
+    const seen = new Set();
+    const list = [];
+    healthRows.forEach((row) => {
+      const groupName = String(row.category || "").trim() || "Uncategorized";
+      if (seen.has(groupName)) return;
+      seen.add(groupName);
+      list.push(groupName);
+    });
+    return list.sort((a, b) => a.localeCompare(b));
+  }, [healthRows]);
+  const filteredHealthRows = useMemo(() => {
+    return healthRows.filter((row) => {
+      const groupName = String(row.category || "").trim() || "Uncategorized";
+      const currentStatus = String(row.status_before || "LIVE").toUpperCase();
+      const checkedStatus = String(row.check_status || "").toUpperCase();
+      if (healthGroupFilter !== "ALL" && groupName !== healthGroupFilter) return false;
+      if (healthPlaylistStatusFilter !== "ALL" && currentStatus !== healthPlaylistStatusFilter) return false;
+      if (healthCheckedFilter !== "ALL" && checkedStatus !== healthCheckedFilter) return false;
+      return true;
+    });
+  }, [healthRows, healthGroupFilter, healthPlaylistStatusFilter, healthCheckedFilter]);
   const allChannelIds = channels.map((x) => Number(x.id)).filter((x) => Number.isFinite(x));
   const liveCount = channels.reduce(
     (total, c) => total + (String(c.status || "LIVE").toUpperCase() === "LIVE" ? 1 : 0),
@@ -865,16 +1069,87 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
       setHealthLoading(true);
       setHealthError("");
       setHealthSummary("");
+      setHealthRows([]);
+      setHealthRowSelection({});
       const res = await fetch(`/api/admin/playlists/${playlistSlug}/health-check`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ timeout: 8, concurrency: 6 }),
+        body: JSON.stringify({ timeout: 8, hard_timeout: 15, delay: 0, verify_segment: true }),
       });
-      const payload = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(payload?.error || "Failed to run health check.");
-      const items = Array.isArray(payload.items) ? payload.items : [];
-      setHealthRows(items);
-      setHealthSummary(`Checked ${payload.total || 0}: LIVE ${payload.live_count || 0}, DEAD ${payload.dead_count || 0}.`);
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(payload?.error || "Failed to run health check.");
+      }
+
+      const contentType = String(res.headers.get("content-type") || "").toLowerCase();
+      if (!contentType.includes("application/x-ndjson")) {
+        const payload = await res.json().catch(() => ({}));
+        const items = Array.isArray(payload.items) ? payload.items : [];
+        setHealthRows(items);
+        setHealthSummary(`Checked ${payload.total || 0}: LIVE ${payload.live_count || 0}, DEAD ${payload.dead_count || 0}.`);
+        return;
+      }
+
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error("No health check response body received.");
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let total = 0;
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          const raw = line.trim();
+          if (!raw) continue;
+          let evt = null;
+          try {
+            evt = JSON.parse(raw);
+          } catch {
+            continue;
+          }
+
+          if (evt?.type === "start") {
+            total = Number(evt.total || 0);
+            setHealthSummary(`Checking 0/${total || 0} saved links...`);
+          }
+
+          if (evt?.type === "item" && evt.id) {
+            const currentChannel = channels.find((channel) => Number(channel.id) === Number(evt.id));
+            const currentStatus = String(currentChannel?.status || evt.status_before || "LIVE").toUpperCase();
+            const nextRow = {
+              id: Number(evt.id),
+              name: String(evt.name || evt.title || "Stream"),
+              category: String(evt.category || ""),
+              url: String(evt.url || ""),
+              status_before: currentStatus,
+              position: Number(evt.position || 0),
+              check_status: String(evt.status || "DEAD").toUpperCase(),
+              reason: String(evt.reason || ""),
+              manual_live: currentStatus === "LIVE",
+            };
+
+            setHealthRows((prev) => {
+              const withoutCurrent = prev.filter((row) => Number(row.id) !== nextRow.id);
+              const merged = [...withoutCurrent, nextRow].sort(
+                (a, b) => Number(a.position || 0) - Number(b.position || 0)
+              );
+              const live = merged.filter((row) => row.check_status === "LIVE").length;
+              const dead = merged.length - live;
+              setHealthSummary(`Checking ${merged.length}/${total || merged.length}: LIVE ${live}, DEAD ${dead}.`);
+              return merged;
+            });
+          }
+
+          if (evt?.type === "complete") {
+            setHealthSummary(`Checked ${evt.total || 0}: LIVE ${evt.live_count || 0}, DEAD ${evt.dead_count || 0}.`);
+          }
+        }
+      }
     } catch (e) {
       setHealthError(e?.message || "Failed to run health check.");
     } finally {
@@ -914,15 +1189,35 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
 
       if (kind === "disable-dead" && deadIds.length) {
         setChannels((prev) => prev.map((c) => (deadIds.includes(Number(c.id)) ? { ...c, status: "DEAD" } : c)));
+        setHealthRows((prev) =>
+          prev.map((row) =>
+            deadIds.includes(Number(row.id)) ? { ...row, status_before: "DEAD", manual_live: false } : row
+          )
+        );
       }
       if (kind === "disable-all" && allIds.length) {
         setChannels((prev) => prev.map((c) => (allIds.includes(Number(c.id)) ? { ...c, status: "DEAD" } : c)));
+        setHealthRows((prev) =>
+          prev.map((row) =>
+            allIds.includes(Number(row.id)) ? { ...row, status_before: "DEAD", manual_live: false } : row
+          )
+        );
       }
       if (kind === "enable-live" && liveIds.length) {
         setChannels((prev) => prev.map((c) => (liveIds.includes(Number(c.id)) ? { ...c, status: "LIVE" } : c)));
+        setHealthRows((prev) =>
+          prev.map((row) =>
+            liveIds.includes(Number(row.id)) ? { ...row, status_before: "LIVE", manual_live: true } : row
+          )
+        );
       }
       if (kind === "enable-all" && allIds.length) {
         setChannels((prev) => prev.map((c) => (allIds.includes(Number(c.id)) ? { ...c, status: "LIVE" } : c)));
+        setHealthRows((prev) =>
+          prev.map((row) =>
+            allIds.includes(Number(row.id)) ? { ...row, status_before: "LIVE", manual_live: true } : row
+          )
+        );
       }
       if ((kind === "delete-dead" || kind === "delete-dead-confirmed") && deadIds.length) {
         setChannels((prev) => prev.filter((c) => !deadIds.includes(Number(c.id))));
@@ -949,6 +1244,128 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
       setCopiedUrl(false);
     }
   };
+
+  const healthColumns = useMemo(
+    () => [
+      {
+        id: "select",
+        header: "Select",
+        enableSorting: false,
+        cell: ({ row }) => (
+          <input
+            type="checkbox"
+            checked={row.getIsSelected()}
+            onChange={row.getToggleSelectedHandler()}
+            aria-label={`Select ${row.original?.name || "row"}`}
+          />
+        ),
+      },
+      {
+        accessorKey: "name",
+        header: ({ column }) => (
+          <button type="button" className={styles.rowLinkBtn} onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
+            Name {column.getIsSorted() === "asc" ? "↑" : column.getIsSorted() === "desc" ? "↓" : ""}
+          </button>
+        ),
+      },
+      {
+        accessorKey: "category",
+        header: ({ column }) => (
+          <button type="button" className={styles.rowLinkBtn} onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
+            Group {column.getIsSorted() === "asc" ? "↑" : column.getIsSorted() === "desc" ? "↓" : ""}
+          </button>
+        ),
+        cell: ({ row }) => row.original.category || "Uncategorized",
+      },
+      {
+        accessorKey: "status_before",
+        header: ({ column }) => (
+          <button type="button" className={styles.rowLinkBtn} onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
+            Playlist Status {column.getIsSorted() === "asc" ? "↑" : column.getIsSorted() === "desc" ? "↓" : ""}
+          </button>
+        ),
+      },
+      {
+        accessorKey: "check_status",
+        header: ({ column }) => (
+          <button type="button" className={styles.rowLinkBtn} onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
+            Checked {column.getIsSorted() === "asc" ? "↑" : column.getIsSorted() === "desc" ? "↓" : ""}
+          </button>
+        ),
+      },
+      {
+        accessorKey: "reason",
+        header: "Reason",
+        cell: ({ row }) => row.original.reason || "-",
+      },
+      {
+        id: "set_live",
+        header: "Set LIVE",
+        enableSorting: false,
+        cell: ({ row }) => {
+          const r = row.original;
+          return (
+            <label className={styles.checkRow}>
+              <input
+                type="checkbox"
+                checked={r.manual_live !== false}
+                onChange={(e) => toggleHealthRowPlaylistLive(r.id, e.target.checked)}
+              />
+              <span>Live</span>
+            </label>
+          );
+        },
+      },
+      {
+        accessorKey: "url",
+        header: "Stream URL",
+        enableSorting: false,
+        cell: ({ row }) => {
+          const r = row.original;
+          return (
+            <div className={styles.healthUrlEditor}>
+              <input
+                className={styles.inlineInput}
+                value={r.url || ""}
+                onChange={(e) => updateHealthRowUrl(r.id, e.target.value)}
+                placeholder="Update stream URL"
+              />
+              <div className={styles.healthUrlActions}>
+                <button
+                  type="button"
+                  className={styles.secondaryBtnCompact}
+                  disabled={!String(r.url || "").trim()}
+                  onClick={() => useHttpForHealthRow(r.id)}
+                  title="Replace https:// with http:// for quick retry"
+                >
+                  Use HTTP
+                </button>
+              </div>
+            </div>
+          );
+        },
+      },
+      {
+        id: "preview",
+        header: "Preview",
+        enableSorting: false,
+        cell: ({ row }) => {
+          const r = row.original;
+          return (
+            <button
+              type="button"
+              className={styles.previewCellBtn}
+              disabled={!String(r.url || "").trim()}
+              onClick={() => openPreview(r.name || "Stream", r.url || "")}
+            >
+              Preview
+            </button>
+          );
+        },
+      },
+    ],
+    [openPreview, toggleHealthRowPlaylistLive, updateHealthRowUrl, useHttpForHealthRow]
+  );
 
   const channelColumns = useMemo(
     () => [
@@ -1186,11 +1603,7 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
             <button
               type="button"
               className={styles.previewCellBtn}
-              onClick={() => {
-                setPreviewError("");
-                setPreviewLoading(false);
-                setPreview({ title: c.name || "Stream", url: c.stream_url || "" });
-              }}
+              onClick={() => openPreview(c.name || "Stream", c.stream_url || "")}
             >
               Preview
             </button>
@@ -1208,6 +1621,7 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
       groupsWithCount,
       moveChannel,
       moveChannelToPosition,
+      openPreview,
       uploadingLogoId,
       uploadLogo,
     ]
@@ -1236,6 +1650,36 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
   });
+
+  const healthTable = useReactTable({
+    data: filteredHealthRows,
+    columns: healthColumns,
+    getRowId: (row) => String(row.id),
+    enableRowSelection: true,
+    state: {
+      sorting: healthSorting,
+      globalFilter: healthSearch,
+      rowSelection: healthRowSelection,
+    },
+    onSortingChange: setHealthSorting,
+    onGlobalFilterChange: setHealthSearch,
+    onRowSelectionChange: setHealthRowSelection,
+    globalFilterFn: (row, _columnId, filterValue) => {
+      const query = String(filterValue || "").trim().toLowerCase();
+      if (!query) return true;
+      const item = row.original || {};
+      const haystack = [item.name, item.category, item.url, item.reason, item.status_before, item.check_status]
+        .map((v) => String(v || "").toLowerCase())
+        .join(" ");
+      return haystack.includes(query);
+    },
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+  });
+
+  const selectedHealthIds = healthTable.getSelectedRowModel().rows.map((row) => Number(row.original.id));
+  const filteredHealthIds = healthTable.getFilteredRowModel().rows.map((row) => Number(row.original.id));
 
   return (
     <section className={styles.editorLayout}>
@@ -1287,6 +1731,9 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
             )}
           </div>
           <div className={styles.editorActions}>
+            <Link href={`/dashboard/playlists/${playlistSlug}/live-check`} className={styles.secondaryBtn}>
+              Open Live Check Workspace
+            </Link>
             <button type="button" className={styles.secondaryBtn} onClick={resetAll}>Reset all changes</button>
             <button type="button" className={styles.primaryBtn} onClick={saveAll} disabled={saving}>
               {saving ? "Saving..." : "Save updates"}
@@ -1644,89 +2091,6 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
         <p className={styles.hint}>Changed items: {totalChangedCount}</p>
         {error ? <p className={styles.errorText}>{error}</p> : null}
         {success ? <p className={styles.successText}>{success}</p> : null}
-      </article>
-
-      <article className={styles.card}>
-        <h2>Saved Playlist Live Check</h2>
-        <p className={styles.hint}>
-          Check current saved links. DEAD links can be temporarily disabled or permanently removed. LIVE results can be re-enabled.
-        </p>
-        <div className={styles.editorActions}>
-          <button type="button" className={styles.primaryBtn} onClick={runHealthCheck} disabled={healthLoading || healthActionLoading}>
-            {healthLoading ? "Checking..." : "Run Saved Links Check"}
-          </button>
-          <button
-            type="button"
-            className={styles.secondaryBtn}
-            disabled={healthActionLoading || !checkedDeadRows.length}
-            onClick={() => applyHealthAction("disable-dead")}
-            title="Temporarily disable dead links from public playlist"
-          >
-            Temp Disable DEAD ({checkedDeadRows.length})
-          </button>
-          <button
-            type="button"
-            className={styles.secondaryBtn}
-            disabled={healthActionLoading || !allChannelIds.length}
-            onClick={() => applyHealthAction("disable-all")}
-            title="Mark every link in this playlist as DEAD"
-          >
-            Set ALL DEAD ({allChannelIds.length})
-          </button>
-          <button
-            type="button"
-            className={styles.secondaryBtn}
-            disabled={healthActionLoading || !checkedLiveRows.length}
-            onClick={() => applyHealthAction("enable-live")}
-            title="Re-enable links that are currently live"
-          >
-            Re-enable LIVE ({checkedLiveRows.length})
-          </button>
-          <button
-            type="button"
-            className={styles.secondaryBtn}
-            disabled={healthActionLoading || !allChannelIds.length}
-            onClick={() => applyHealthAction("enable-all")}
-            title="Mark every link in this playlist as LIVE"
-          >
-            Set ALL LIVE ({allChannelIds.length})
-          </button>
-          <button
-            type="button"
-            className={styles.secondaryBtn}
-            disabled={healthActionLoading || !checkedDeadRows.length}
-            onClick={() => applyHealthAction("delete-dead")}
-            title="Permanently remove dead links from playlist"
-          >
-            Permanent Delete DEAD ({checkedDeadRows.length})
-          </button>
-        </div>
-        {healthError ? <p className={styles.errorText}>{healthError}</p> : null}
-        {healthSummary ? <p className={styles.successText}>{healthSummary}</p> : null}
-        {healthRows.length ? (
-          <div className={styles.tableWrap}>
-            <table className={styles.editorTable}>
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Current Status</th>
-                  <th>Checked</th>
-                  <th>Reason</th>
-                </tr>
-              </thead>
-              <tbody>
-                {healthRows.map((r) => (
-                  <tr key={`health-${r.id}`}>
-                    <td>{r.name}</td>
-                    <td>{r.status_before}</td>
-                    <td>{r.check_status}</td>
-                    <td>{r.reason || "-"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : null}
       </article>
 
       <div className={styles.floatingSaveWrap}>

@@ -1374,6 +1374,19 @@
   color: var(--primary-foreground);
 }
 
+.healthUrlEditor {
+  display: grid;
+  gap: 6px;
+  min-width: 260px;
+}
+
+.healthUrlActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
 .modalWrap {
   position: fixed;
   inset: 0;

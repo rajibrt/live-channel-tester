@@ -1,6 +1,6 @@
-import styles from "../../page.module.css";
-import { getSupabaseAdmin } from "../../../../lib/supabaseAdmin";
-import PlaylistEditor from "./playlist-editor";
+import styles from "../../../page.module.css";
+import { getSupabaseAdmin } from "../../../../../lib/supabaseAdmin";
+import LiveCheckWorkspace from "./live-check-workspace";
 
 const PAGE_SIZE = 1000;
 
@@ -22,33 +22,25 @@ async function fetchAllPlaylistLinks(supabase, slug) {
   return rows;
 }
 
-async function fetchChannelsByIds(supabase, ids, includeIncludeOnHome = true) {
+async function fetchChannelsByIds(supabase, ids) {
   const uniqueIds = [...new Set((ids || []).filter(Boolean))];
   const rows = [];
   const selectWithHome = "id,name,category,logo_url,stream_url,status,include_on_home";
   const selectWithoutHome = "id,name,category,logo_url,stream_url,status";
-  let needsFallback = false;
 
   for (let i = 0; i < uniqueIds.length; i += PAGE_SIZE) {
     const part = uniqueIds.slice(i, i + PAGE_SIZE);
-    let query = supabase.from("channels").select(includeIncludeOnHome ? selectWithHome : selectWithoutHome).in("id", part);
-    let res = await query;
-    if (
-      includeIncludeOnHome &&
-      res.error &&
-      String(res.error.message || "").toLowerCase().includes("include_on_home")
-    ) {
-      needsFallback = true;
+    let res = await supabase.from("channels").select(selectWithHome).in("id", part);
+    if (res.error && String(res.error.message || "").toLowerCase().includes("include_on_home")) {
       res = await supabase.from("channels").select(selectWithoutHome).in("id", part);
     }
     if (res.error) throw res.error;
     rows.push(...(res.data || []));
   }
-
-  return { rows, usedIncludeOnHome: includeIncludeOnHome && !needsFallback };
+  return rows;
 }
 
-async function getPlaylistEditorData(slug) {
+async function getPlaylistData(slug) {
   const supabase = getSupabaseAdmin();
   const { data: playlist } = await supabase
     .from("playlists")
@@ -58,13 +50,8 @@ async function getPlaylistEditorData(slug) {
   if (!playlist) return null;
 
   const links = await fetchAllPlaylistLinks(supabase, slug);
-
   const ids = (links || []).map((x) => x.channel_id).filter(Boolean);
-  if (!ids.length) {
-    return { playlist, channels: [] };
-  }
-
-  const { rows: channels } = await fetchChannelsByIds(supabase, ids, true);
+  const channels = ids.length ? await fetchChannelsByIds(supabase, ids) : [];
   const byId = Object.fromEntries((channels || []).map((c) => [c.id, c]));
   const merged = (links || [])
     .map((l) => {
@@ -84,22 +71,12 @@ async function getPlaylistEditorData(slug) {
     savedGroups = (groupRes.data || []).map((g) => String(g.name || "").trim()).filter(Boolean);
   }
 
-  const { data: tokenRows } = await supabase
-    .from("playlist_tokens")
-    .select("token,is_active")
-    .eq("playlist_slug", slug)
-    .eq("is_active", true)
-    .limit(1);
-  const activeToken = Array.isArray(tokenRows) && tokenRows[0] ? String(tokenRows[0].token || "") : "";
-
-  return { playlist, channels: merged, savedGroups, activeToken };
+  return { playlist, channels: merged, savedGroups };
 }
 
-export default async function PlaylistEditorPage({ params }) {
+export default async function PlaylistLiveCheckPage({ params }) {
   const { slug } = await params;
-  const data = await getPlaylistEditorData(slug);
-  const base = process.env.PUBLIC_PLAYLIST_BASE_URL || "";
-  const playlistUrl = data?.activeToken && base ? `${base}/playlist/${data.activeToken}.m3u` : "";
+  const data = await getPlaylistData(slug);
 
   if (!data) {
     return (
@@ -110,19 +87,11 @@ export default async function PlaylistEditorPage({ params }) {
   }
 
   return (
-    <>
-      <section className={styles.card}>
-        <h2>{data.playlist.name}</h2>
-        <p className={styles.hint}>Slug: {slug}</p>
-      </section>
-      <PlaylistEditor
-        key={data.playlist.slug}
-        playlistSlug={data.playlist.slug}
-        playlistName={data.playlist.name}
-        playlistUrl={playlistUrl}
-        initialChannels={data.channels}
-        initialGroups={data.savedGroups || []}
-      />
-    </>
+    <LiveCheckWorkspace
+      playlistSlug={data.playlist.slug}
+      playlistName={data.playlist.name}
+      initialChannels={data.channels}
+      initialGroups={data.savedGroups || []}
+    />
   );
 }

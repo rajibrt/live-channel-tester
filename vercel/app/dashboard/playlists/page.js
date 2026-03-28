@@ -4,6 +4,52 @@ import CreatePlaylistForm from "./CreatePlaylistForm";
 import PlaylistEditor from "./[slug]/playlist-editor";
 import PlaylistsTable from "./PlaylistsTable";
 
+const PAGE_SIZE = 1000;
+
+async function fetchAllPlaylistLinks(supabase, slug) {
+  const rows = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const to = from + PAGE_SIZE - 1;
+    const { data, error } = await supabase
+      .from("playlist_channels")
+      .select("channel_id,position")
+      .eq("playlist_slug", slug)
+      .order("position", { ascending: true })
+      .range(from, to);
+    if (error) throw error;
+    const batch = Array.isArray(data) ? data : [];
+    rows.push(...batch);
+    if (batch.length < PAGE_SIZE) break;
+  }
+  return rows;
+}
+
+async function fetchChannelsByIds(supabase, ids, includeIncludeOnHome = true) {
+  const uniqueIds = [...new Set((ids || []).filter(Boolean))];
+  const rows = [];
+  const selectWithHome = "id,name,category,logo_url,stream_url,status,include_on_home";
+  const selectWithoutHome = "id,name,category,logo_url,stream_url,status";
+
+  for (let i = 0; i < uniqueIds.length; i += PAGE_SIZE) {
+    const part = uniqueIds.slice(i, i + PAGE_SIZE);
+    let res = await supabase
+      .from("channels")
+      .select(includeIncludeOnHome ? selectWithHome : selectWithoutHome)
+      .in("id", part);
+    if (
+      includeIncludeOnHome &&
+      res.error &&
+      String(res.error.message || "").toLowerCase().includes("include_on_home")
+    ) {
+      res = await supabase.from("channels").select(selectWithoutHome).in("id", part);
+    }
+    if (res.error) throw res.error;
+    rows.push(...(res.data || []));
+  }
+
+  return rows;
+}
+
 async function getPlaylists() {
   const supabase = getSupabaseAdmin();
   const { data } = await supabase
@@ -22,26 +68,12 @@ async function getPlaylistEditorData(slug) {
     .single();
   if (!playlist) return null;
 
-  const { data: links } = await supabase
-    .from("playlist_channels")
-    .select("channel_id,position")
-    .eq("playlist_slug", slug)
-    .order("position", { ascending: true });
+  const links = await fetchAllPlaylistLinks(supabase, slug);
 
   const ids = (links || []).map((x) => x.channel_id).filter(Boolean);
   let merged = [];
   if (ids.length) {
-    let channelsRes = await supabase
-      .from("channels")
-      .select("id,name,category,logo_url,stream_url,status,include_on_home")
-      .in("id", ids);
-    if (channelsRes.error && String(channelsRes.error.message || "").toLowerCase().includes("include_on_home")) {
-      channelsRes = await supabase
-        .from("channels")
-        .select("id,name,category,logo_url,stream_url,status")
-        .in("id", ids);
-    }
-    const channels = channelsRes.data || [];
+    const channels = await fetchChannelsByIds(supabase, ids, true);
     const byId = Object.fromEntries((channels || []).map((c) => [c.id, c]));
     merged = (links || [])
       .map((l) => {
