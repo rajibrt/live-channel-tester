@@ -1,6 +1,6 @@
 .shell {
   min-height: 100dvh;
-  padding: 112px 20px 72px;
+  padding: 18px 20px 56px;
   background:
     radial-gradient(circle at top, color-mix(in oklab, var(--primary) 16%, transparent), transparent 42%),
     linear-gradient(180deg, color-mix(in oklab, var(--background) 94%, transparent), var(--background));
@@ -501,6 +501,7 @@
   color: var(--muted-foreground);
   font-size: 1rem;
   line-height: 1.7;
+  overflow-wrap: anywhere;
 }
 
 .body {
@@ -551,6 +552,7 @@
   margin: 0;
   color: var(--muted-foreground);
   line-height: 1.75;
+  overflow-wrap: anywhere;
 }
 
 .section ul {
@@ -583,6 +585,8 @@
   margin: 0;
   color: var(--muted-foreground);
   line-height: 1.7;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .actions {
@@ -973,7 +977,7 @@
   }
 
   .shell {
-    padding: 92px 14px 52px;
+    padding: 14px 14px 44px;
   }
 
   .hero,
@@ -1004,6 +1008,26 @@
   .hero,
   .body {
     padding: 16px;
+  }
+
+  .shell {
+    padding: 10px 10px 32px;
+  }
+
+  .card {
+    border-radius: 18px;
+  }
+
+  .title {
+    line-height: 1.05;
+  }
+
+  .intro,
+  .section p,
+  .noticeText,
+  .infoCard p {
+    font-size: 0.96rem;
+    line-height: 1.62;
   }
 
   .siteBrand {
