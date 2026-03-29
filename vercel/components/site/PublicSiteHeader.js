@@ -45,7 +45,6 @@ export default function PublicSiteHeader() {
         <div className={styles.siteHeaderTopRow}>
           <Link href="/" className={styles.siteBrand} aria-label="WEBTVBD home">
             <Image src="/logo.png" alt="WEBTVBD" width={156} height={49} className={styles.siteBrandLogo} priority />
-            <span className={styles.siteBrandText}>TV Beyond Borders</span>
           </Link>
           <div className={styles.headerTicker} role="note" aria-label="Login required notice">
             <div className={styles.headerTickerTrack}>
@@ -59,6 +58,9 @@ export default function PublicSiteHeader() {
               </div>
             </div>
           </div>
+          <Link href="/client-login" className={styles.mobileTopLoginLink}>
+            {t("publicSite.clientLogin")}
+          </Link>
           <button
             type="button"
             className={styles.mobileMenuButton}

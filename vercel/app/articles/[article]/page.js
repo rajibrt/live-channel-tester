@@ -94,39 +94,53 @@ export default async function ArticleDetailPage({ params }) {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <article className={styles.articleDetailShell}>
         <Link href="/articles" className={styles.secondaryLink}>{copy.back}</Link>
-        <header className={styles.articleDetailHeader}>
-          <p className={styles.eyebrow}>{copy.eyebrow}</p>
-          <h1 className={styles.title}>{article.title}</h1>
-          <p className={styles.articleMeta}>
-            <span>{copy.updated}: {formatDate(article.updatedAt || article.publishedAt, locale)}</span>
-            <span>{article.readingMinutes} {copy.readingTime}</span>
-          </p>
-          <p className={styles.intro}>{article.description}</p>
-        </header>
+        <div className={styles.articleDetailContentGrid}>
+          <div className={styles.articleMainColumn}>
+            <header className={styles.articleDetailHeader}>
+              <p className={styles.eyebrow}>{copy.eyebrow}</p>
+              <h1 className={styles.title}>{article.title}</h1>
+              <p className={styles.articleMeta}>
+                <span>{copy.updated}: {formatDate(article.updatedAt || article.publishedAt, locale)}</span>
+                <span>{article.readingMinutes} {copy.readingTime}</span>
+              </p>
+              <p className={styles.intro}>{article.description}</p>
+            </header>
 
-        {article.featuredImageUrl ? (
-          <img src={article.featuredImageUrl} alt={article.title} className={styles.articleHeroImage} />
-        ) : null}
+            {article.featuredImageUrl ? (
+              <img src={article.featuredImageUrl} alt={article.title} className={styles.articleHeroImage} />
+            ) : null}
 
-        <section
-          className={styles.articleBody}
-          dangerouslySetInnerHTML={{ __html: article.html }}
-        />
-
-        <section className={styles.section}>
-          <h2>{copy.related}</h2>
-          <div className={styles.articleList}>
-            {related.map((item) => (
-              <article key={item.slug} className={styles.articleListCard}>
-                <div className={styles.articleListCopy}>
-                  <h3>{item.title}</h3>
-                  <p>{item.excerpt}</p>
-                </div>
-                <Link href={item.path} className={styles.secondaryLink}>{copy.readArticle}</Link>
-              </article>
-            ))}
+            <section
+              className={styles.articleBody}
+              dangerouslySetInnerHTML={{ __html: article.html }}
+            />
           </div>
-        </section>
+
+          <aside className={styles.articleSidebar}>
+            <section className={styles.section}>
+              <h2>{copy.related}</h2>
+              <div className={styles.articleList}>
+                {related.map((item) => (
+                  <Link key={item.slug} href={item.path} className={styles.articleListCard}>
+                    {item.featuredImageUrl ? (
+                      <img
+                        src={item.featuredImageUrl}
+                        alt={item.title}
+                        className={styles.articleListThumb}
+                        loading="lazy"
+                      />
+                    ) : null}
+                    <div className={styles.articleListCopy}>
+                      <h3>{item.title}</h3>
+                      <p>{item.excerpt}</p>
+                    </div>
+                    <span className={styles.secondaryLink}>{copy.readArticle}</span>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          </aside>
+        </div>
       </article>
     </main>
   );

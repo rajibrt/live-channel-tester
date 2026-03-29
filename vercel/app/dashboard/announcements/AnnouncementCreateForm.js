@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { ImagePlus, Save } from "lucide-react";
+import { ImagePlus, Sparkles, Save } from "lucide-react";
 import styles from "../page.module.css";
 import { Button } from "../../../components/ui/button";
 import { Switch } from "../../../components/ui/switch";
@@ -34,8 +34,12 @@ export default function AnnouncementCreateForm({ mode: sectionMode = "articles",
   }), [initialData, isAnnouncementMode]);
   const [form, setForm] = useState(baseForm);
   const [saving, setSaving] = useState(false);
+  const [generatingDraft, setGeneratingDraft] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [error, setError] = useState("");
+  const [draftLanguage, setDraftLanguage] = useState("bn");
+  const [draftTone, setDraftTone] = useState("informative");
+  const [draftLength, setDraftLength] = useState("medium");
 
   async function uploadArticleImage(file) {
     try {
@@ -90,6 +94,35 @@ export default function AnnouncementCreateForm({ mode: sectionMode = "articles",
     }
   }
 
+  async function handleGenerateDraft() {
+    if (isAnnouncementMode || isEditing) return;
+    setGeneratingDraft(true);
+    setError("");
+    try {
+      const res = await fetch("/api/admin/articles/generate-draft", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          title: form.title,
+          language: draftLanguage,
+          tone: draftTone,
+          length: draftLength,
+        }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload?.error || "Failed to generate article draft.");
+      setForm((prev) => ({
+        ...prev,
+        title: String(payload?.draft?.title || prev.title || ""),
+        content_html: String(payload?.draft?.html || prev.content_html || ""),
+      }));
+    } catch (err) {
+      setError(err?.message || "Failed to generate article draft.");
+    } finally {
+      setGeneratingDraft(false);
+    }
+  }
+
   return (
     <section className={styles.card}>
       <div className={styles.sectionHead}>
@@ -120,6 +153,52 @@ export default function AnnouncementCreateForm({ mode: sectionMode = "articles",
             required
           />
         </label>
+
+        {!isAnnouncementMode && !isEditing ? (
+          <div className={`${styles.field} ${styles.full}`}>
+            <span className={styles.statLabelWithIcon}><Sparkles size={14} /><span>AI Draft Generator</span></span>
+            <div className={styles.formGrid}>
+              <label className={styles.field}>
+                <span>Language</span>
+                <select value={draftLanguage} onChange={(e) => setDraftLanguage(e.target.value)}>
+                  <option value="bn">Bangla</option>
+                  <option value="en">English</option>
+                </select>
+              </label>
+              <label className={styles.field}>
+                <span>Tone</span>
+                <select value={draftTone} onChange={(e) => setDraftTone(e.target.value)}>
+                  <option value="informative">Informative</option>
+                  <option value="guide">Guide</option>
+                  <option value="news">News</option>
+                </select>
+              </label>
+              <label className={styles.field}>
+                <span>Length</span>
+                <select value={draftLength} onChange={(e) => setDraftLength(e.target.value)}>
+                  <option value="short">Short</option>
+                  <option value="medium">Medium</option>
+                  <option value="long">Long</option>
+                </select>
+              </label>
+            </div>
+            <div className={styles.controlRowEnd}>
+              <Button
+                type="button"
+                variant="outline"
+                className={styles.secondaryBtn}
+                disabled={generatingDraft || saving || form.title.trim().length < 6}
+                onClick={handleGenerateDraft}
+              >
+                <Sparkles size={16} />
+                <span>{generatingDraft ? "Generating..." : "Generate Draft from Title"}</span>
+              </Button>
+            </div>
+            <small className={styles.fieldHint}>
+              Enter a strong title first. The generated HTML draft will be inserted into the editor for review.
+            </small>
+          </div>
+        ) : null}
 
         <div className={`${styles.field} ${styles.full}`}>
           <span className={styles.statLabelWithIcon}><ImagePlus size={14} /><span>Featured Image</span></span>

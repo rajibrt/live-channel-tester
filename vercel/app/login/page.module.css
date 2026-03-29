@@ -133,6 +133,11 @@
   padding: 40px clamp(18px, 5vw, 80px);
 }
 
+.formShellWrap {
+  position: relative;
+  width: min(460px, 100%);
+}
+
 .formShell {
   width: min(460px, 100%);
   background: rgba(255, 255, 255, 0.88);
@@ -723,6 +728,10 @@
     overflow: auto;
   }
 
+  .formShellWrap {
+    width: min(420px, 100%);
+  }
+
   .formHeaderRow {
     margin-bottom: 10px;
   }
@@ -844,138 +853,256 @@
   }
 
   .visualPane {
-    min-height: 214px;
+    min-height: 170px;
   }
 
   .visualBrand {
     left: 50%;
     right: auto;
-    top: 30%;
+    top: 28%;
     bottom: auto;
     transform: translate(-50%, -50%);
     padding: 4px 8px 4px;
-    max-width: min(270px, calc(100% - 20px));
+    max-width: min(220px, calc(100% - 20px));
     justify-items: center;
+    gap: 4px;
   }
 
   .visualBrandLogoFull {
-    width: min(150px, 55vw);
+    width: min(124px, 44vw);
   }
 
   .visualBrandSlogan {
-    font-size: 8px;
-    letter-spacing: 0.1em;
-  }
-
-  .visualCopy {
-    left: 16px;
-    right: 16px;
-    bottom: 10px;
-  }
-
-  .visualTag {
-    margin-bottom: 6px;
-    font-size: 11px;
-    padding: 4px 9px;
-  }
-
-  .visualTitle {
-    margin-bottom: 6px;
-    font-size: clamp(18px, 7vw, 26px);
-    line-height: 1.05;
-  }
-
-  .visualText {
-    display: block;
-    font-size: 11px;
-    line-height: 1.35;
-    margin-top: 2px;
-  }
-
-  .formPane {
-    padding: 10px;
-  }
-
-  .formShell {
-    width: 100%;
-    border-radius: 14px;
-    padding: 14px 12px;
-    box-shadow: 0 14px 30px rgba(16, 24, 40, 0.08);
-  }
-
-  .formTitle {
-    font-size: clamp(18px, 8vw, 26px);
-    line-height: 1.1;
-  }
-
-  .formTag {
-    margin: 0 0 4px;
-    font-size: 11px;
-  }
-
-  .formText {
-    margin: 6px 0 12px;
-    font-size: 11px;
-    line-height: 1.35;
-  }
-
-  .form {
-    gap: 10px;
-  }
-
-  .inlineSwitchNote {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .field {
-    gap: 6px;
-    font-size: 12px;
-  }
-
-  .field input {
-    border-radius: 10px;
-    padding: 9px 11px;
-  }
-
-  .submit {
-    border-radius: 10px;
-    padding: 10px 11px;
-    font-size: 15px;
-  }
-}
-
-@media (max-width: 420px) {
-  .visualPane {
-    min-height: 198px;
-  }
-
-  .visualBrandLogoFull {
-    width: min(132px, 50vw);
-  }
-
-  .visualBrand {
-    top: 35%;
+    font-size: 7px;
+    letter-spacing: 0.08em;
   }
 
   .visualCopy {
     left: 14px;
     right: 14px;
-    bottom: 6px;
+    bottom: 8px;
   }
 
   .visualTag {
-    margin-bottom: 5px;
+    margin-bottom: 4px;
     font-size: 10px;
+    padding: 3px 8px;
   }
 
   .visualTitle {
-    font-size: clamp(17px, 6.8vw, 22px);
+    margin-bottom: 4px;
+    font-size: clamp(15px, 6vw, 22px);
+    line-height: 1.05;
   }
 
   .visualText {
+    display: block;
+    font-size: 10px;
+    line-height: 1.3;
+    margin-top: 0;
+  }
+
+  .formPane {
+    padding: 8px;
+  }
+
+  .formShellWrap {
+    width: min(360px, calc(100% - 16px));
+    padding-top: 0;
+  }
+
+  .formShell {
+    width: 100%;
+    border-radius: 12px;
+    padding: 12px;
+    box-shadow: 0 10px 24px rgba(16, 24, 40, 0.08);
+  }
+
+  .formHeaderRow {
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    margin-bottom: 0;
+    z-index: 70;
+  }
+
+  .localeToggleBtn {
+    min-height: 36px;
+    padding: 0 12px;
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);
+  }
+
+  .authModeSwitch {
+    margin-bottom: 10px;
+    padding: 4px;
+    border-radius: 14px;
+  }
+
+  .authModeLink {
+    min-height: 38px;
+    border-radius: 10px;
+  }
+
+  .formTitle {
+    font-size: clamp(18px, 7.4vw, 24px);
+    line-height: 1.1;
+  }
+
+  .formTag {
+    margin: 0 0 4px;
+    font-size: 10px;
+  }
+
+  .formText {
+    margin: 4px 0 10px;
     font-size: 10px;
     line-height: 1.32;
+  }
+
+  .form {
+    gap: 8px;
+  }
+
+  .inlineSwitchNote {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    margin-top: 12px;
+    font-size: 12px;
+  }
+
+  .field {
+    gap: 4px;
+    font-size: 12px;
+  }
+
+  .field input {
+    border-radius: 9px;
+    padding: 10px 12px;
+    font-size: 14px;
+  }
+
+  .submit {
+    border-radius: 9px;
+    padding: 9px 10px;
+    font-size: 14px;
+  }
+
+  .divider {
+    margin: 12px 0 10px;
+    font-size: 12px;
+  }
+
+  .socialBtn {
+    padding: 9px 10px;
+    gap: 8px;
+    font-size: 13px;
+  }
+
+  .socialIcon {
+    width: 22px;
+    height: 22px;
+  }
+
+  .note,
+  .successNote,
+  .errorNote {
+    font-size: 12px;
+    padding: 8px 10px;
+  }
+
+  .publicLinks {
+    margin-top: 14px;
+    padding-top: 12px;
+    gap: 8px;
+  }
+
+  .publicLinksLabel {
+    font-size: 10px;
+  }
+
+  .publicLinksNav {
+    gap: 6px 10px;
+  }
+
+  .publicLinksNav a {
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 420px) {
+  .visualPane {
+    min-height: 152px;
+  }
+
+  .visualBrandLogoFull {
+    width: min(112px, 42vw);
+  }
+
+  .visualBrand {
+    top: 27%;
+  }
+
+  .visualCopy {
+    left: 12px;
+    right: 12px;
+    bottom: 4px;
+  }
+
+  .visualTag {
+    margin-bottom: 3px;
+    font-size: 9px;
+  }
+
+  .visualTitle {
+    font-size: clamp(14px, 6.2vw, 18px);
+  }
+
+  .visualText {
+    font-size: 9px;
+    line-height: 1.25;
+  }
+
+  .formPane {
+    padding: 6px;
+  }
+
+  .formShellWrap {
+    width: min(340px, calc(100% - 12px));
+  }
+
+  .formHeaderRow {
+    top: 10px;
+    right: 10px;
+  }
+
+  .formShell {
+    width: 100%;
+    padding: 10px;
+  }
+
+  .authModeLink {
+    min-height: 36px;
+    font-size: 13px;
+  }
+
+  .formTitle {
+    font-size: 18px;
+  }
+
+  .field {
+    font-size: 11px;
+  }
+
+  .field input {
+    padding: 9px 11px;
+    font-size: 14px;
+  }
+
+  .submit {
+    font-size: 13px;
+    padding: 8px 9px;
   }
 
   .formPane {

@@ -1,5 +1,4 @@
 import { cache } from "react";
-import { EDITORIAL_GUIDES } from "./editorialGuides";
 import { resolveObjectUrl } from "./objectStorage";
 import { getSupabaseAdmin } from "./supabaseAdmin";
 import { toAbsoluteUrl } from "./siteUrl";
@@ -111,7 +110,7 @@ async function loadPublishedAnnouncementArticles(limit = 24) {
 
 export const getPublicArticles = cache(async () => {
   const dbArticles = await loadPublishedAnnouncementArticles(32);
-  const merged = [...dbArticles, ...EDITORIAL_GUIDES].sort((a, b) => {
+  const merged = [...dbArticles].sort((a, b) => {
     return new Date(b.updatedAt || b.publishedAt || 0).getTime() - new Date(a.updatedAt || a.publishedAt || 0).getTime();
   });
   return merged;

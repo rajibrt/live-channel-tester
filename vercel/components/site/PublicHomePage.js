@@ -1,70 +1,96 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { useI18n } from "../i18n/LanguageProvider";
 import styles from "./public-pages.module.css";
 
 export default function PublicHomePage({ featuredArticles = [] }) {
   const { t } = useI18n();
+  const heroArticles = featuredArticles.slice(0, 3);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const heroArticle = heroArticles[activeIndex] || featuredArticles[0] || null;
+  const editorialIntro = t("publicSite.editorialIntro");
+
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [featuredArticles.length]);
+
+  useEffect(() => {
+    if (heroArticles.length <= 1) {
+      return undefined;
+    }
+
+    const timer = window.setInterval(() => {
+      setActiveIndex((current) => (current + 1) % heroArticles.length);
+    }, 4200);
+
+    return () => window.clearInterval(timer);
+  }, [heroArticles.length]);
 
   return (
     <main className={styles.landingShell}>
-      <section className={styles.landingHero}>
-        <div className={styles.landingCopy}>
-          <p className={styles.eyebrow}>{t("publicSite.homeEyebrow")}</p>
-          <h1 className={styles.landingTitle}>{t("publicSite.homeTitle")}</h1>
-          <p className={styles.landingIntro}>{t("publicSite.homeIntro")}</p>
-          <div className={styles.actions}>
-            <Link href="/client-login" className={styles.primaryLink}>
-              {t("publicSite.clientLogin")}
-            </Link>
-            <Link href="/about" className={styles.secondaryLink}>
-              {t("publicSite.learnAbout")}
-            </Link>
-          </div>
+      <section className={styles.homeHeroSection}>
+        <div className={styles.homeHeroBackdrop}>
+          {heroArticles.length ? (
+            heroArticles.map((article, index) =>
+              article?.featuredImageUrl ? (
+                <img
+                  key={article.slug}
+                  src={article.featuredImageUrl}
+                  alt={article.title}
+                  className={`${styles.homeHeroImage} ${index === activeIndex ? styles.homeHeroImageActive : ""}`}
+                  loading={index === 0 ? "eager" : "lazy"}
+                />
+              ) : null
+            )
+          ) : heroArticle?.featuredImageUrl ? (
+            <img src={heroArticle.featuredImageUrl} alt={heroArticle.title} className={`${styles.homeHeroImage} ${styles.homeHeroImageActive}`} loading="eager" />
+          ) : null}
         </div>
-
-        <section className={styles.heroShowcase}>
-          <div className={styles.heroPanel}>
-            <div className={styles.heroBrandCard}>
-              <div className={styles.heroBrandRow}>
-                <Image src="/logo.png" alt="WEBTVBD" width={176} height={55} className={styles.heroLogo} priority />
-                <span className={styles.heroBadge}>{t("publicSite.heroBadge")}</span>
-              </div>
-              <p className={styles.heroBrandLead}>{t("publicSite.heroLead")}</p>
-            </div>
-            <div className={styles.heroStats}>
-              <article className={styles.heroStatCard}>
-                <p>{t("publicSite.stat1Label")}</p>
-                <strong>{t("publicSite.stat1Title")}</strong>
-                <span>{t("publicSite.stat1Body")}</span>
-              </article>
-              <article className={styles.heroStatCard}>
-                <p>{t("publicSite.stat2Label")}</p>
-                <strong>{t("publicSite.stat2Title")}</strong>
-                <span>{t("publicSite.stat2Body")}</span>
-              </article>
-              <article className={styles.heroStatCard}>
-                <p>{t("publicSite.stat3Label")}</p>
-                <strong>{t("publicSite.stat3Title")}</strong>
-                <span>{t("publicSite.stat3Body")}</span>
-              </article>
-            </div>
-          </div>
-        </section>
+        <div className={styles.homeHeroOverlay}>
+          {heroArticle ? (
+            <article key={heroArticle.slug} className={styles.homeHeroFeatureCard}>
+              {heroArticle.featuredImageUrl ? (
+                <img
+                  src={heroArticle.featuredImageUrl}
+                  alt={heroArticle.title}
+                  className={styles.homeHeroCardImage}
+                  loading="lazy"
+                />
+              ) : null}
+              <p className={styles.articleMeta}>
+                <span>{heroArticle.readingMinutes} {t("publicSite.readingMinutes")}</span>
+              </p>
+              <h2>{heroArticle.title}</h2>
+              <p>{heroArticle.excerpt}</p>
+              <Link href={heroArticle.path} className={styles.primaryLink}>
+                {t("publicSite.readArticle")}
+              </Link>
+              {heroArticles.length > 1 ? (
+                <div className={styles.homeHeroIndicators} aria-label="Hero article slides">
+                  {heroArticles.map((article, index) => (
+                    <button
+                      key={article.slug}
+                      type="button"
+                      className={`${styles.homeHeroIndicator} ${index === activeIndex ? styles.homeHeroIndicatorActive : ""}`}
+                      aria-label={`Show slide ${index + 1}`}
+                      aria-pressed={index === activeIndex}
+                      onClick={() => setActiveIndex(index)}
+                    />
+                  ))}
+                </div>
+              ) : null}
+            </article>
+          ) : null}
+        </div>
       </section>
 
-      <section className={styles.noticeBox}>
-        <p className={styles.noticeTitle}>{t("publicSite.sourceNoticeTitle")}</p>
-        <p className={styles.noticeText}>{t("publicSite.sourceNoticeBody")}</p>
-      </section>
-
-      <section className={styles.homeEditorialSection}>
+      <section className={styles.homeArticleSection}>
         <div className={styles.sectionHeading}>
           <p className={styles.eyebrow}>{t("publicSite.editorialEyebrow")}</p>
           <h2>{t("publicSite.editorialTitle")}</h2>
-          <p>{t("publicSite.editorialIntro")}</p>
+          {editorialIntro && editorialIntro !== "publicSite.editorialIntro" ? <p>{editorialIntro}</p> : null}
         </div>
         <div className={styles.articleFeaturedGrid}>
           {featuredArticles.map((article) => (
@@ -83,21 +109,6 @@ export default function PublicHomePage({ featuredArticles = [] }) {
             </article>
           ))}
         </div>
-      </section>
-
-      <section className={styles.homeTrustGrid}>
-        <article className={styles.infoCard}>
-          <strong>{t("publicSite.trustTitle1")}</strong>
-          <p>{t("publicSite.trustBody1")}</p>
-        </article>
-        <article className={styles.infoCard}>
-          <strong>{t("publicSite.trustTitle2")}</strong>
-          <p>{t("publicSite.trustBody2")}</p>
-        </article>
-        <article className={styles.infoCard}>
-          <strong>{t("publicSite.trustTitle3")}</strong>
-          <p>{t("publicSite.trustBody3")}</p>
-        </article>
       </section>
     </main>
   );

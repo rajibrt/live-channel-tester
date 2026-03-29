@@ -28,7 +28,6 @@ export default function PublicSiteFooter() {
     <footer className={styles.footer}>
       <div className={styles.footerBrand}>
         <strong>WEBTVBD</strong>
-        <span>{t("publicSite.footerDescription")}</span>
       </div>
       <nav className={styles.footerNav} aria-label="Public site links">
         {footerLinks.map((item) => (
