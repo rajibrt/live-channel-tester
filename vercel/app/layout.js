@@ -3,15 +3,17 @@ import Script from "next/script";
 import { cookies } from "next/headers";
 import PublicAdSenseScript from "../components/ads/PublicAdSenseScript";
 import { LanguageProvider } from "../components/i18n/LanguageProvider";
-import PublicSiteHeader from "../components/site/PublicSiteHeader";
-import PublicSiteFooter from "../components/site/PublicSiteFooter";
 import PublicSmoothScroll from "../components/site/PublicSmoothScroll";
+import SiteChrome from "../components/site/SiteChrome";
 import { getCurrentClient } from "../lib/clientAuth";
+import { getHomeIptvData } from "../components/iptv/homeData";
+import { buildWatchPath } from "../lib/channelSlug";
 import { DEFAULT_LOCALE, SUPPORTED_LOCALES } from "../lib/i18n/dictionaries";
 import { getBaseUrl } from "../lib/siteUrl";
 
 const baseUrl = getBaseUrl();
 const buildVersion = String(process.env.NEXT_PUBLIC_BUILD_VERSION || "dev").trim() || "dev";
+const PUBLIC_LOCALE_COOKIE = "site_lang";
 export const metadata = {
   title: "WEBTVBD || TV Beyond Borders",
   description: "WEBTVBD live streaming platform for channels, categories, and on-demand viewer access.",
@@ -39,9 +41,17 @@ export const metadata = {
 
 export default async function RootLayout({ children }) {
   const cookieStore = await cookies();
-  const cookieLocale = String(cookieStore.get("lang")?.value || "").trim().toLowerCase();
+  const cookieLocale = String(cookieStore.get(PUBLIC_LOCALE_COOKIE)?.value || cookieStore.get("lang")?.value || "").trim().toLowerCase();
   const initialLocale = SUPPORTED_LOCALES.includes(cookieLocale) ? cookieLocale : DEFAULT_LOCALE;
   const currentClient = await getCurrentClient().catch(() => null);
+  const approvalStatus = String(currentClient?.client?.approval_status || "").trim().toLowerCase();
+  const hasApprovedClientSession = !!currentClient && approvalStatus === "approved";
+  let viewerEntryHref = "/client-login";
+  if (hasApprovedClientSession) {
+    const homeData = await getHomeIptvData().catch(() => null);
+    const firstChannel = Array.isArray(homeData?.channels) ? homeData.channels[0] : null;
+    viewerEntryHref = firstChannel ? buildWatchPath(firstChannel) : "/client-login";
+  }
   const themeInitScript = `
     (function () {
       try {
@@ -98,9 +108,9 @@ export default async function RootLayout({ children }) {
         <LanguageProvider initialLocale={initialLocale}>
           <PublicSmoothScroll />
           <PublicAdSenseScript />
-          {!currentClient ? <PublicSiteHeader /> : null}
-          {children}
-          {!currentClient ? <PublicSiteFooter /> : null}
+          <SiteChrome hasClientSession={!!currentClient} viewerEntryHref={viewerEntryHref}>
+            {children}
+          </SiteChrome>
         </LanguageProvider>
         <Script id="statcounter-config" strategy="afterInteractive">
           {`

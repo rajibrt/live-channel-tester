@@ -29,7 +29,7 @@ export default function AnnouncementCreateForm({ mode: sectionMode = "articles",
     ...EMPTY_FORM,
     ...initialData,
     content_type: isAnnouncementMode ? "announcement" : "article",
-    show_title_in_ticker: isAnnouncementMode ? true : !!initialData?.show_title_in_ticker,
+    show_title_in_ticker: !!initialData?.show_title_in_ticker,
     is_pinned: isAnnouncementMode ? !!initialData?.is_pinned : false,
   }), [initialData, isAnnouncementMode]);
   const [form, setForm] = useState(baseForm);
@@ -79,7 +79,7 @@ export default function AnnouncementCreateForm({ mode: sectionMode = "articles",
         body: JSON.stringify({
           ...form,
           content_type: isAnnouncementMode ? "announcement" : "article",
-          show_title_in_ticker: isAnnouncementMode ? true : !!form.show_title_in_ticker,
+          show_title_in_ticker: !!form.show_title_in_ticker,
           is_published: mode === "draft" ? false : !!form.is_published,
         }),
       });
@@ -259,15 +259,17 @@ export default function AnnouncementCreateForm({ mode: sectionMode = "articles",
             />
             <span>Pin to top</span>
           </label>
-          {!isAnnouncementMode ? (
-            <label className={styles.checkRow}>
-              <Switch
-                checked={!!form.show_title_in_ticker}
-                onCheckedChange={(checked) => setForm((prev) => ({ ...prev, show_title_in_ticker: checked }))}
-              />
-              <span>Show title in ticker and open article in modal on click</span>
-            </label>
-          ) : null}
+          <label className={styles.checkRow}>
+            <Switch
+              checked={!!form.show_title_in_ticker}
+              onCheckedChange={(checked) => setForm((prev) => ({ ...prev, show_title_in_ticker: checked }))}
+            />
+            <span>
+              {isAnnouncementMode
+                ? "Ticker Mode: show title only and open modal on click"
+                : "Show title in ticker and open article in modal on click"}
+            </span>
+          </label>
         </div>
 
         {error ? <p className={styles.errorText}>{error}</p> : null}

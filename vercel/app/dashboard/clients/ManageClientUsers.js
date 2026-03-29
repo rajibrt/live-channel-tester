@@ -2,9 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Activity, Eye, EyeOff, History, Mail, Pencil, Plus, RotateCcw, Trash2, UserCheck, Users, Users2 } from "lucide-react";
+import { Activity, Bell, Eye, EyeOff, History, Mail, Pencil, Plus, RotateCcw, Trash2, UserCheck, Users, Users2 } from "lucide-react";
 import styles from "../page.module.css";
-import ActiveViewersPanel from "../ActiveViewersPanel";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -162,6 +161,8 @@ export default function ManageClientUsers({ initialItems = [], initialActiveView
   const [statusFilter, setStatusFilter] = useState("all");
   const [approvalFilter, setApprovalFilter] = useState("all");
   const [activityFilter, setActivityFilter] = useState("all");
+  const [pushFilter, setPushFilter] = useState("all");
+  const [activeViewerFilter, setActiveViewerFilter] = useState("all");
   const [watchTierFilter, setWatchTierFilter] = useState("all");
   const [sortMode, setSortMode] = useState("created_desc");
   const [currentPage, setCurrentPage] = useState(1);
@@ -216,11 +217,16 @@ export default function ManageClientUsers({ initialItems = [], initialActiveView
   }
 
   const activeCount = useMemo(() => items.filter((x) => x.is_active).length, [items]);
+  const pushEnabledCount = useMemo(() => items.filter((x) => x.push_enabled).length, [items]);
   const pendingApprovalCount = useMemo(
     () => items.filter((x) => String(x?.approval_status || "").toLowerCase() === "pending").length,
     [items]
   );
   const noActivityCount = useMemo(() => items.filter((x) => Number(x.watch_count || 0) <= 0).length, [items]);
+  const activeViewerIds = useMemo(
+    () => new Set((Array.isArray(initialActiveViewers) ? initialActiveViewers : []).map((row) => String(row?.user_id || "")).filter(Boolean)),
+    [initialActiveViewers]
+  );
   const filteredItems = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
     const base = items.filter((row) => {
@@ -238,6 +244,10 @@ export default function ManageClientUsers({ initialItems = [], initialActiveView
 
       if (activityFilter === "no_activity" && hasActivity) return false;
       if (activityFilter === "has_activity" && !hasActivity) return false;
+
+      if (pushFilter === "enabled" && !row.push_enabled) return false;
+      if (pushFilter === "disabled" && row.push_enabled) return false;
+      if (activeViewerFilter === "watching" && !activeViewerIds.has(String(row?.user_id || ""))) return false;
 
       if (watchTierFilter === "heavy" && totalWatch < 1800) return false;
       if (watchTierFilter === "medium" && (totalWatch < 300 || totalWatch >= 1800)) return false;
@@ -276,7 +286,7 @@ export default function ManageClientUsers({ initialItems = [], initialActiveView
       return timeValue(b.created_at) - timeValue(a.created_at);
     });
     return sorted;
-  }, [items, searchTerm, statusFilter, approvalFilter, activityFilter, watchTierFilter, sortMode]);
+  }, [items, searchTerm, statusFilter, approvalFilter, activityFilter, pushFilter, activeViewerFilter, activeViewerIds, watchTierFilter, sortMode]);
 
   const hasActiveFilters = useMemo(
     () =>
@@ -284,9 +294,11 @@ export default function ManageClientUsers({ initialItems = [], initialActiveView
       statusFilter !== "all" ||
       approvalFilter !== "all" ||
       activityFilter !== "all" ||
+      pushFilter !== "all" ||
+      activeViewerFilter !== "all" ||
       watchTierFilter !== "all" ||
       sortMode !== "created_desc",
-    [searchTerm, statusFilter, approvalFilter, activityFilter, watchTierFilter, sortMode]
+    [searchTerm, statusFilter, approvalFilter, activityFilter, pushFilter, activeViewerFilter, watchTierFilter, sortMode]
   );
   const totalFilteredItems = filteredItems.length;
   const totalPages = Math.max(1, Math.ceil(totalFilteredItems / pageSize));
@@ -608,34 +620,78 @@ export default function ManageClientUsers({ initialItems = [], initialActiveView
     setStatusFilter("all");
     setApprovalFilter("all");
     setActivityFilter("all");
+    setPushFilter("all");
+    setActiveViewerFilter("all");
     setWatchTierFilter("all");
     setSortMode("created_desc");
+  }
+
+  function applyQuickFilter(type) {
+    setSearchTerm("");
+    setCurrentPage(1);
+    if (type === "all") {
+      clearFilters();
+      return;
+    }
+    setStatusFilter(type === "active" ? "active" : "all");
+    setApprovalFilter(type === "pending" ? "pending" : "all");
+    setActivityFilter(type === "no_activity" ? "no_activity" : "all");
+    setPushFilter(type === "push_enabled" ? "enabled" : "all");
+    setActiveViewerFilter(type === "watching" ? "watching" : "all");
+    setWatchTierFilter("all");
+    setSortMode(type === "watching" ? "recent_activity" : "created_desc");
   }
 
   return (
     <section className={styles.form}>
       <div className={styles.stats}>
-        <ActiveViewersPanel title="Watching Now" viewers={initialActiveViewers} />
+        <button
+          type="button"
+          className={styles.statCardButton}
+          onClick={() => applyQuickFilter("watching")}
+          aria-pressed={activeViewerFilter === "watching"}
+        >
+          <article className={styles.statCard}>
+            <p>Watching Now</p>
+            <strong>{Array.isArray(initialActiveViewers) ? initialActiveViewers.length : 0}</strong>
+            <small className={styles.metaMuted}>
+              {activeViewerFilter === "watching" ? "Showing active viewers only" : "Click to filter active sessions"}
+            </small>
+          </article>
+        </button>
         <article className={styles.statCard}>
-          <p className={styles.statLabelWithIcon}>
-            <Users size={14} />
-            <span>Total Clients</span>
-          </p>
-          <strong>{items.length}</strong>
-        </article>
-        <article className={styles.statCard}>
-          <p className={styles.statLabelWithIcon}>
-            <UserCheck size={14} />
-            <span>Active Clients</span>
-          </p>
-          <strong>{activeCount}</strong>
+          <button type="button" className={styles.statCardButton} onClick={() => applyQuickFilter("all")}>
+            <p className={styles.statLabelWithIcon}>
+              <Users size={14} />
+              <span>Total Clients</span>
+            </p>
+            <strong>{items.length}</strong>
+            <small className={styles.metaMuted}>Click to reset table filters</small>
+          </button>
         </article>
         <button
           type="button"
           className={styles.statCardButton}
-          onClick={() => setApprovalFilter((prev) => (prev === "pending" ? "all" : "pending"))}
+          onClick={() => applyQuickFilter("active")}
+          aria-pressed={statusFilter === "active"}
+        >
+          <article className={styles.statCard}>
+            <p className={styles.statLabelWithIcon}>
+              <UserCheck size={14} />
+              <span>Active Clients</span>
+            </p>
+            <strong>{activeCount}</strong>
+            <small className={styles.metaMuted}>
+              {statusFilter === "active" ? "Showing active clients only" : "Click to filter active clients"}
+            </small>
+          </article>
+        </button>
+        <button
+          type="button"
+          className={styles.statCardButton}
+          onClick={() => applyQuickFilter("pending")}
           aria-pressed={approvalFilter === "pending"}
-          title="Toggle pending approval filter"
+          title="Filter pending approvals"
         >
           <p className={styles.statLabelWithIcon}>
             <Users2 size={14} />
@@ -646,13 +702,40 @@ export default function ManageClientUsers({ initialItems = [], initialActiveView
             {approvalFilter === "pending" ? "Showing pending only" : "Click to filter table"}
           </small>
         </button>
-        <article className={styles.statCard}>
-          <p className={styles.statLabelWithIcon}>
-            <Activity size={14} />
-            <span>No Activity</span>
-          </p>
-          <strong>{noActivityCount}</strong>
-        </article>
+        <button
+          type="button"
+          className={styles.statCardButton}
+          onClick={() => applyQuickFilter("no_activity")}
+          aria-pressed={activityFilter === "no_activity"}
+        >
+          <article className={styles.statCard}>
+            <p className={styles.statLabelWithIcon}>
+              <Activity size={14} />
+              <span>No Activity</span>
+            </p>
+            <strong>{noActivityCount}</strong>
+            <small className={styles.metaMuted}>
+              {activityFilter === "no_activity" ? "Showing no-activity users only" : "Click to filter no activity"}
+            </small>
+          </article>
+        </button>
+        <button
+          type="button"
+          className={styles.statCardButton}
+          onClick={() => applyQuickFilter("push_enabled")}
+          aria-pressed={pushFilter === "enabled"}
+        >
+          <article className={styles.statCard}>
+            <p className={styles.statLabelWithIcon}>
+              <Bell size={14} />
+              <span>Push Enabled</span>
+            </p>
+            <strong>{pushEnabledCount}</strong>
+            <small className={styles.metaMuted}>
+              {pushFilter === "enabled" ? "Showing push-enabled clients only" : "Click to filter push-enabled clients"}
+            </small>
+          </article>
+        </button>
       </div>
 
       <div className={styles.controlRowEnd}>
@@ -785,6 +868,14 @@ export default function ManageClientUsers({ initialItems = [], initialActiveView
             <option value="all">All Activity States</option>
             <option value="has_activity">Has Activity</option>
             <option value="no_activity">No Activity</option>
+          </select>
+        </label>
+        <label className={styles.field}>
+          <span>Push Filter</span>
+          <select value={pushFilter} onChange={(e) => setPushFilter(e.target.value)}>
+            <option value="all">All Push States</option>
+            <option value="enabled">Push Enabled</option>
+            <option value="disabled">Push Disabled</option>
           </select>
         </label>
         <label className={styles.field}>
@@ -999,6 +1090,10 @@ export default function ManageClientUsers({ initialItems = [], initialActiveView
                 <div className={styles.clientViewRow}><dt>Approval</dt><dd>{String(viewUser?.approval_status || "approved")}</dd></div>
                 <div className={styles.clientViewRow}><dt>Provider</dt><dd>{String(viewUser?.auth_provider || "password")}</dd></div>
                 <div className={styles.clientViewRow}>
+                  <dt>Push Notifications</dt>
+                  <dd>{viewUser?.push_enabled ? `ON (${Number(viewUser?.push_subscription_count || 0)} device)` : "OFF"}</dd>
+                </div>
+                <div className={styles.clientViewRow}>
                   <dt>Created</dt>
                   <dd>{viewUser?.created_at ? new Date(viewUser.created_at).toLocaleString() : "-"}</dd>
                 </div>
@@ -1150,6 +1245,7 @@ export default function ManageClientUsers({ initialItems = [], initialActiveView
                   </button>
                 </TableHead>
                 <TableHead className={styles.colClientStatus}>Approval</TableHead>
+                <TableHead className={styles.colClientStatus}>Push</TableHead>
                 <TableHead className={styles.colClientViews}>
                   <button type="button" className={styles.rowLinkBtn} onClick={() => toggleHeaderSort("most_views", "least_views")}>
                     Views {sortMarker("most_views", "least_views")}
@@ -1187,6 +1283,11 @@ export default function ManageClientUsers({ initialItems = [], initialActiveView
                   </TableCell>
                   <TableCell className={styles.colClientStatus}>
                     <TruncatedTooltipCell text={String(row.approval_status || "approved")} />
+                  </TableCell>
+                  <TableCell className={styles.colClientStatus}>
+                    <TruncatedTooltipCell
+                      text={row.push_enabled ? `On (${Number(row.push_subscription_count || 0)})` : "Off"}
+                    />
                   </TableCell>
                   <TableCell className={styles.colClientViews}>
                     <TruncatedTooltipCell text={Number(row.watch_count || 0)} />
@@ -1256,7 +1357,7 @@ export default function ManageClientUsers({ initialItems = [], initialActiveView
               ))}
             {!totalFilteredItems ? (
               <TableRow>
-                <TableCell colSpan={9} className={styles.pending}>No users found for this filter.</TableCell>
+                <TableCell colSpan={10} className={styles.pending}>No users found for this filter.</TableCell>
               </TableRow>
             ) : null}
             </TableBody>

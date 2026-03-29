@@ -765,9 +765,7 @@
   content: "";
   position: absolute;
   inset: 0;
-  background:
-    linear-gradient(90deg, rgba(6, 8, 18, 0.92) 0%, rgba(6, 8, 18, 0.78) 44%, rgba(6, 8, 18, 0.34) 100%),
-    linear-gradient(180deg, rgba(10, 11, 23, 0.18) 0%, rgba(10, 11, 23, 0.82) 100%);
+  background: transparent;
 }
 
 .homeHeroImage {
@@ -802,7 +800,7 @@
   border: 1px solid color-mix(in oklab, var(--primary) 30%, var(--border));
   border-radius: 20px;
   background:
-    linear-gradient(180deg, rgba(14, 18, 35, 0.9), rgba(14, 18, 35, 0.78)),
+    linear-gradient(180deg, rgba(14, 18, 35, 0.82), rgba(14, 18, 35, 0.66)),
     color-mix(in oklab, var(--card) 92%, transparent);
   box-shadow: var(--shadow-xl);
   backdrop-filter: blur(10px);

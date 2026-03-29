@@ -195,6 +195,66 @@
   font-size: 12px;
 }
 
+.pushEnabledList {
+  display: grid;
+  gap: 10px;
+}
+
+.pushEnabledRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: color-mix(in oklab, var(--background) 90%, var(--card));
+}
+
+.pushEnabledCopy {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.pushEnabledCopy strong {
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.pushEnabledCopy span {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.pushEnabledBadge,
+.pushMutedBadge {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.pushEnabledBadge {
+  color: var(--primary-foreground);
+  background: linear-gradient(135deg, var(--primary), color-mix(in oklab, var(--primary) 72%, var(--accent)));
+}
+
+.pushMutedBadge {
+  color: var(--foreground);
+  background: color-mix(in oklab, var(--background) 82%, var(--card));
+  border: 1px solid var(--border);
+}
+
 .articleImagePreview {
   margin-top: 12px;
   border: 1px solid var(--border);

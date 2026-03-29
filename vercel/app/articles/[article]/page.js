@@ -46,6 +46,17 @@ export async function generateMetadata({ params }) {
     };
   }
 
+  const socialImage = article.featuredImageUrl
+    ? [
+        {
+          url: article.featuredImageUrl,
+          width: 1200,
+          height: 630,
+          alt: article.title,
+        },
+      ]
+    : undefined;
+
   return {
     title: `${article.title} | WEBTVBD`,
     description: article.description,
@@ -55,13 +66,13 @@ export async function generateMetadata({ params }) {
       url: article.canonicalUrl,
       title: article.title,
       description: article.description,
-      images: article.featuredImageUrl ? [article.featuredImageUrl] : undefined,
+      images: socialImage,
     },
     twitter: {
       card: "summary_large_image",
       title: article.title,
       description: article.description,
-      images: article.featuredImageUrl ? [article.featuredImageUrl] : undefined,
+      images: socialImage,
     },
   };
 }

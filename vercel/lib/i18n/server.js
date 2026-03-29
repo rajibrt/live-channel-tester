@@ -1,9 +1,11 @@
 import { cookies } from "next/headers";
 import { DEFAULT_LOCALE, SUPPORTED_LOCALES, dictionaries } from "./dictionaries";
 
+const PUBLIC_LOCALE_COOKIE = "site_lang";
+
 export async function getLocaleFromRequest() {
   const cookieStore = await cookies();
-  const raw = String(cookieStore.get("lang")?.value || "").trim().toLowerCase();
+  const raw = String(cookieStore.get(PUBLIC_LOCALE_COOKIE)?.value || cookieStore.get("lang")?.value || "").trim().toLowerCase();
   return SUPPORTED_LOCALES.includes(raw) ? raw : DEFAULT_LOCALE;
 }
 

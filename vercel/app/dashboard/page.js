@@ -9,7 +9,7 @@ import UserArrivalTrendCharts from "./UserArrivalTrendCharts";
 
 async function getData() {
   const supabase = getSupabaseAdmin();
-  const [{ data: playlists }, { data: tokens }, { data: jobRun }, activeViewers, reports] = await Promise.all([
+  const [{ data: playlists }, { data: tokens }, { data: jobRun }, { data: pushSubscriptions }, activeViewers, reports] = await Promise.all([
     supabase
       .from("playlists")
       .select("slug,name,channel_count,updated_at")
@@ -23,11 +23,65 @@ async function getData() {
       .select("job_name,last_run_at,last_status,last_message,last_total,last_live,last_dead,is_enabled")
       .eq("job_name", "playlist_health_hourly")
       .maybeSingle(),
+    supabase
+      .from("client_push_subscriptions")
+      .select("user_id,endpoint,is_active,updated_at")
+      .eq("is_active", true)
+      .order("updated_at", { ascending: false }),
     getActiveViewerSnapshot(),
     getDashboardReports(),
   ]);
   const tokenBySlug = Object.fromEntries((tokens || []).map((t) => [t.playlist_slug, t.token]));
-  return { playlists: playlists || [], tokenBySlug, jobRun: jobRun || null, activeViewers, reports };
+  const activePushRows = Array.isArray(pushSubscriptions) ? pushSubscriptions.filter((row) => row?.user_id) : [];
+  const activePushUserIds = [...new Set(activePushRows.map((row) => String(row.user_id)))];
+
+  let pushEnabledClients = [];
+  if (activePushUserIds.length) {
+    const { data: clientUsers } = await supabase
+      .from("client_users")
+      .select("user_id,full_name,email,mobile_number,is_active,approval_status")
+      .in("user_id", activePushUserIds);
+
+    const clientById = new Map((clientUsers || []).map((row) => [String(row.user_id), row]));
+    const groupedByUser = activePushRows.reduce((map, row) => {
+      const key = String(row.user_id);
+      const bucket = map.get(key) || [];
+      bucket.push(row);
+      map.set(key, bucket);
+      return map;
+    }, new Map());
+
+    pushEnabledClients = Array.from(groupedByUser.entries())
+      .map(([userId, rows]) => {
+        const client = clientById.get(userId) || {};
+        const latestUpdatedAt = rows
+          .map((row) => row?.updated_at)
+          .filter(Boolean)
+          .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0] || null;
+
+        return {
+          user_id: userId,
+          full_name: String(client.full_name || "").trim(),
+          email: String(client.email || "").trim(),
+          mobile_number: String(client.mobile_number || "").trim(),
+          approval_status: String(client.approval_status || "").trim(),
+          is_active: typeof client.is_active === "boolean" ? client.is_active : true,
+          subscription_count: rows.length,
+          updated_at: latestUpdatedAt,
+        };
+      })
+      .sort((a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime());
+  }
+
+  return {
+    playlists: playlists || [],
+    tokenBySlug,
+    jobRun: jobRun || null,
+    activeViewers,
+    reports,
+    pushEnabledClients,
+    activePushSubscriptionCount: activePushRows.length,
+  };
 }
 
 function formatDuration(totalSeconds) {
@@ -54,8 +108,15 @@ function formatShortCount(value) {
   return String(n);
 }
 
+function formatDateTime(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleString();
+}
+
 export default async function DashboardPage() {
-  const { playlists, tokenBySlug, jobRun, activeViewers, reports } = await getData();
+  const { playlists, tokenBySlug, jobRun, activeViewers, reports, pushEnabledClients, activePushSubscriptionCount } = await getData();
   const base = process.env.PUBLIC_PLAYLIST_BASE_URL || "";
   const activeTokenCount = Object.keys(tokenBySlug).length;
   const lastRunText = jobRun?.last_run_at
@@ -144,6 +205,24 @@ export default async function DashboardPage() {
           <small className={styles.metaMuted}>
             Unique channels: {Number(reports?.unique_channels_24h || 0)}
           </small>
+        </article>
+      </section>
+
+      <section className={`${styles.stats} ${styles.statsCompact3}`}>
+        <article className={styles.statCard}>
+          <p>Push Enabled Clients</p>
+          <strong>{pushEnabledClients.length}</strong>
+          <small className={styles.metaMuted}>Distinct client accounts with push ON</small>
+        </article>
+        <article className={styles.statCard}>
+          <p>Active Push Subscriptions</p>
+          <strong>{activePushSubscriptionCount}</strong>
+          <small className={styles.metaMuted}>Includes multiple devices per client</small>
+        </article>
+        <article className={styles.statCard}>
+          <p>Latest Push Update</p>
+          <strong>{pushEnabledClients[0]?.updated_at ? formatDateTime(pushEnabledClients[0].updated_at) : "—"}</strong>
+          <small className={styles.metaMuted}>Most recent push subscription activity</small>
         </article>
       </section>
 
@@ -255,6 +334,34 @@ export default async function DashboardPage() {
           <h2>Client Users</h2>
           <p className={styles.hint}>Create viewer accounts and control login access.</p>
           <Link href="/dashboard/clients" className={styles.navCta}>Open Clients</Link>
+        </article>
+        <article className={styles.card}>
+          <h2>Push Enabled Clients</h2>
+          <p className={styles.hint}>Clients who currently have push notifications enabled on one or more devices.</p>
+          {pushEnabledClients.length ? (
+            <div className={styles.pushEnabledList}>
+              {pushEnabledClients.slice(0, 8).map((client) => {
+                const primaryLabel = client.full_name || client.mobile_number || client.email || "Unnamed Client";
+                const secondaryLabel = client.mobile_number || client.email || "No mobile/email";
+                return (
+                  <div key={client.user_id} className={styles.pushEnabledRow}>
+                    <div className={styles.pushEnabledCopy}>
+                      <strong>{primaryLabel}</strong>
+                      <span>{secondaryLabel}</span>
+                      <span>
+                        Subs: {client.subscription_count} | Updated: {formatDateTime(client.updated_at)}
+                      </span>
+                    </div>
+                    <span className={client.is_active ? styles.pushEnabledBadge : styles.pushMutedBadge}>
+                      {client.is_active ? "Push ON" : "Inactive"}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className={styles.pending}>No client currently has push notifications enabled.</p>
+          )}
         </article>
         <article className={styles.card}>
           <h2>Articles</h2>

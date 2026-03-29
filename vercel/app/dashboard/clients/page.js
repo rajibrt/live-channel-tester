@@ -113,17 +113,45 @@ async function syncMissingFacebookClientUsers(admin) {
 async function getClientUsers() {
   const admin = getSupabaseAdmin();
   await syncMissingFacebookClientUsers(admin);
-  const { data: users } = await admin
-    .from("client_users")
-    .select("user_id,email,full_name,mobile_number,is_active,approval_status,approval_note,auth_provider,provider_user_id,avatar_url,oauth_profile_json,lifetime_watch_count,lifetime_watch_seconds,last_watched_at,created_at,updated_at")
-    .order("created_at", { ascending: false });
+  const [{ data: users }, { data: pushSubscriptions }] = await Promise.all([
+    admin
+      .from("client_users")
+      .select("user_id,email,full_name,mobile_number,is_active,approval_status,approval_note,auth_provider,provider_user_id,avatar_url,oauth_profile_json,lifetime_watch_count,lifetime_watch_seconds,last_watched_at,created_at,updated_at")
+      .order("created_at", { ascending: false }),
+    admin
+      .from("client_push_subscriptions")
+      .select("user_id,is_active,updated_at")
+      .eq("is_active", true),
+  ]);
+
+  const pushByUser = (Array.isArray(pushSubscriptions) ? pushSubscriptions : []).reduce((map, row) => {
+    const key = String(row?.user_id || "").trim();
+    if (!key) return map;
+    const current = map.get(key) || { push_enabled: false, push_subscription_count: 0, push_updated_at: "" };
+    current.push_enabled = true;
+    current.push_subscription_count += 1;
+    const updatedAt = String(row?.updated_at || "");
+    if (!current.push_updated_at || new Date(updatedAt).getTime() > new Date(current.push_updated_at).getTime()) {
+      current.push_updated_at = updatedAt;
+    }
+    map.set(key, current);
+    return map;
+  }, new Map());
 
   return (Array.isArray(users) ? users : []).map((user) => {
+    const pushState = pushByUser.get(String(user?.user_id || "").trim()) || {
+      push_enabled: false,
+      push_subscription_count: 0,
+      push_updated_at: "",
+    };
     return {
       ...user,
       watch_count: Math.max(0, Number(user?.lifetime_watch_count || 0)),
       total_watch_seconds: Math.max(0, Number(user?.lifetime_watch_seconds || 0)),
       last_watched_at: String(user?.last_watched_at || ""),
+      push_enabled: !!pushState.push_enabled,
+      push_subscription_count: Math.max(0, Number(pushState.push_subscription_count || 0)),
+      push_updated_at: String(pushState.push_updated_at || ""),
     };
   });
 }

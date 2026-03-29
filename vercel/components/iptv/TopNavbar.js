@@ -45,6 +45,21 @@ function stripHtml(value) {
     .trim()
 }
 
+function escapeRegExp(value) {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function stripLeadingTitle(body, title) {
+  const safeBody = String(body || '').trim()
+  const safeTitle = String(title || '').trim()
+  if (!safeBody || !safeTitle) return safeBody
+
+  const normalizedBody = safeBody.replace(/\s+/g, ' ').trim()
+  const normalizedTitle = safeTitle.replace(/\s+/g, ' ').trim()
+  const titlePattern = new RegExp(`^${escapeRegExp(normalizedTitle)}(?:\\s*[|:।,-]+\\s*|\\s+)`, 'i')
+  return normalizedBody.replace(titlePattern, '').trim() || normalizedBody
+}
+
 function isInstallCtaDismissed(
   storageKey,
   windowRef,
@@ -418,7 +433,8 @@ export default function TopNavbar({
             const useTitle = !!row?.show_title_in_ticker
             const title = stripHtml(row?.title || '')
             const body = stripHtml(row?.content_html || '')
-            const text = useTitle ? title : body || title
+            const bodyOnly = stripLeadingTitle(body, title)
+            const text = useTitle ? title : bodyOnly || body || title
             return {
               id: String(row?.id || ''),
               title: title || 'Announcement',

@@ -10,7 +10,7 @@ import styles from "./public-pages.module.css";
 
 const HIDDEN_PREFIXES = ["/dashboard", "/login", "/client-login", "/client-signup", "/client-reset-password", "/admin-reset-password"];
 
-export default function PublicSiteHeader() {
+export default function PublicSiteHeader({ viewerEntryHref = "/client-login" }) {
   const pathname = usePathname();
   const path = String(pathname || "");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -58,7 +58,7 @@ export default function PublicSiteHeader() {
               </div>
             </div>
           </div>
-          <Link href="/client-login" className={styles.mobileTopLoginLink}>
+          <Link href={viewerEntryHref} className={styles.mobileTopLoginLink}>
             {t("publicSite.clientLogin")}
           </Link>
           <button
@@ -87,7 +87,7 @@ export default function PublicSiteHeader() {
               ))}
             </nav>
             <PublicLocaleToggle className={styles.headerLocaleButton} />
-            <Link href="/client-login" className={styles.headerLoginLink}>
+            <Link href={viewerEntryHref} className={styles.headerLoginLink}>
               {t("publicSite.clientLogin")}
             </Link>
             <div className={styles.mobileHeaderNotice}>

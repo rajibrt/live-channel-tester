@@ -801,6 +801,13 @@ export default function ManageAnnouncements({ initialItems = [], loadError = "",
                   />
                   <span>Pinned</span>
                 </label>
+                <label className={styles.checkRow}>
+                  <Switch
+                    checked={!!form.show_title_in_ticker}
+                    onCheckedChange={(checked) => setForm((prev) => ({ ...prev, show_title_in_ticker: checked }))}
+                  />
+                  <span>Ticker Mode: show title only and open modal on click</span>
+                </label>
               </div>
               {error ? <p className={styles.errorText}>{error}</p> : null}
               <AlertDialogFooter>
