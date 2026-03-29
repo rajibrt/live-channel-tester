@@ -1559,6 +1559,7 @@ export default function IptvHomeClient({
             <RightPanel
               channels={visibleChannels}
               selectedChannel={selectedChannel}
+              categoryKey={String(selectedCategory || mode || "all")}
               onChannelSelect={handleSelectChannel}
               search={channelSearch}
               onSearch={setChannelSearch}

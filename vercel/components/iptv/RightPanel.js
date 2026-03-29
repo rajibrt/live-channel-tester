@@ -10,6 +10,7 @@ import styles from "./iptv.module.css";
 export default function RightPanel({
   channels,
   selectedChannel,
+  categoryKey = "",
   onChannelSelect,
   search,
   onSearch,
@@ -18,26 +19,33 @@ export default function RightPanel({
   favorites,
   onToggleFavorite,
 }) {
-  const rightBodyRef = useRef(null);
+  const panelRef = useRef(null);
   const channelRefs = useRef(new Map());
 
   useEffect(() => {
-    const selectedId = String(selectedChannel?.id || "").trim();
-    if (!selectedId) return;
+    const container = panelRef.current;
+    if (!container) return;
 
-    const container = rightBodyRef.current;
-    const card = channelRefs.current.get(selectedId);
-    if (!container || !card) return;
+    const selectedId = String(selectedChannel?.id || "").trim();
+    const card = selectedId ? channelRefs.current.get(selectedId) : null;
+
+    if (!card) {
+      container.scrollTo({
+        top: 0,
+        behavior: "smooth",
+      });
+      return;
+    }
 
     card.scrollIntoView({
-      block: "nearest",
+      block: "center",
       inline: "nearest",
       behavior: "smooth",
     });
-  }, [selectedChannel?.id, channels.length]);
+  }, [selectedChannel?.id, channels.length, categoryKey]);
 
   return (
-    <aside className={`${styles.rightPanel} ${isDark ? styles.darkGlass : styles.lightGlass}`}>
+    <aside ref={panelRef} className={`${styles.rightPanel} ${isDark ? styles.darkGlass : styles.lightGlass}`}>
       <div className={styles.rightHeader}>
         <div className={styles.sidebarHeaderMobile}>
           <h2>Channels</h2>
@@ -58,7 +66,7 @@ export default function RightPanel({
         </div>
       </div>
 
-      <div ref={rightBodyRef} className={styles.rightBody}>
+      <div className={styles.rightBody}>
         {channels.length ? (
           <div className={styles.channelGrid}>
             {channels.map((channel) => (
