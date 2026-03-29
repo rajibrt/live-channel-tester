@@ -19,8 +19,15 @@ function cleanText(value) {
   return String(value || "").replace(/\s+/g, " ").trim();
 }
 
-function normalizeContentType(value, fallback = "announcement") {
-  return String(value || "").trim().toLowerCase() === "article" ? "article" : fallback;
+function normalizeContentType(value) {
+  return String(value || "").trim().toLowerCase() === "announcement" ? "announcement" : "article";
+}
+
+function resolveContentType(row) {
+  const ct = String(row?.content_type || "").trim().toLowerCase();
+  if (ct === "announcement" || ct === "article") return ct;
+  // Legacy installs without content_type column: use flags as heuristic
+  return (row?.show_title_in_ticker || row?.is_pinned) ? "announcement" : "article";
 }
 
 function cleanUrl(value) {
@@ -44,16 +51,12 @@ function normalizePosition(value) {
   return Math.max(0, Math.floor(num));
 }
 
-function inferContentType(row) {
-  return String(row?.featured_image_path || row?.featured_image_url || "").trim() ? "article" : "announcement";
-}
-
 function mapRow(row) {
   return {
     id: row?.id,
     title: String(row?.title || ""),
     content_html: String(row?.content_html || ""),
-    content_type: normalizeContentType(row?.content_type, inferContentType(row)),
+    content_type: resolveContentType(row),
     featured_image_url: String(row?.featured_image_url || ""),
     featured_image_path: String(row?.featured_image_path || ""),
     featured_image_bucket: String(row?.featured_image_bucket || ""),
@@ -112,7 +115,7 @@ export async function POST(request) {
   const isPublished = !!body?.is_published;
   const isPinned = !!body?.is_pinned;
   const showTitleInTicker = !!body?.show_title_in_ticker;
-  const contentType = normalizeContentType(body?.content_type, "announcement");
+  const contentType = normalizeContentType(body?.content_type);
   const featuredImageUrl = cleanUrl(body?.featured_image_url);
   const featuredImagePath = cleanText(body?.featured_image_path);
   const featuredImageBucket = cleanText(body?.featured_image_bucket);

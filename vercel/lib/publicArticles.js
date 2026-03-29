@@ -32,10 +32,18 @@ export function slugify(value) {
     .slice(0, 90);
 }
 
+function shortId(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "")
+    .slice(0, 8);
+}
+
 export function buildPublicArticlePath(id, title) {
-  const safeId = String(id || "").trim();
+  const safeId = shortId(id);
   const safeTitle = cleanText(title) || "article";
-  return `/articles/news-${safeId}-${slugify(safeTitle) || "article"}`;
+  const titleSlug = slugify(safeTitle) || "article";
+  return safeId ? `/articles/${titleSlug}-${safeId}` : `/articles/${titleSlug}`;
 }
 
 function estimateReadingMinutes(text) {
@@ -47,7 +55,7 @@ async function normalizeArticle(row) {
   const title = cleanText(row?.title) || "Untitled article";
   const plain = stripHtml(row?.content_html);
   const path = buildPublicArticlePath(row?.id, title);
-  const slug = path.split("/").pop() || `news-${String(row?.id || "").trim()}-${slugify(title) || "article"}`;
+  const slug = path.split("/").pop() || slugify(title) || "article";
   const excerpt = plain.slice(0, 190);
   const publishedAt = String(row?.published_at || row?.updated_at || row?.created_at || "");
   const updatedAt = String(row?.updated_at || row?.published_at || row?.created_at || "");
@@ -75,9 +83,10 @@ async function normalizeArticle(row) {
 }
 
 function isArticleRow(row) {
-  const kind = cleanText(row?.content_type).toLowerCase();
-  if (kind) return kind === "article";
-  return !!cleanText(row?.featured_image_path || row?.featured_image_url);
+  // Articles and announcements are completely separate systems.
+  // Only rows with content_type = 'article' appear in the public article feed.
+  // Legacy rows without the column (old schema had no articles) are excluded.
+  return cleanText(row?.content_type).toLowerCase() === "article";
 }
 
 function cleanUrl(value) {
@@ -99,7 +108,7 @@ async function loadPublishedAnnouncementArticles(limit = 24) {
       .limit(limit);
 
   let { data, error } = await buildQuery(
-    "id,title,content_html,content_type,featured_image_url,featured_image_path,featured_image_bucket,published_at,updated_at,created_at,is_published,is_pinned,position"
+    "id,title,content_html,content_type,featured_image_url,featured_image_path,featured_image_bucket,published_at,updated_at,created_at,is_published,is_pinned,show_title_in_ticker,position"
   );
 
   if (error) {
@@ -107,7 +116,7 @@ async function loadPublishedAnnouncementArticles(limit = 24) {
     const missingContentType = String(error?.code || "") === "42703" || lower.includes("content_type");
     if (!missingContentType) return [];
     ({ data, error } = await buildQuery(
-      "id,title,content_html,featured_image_url,featured_image_path,featured_image_bucket,published_at,updated_at,created_at,is_published,is_pinned,position"
+      "id,title,content_html,featured_image_url,featured_image_path,featured_image_bucket,published_at,updated_at,created_at,is_published,is_pinned,show_title_in_ticker,position"
     ));
     if (error) return [];
   }

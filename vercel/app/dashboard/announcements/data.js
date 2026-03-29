@@ -2,15 +2,13 @@ import { getSupabaseAdmin } from "../../../lib/supabaseAdmin";
 
 const TABLE = "admin_announcements";
 
-function inferContentType(row) {
-  return String(row?.featured_image_path || row?.featured_image_url || "").trim() ? "article" : "announcement";
-}
-
 function mapItem(row) {
-  return {
-    ...row,
-    content_type: String(row?.content_type || "").trim().toLowerCase() || inferContentType(row),
-  };
+  const ct = String(row?.content_type || "").trim().toLowerCase();
+  // Trust content_type from DB completely.
+  // Only for legacy installs where the column doesn't exist yet (ct is empty),
+  // fall back to flags so the admin dashboard can still display items correctly.
+  if (ct === "announcement" || ct === "article") return { ...row, content_type: ct };
+  return { ...row, content_type: (row?.show_title_in_ticker || row?.is_pinned) ? "announcement" : "article" };
 }
 
 function formatDbError(error, fallback) {

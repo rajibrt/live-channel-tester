@@ -26,15 +26,17 @@ export async function GET() {
       .from("admin_announcements")
       .select(selectClause)
       .eq("is_published", true)
-      .eq("is_pinned", true)
       .order("position", { ascending: true })
       .order("updated_at", { ascending: false })
       .limit(20);
 
   let [{ data, error }, settingsRes] = await Promise.all([
-    buildQuery("id,title,content_html,content_type,show_title_in_ticker,position,updated_at").eq("content_type", "announcement"),
+    buildQuery("id,title,content_html,content_type,show_title_in_ticker,position,updated_at"),
     settingsPromise,
   ]);
+
+  // Whether to use the strict content_type filter or the legacy fallback
+  let legacySchema = false;
 
   if (error) {
     const lower = String(error?.message || "").toLowerCase();
@@ -42,13 +44,23 @@ export async function GET() {
     if (!missingContentType) {
       return NextResponse.json({ error: error.message || "Failed to load announcements." }, { status: 500 });
     }
-    ({ data, error } = await buildQuery("id,title,content_html,show_title_in_ticker,position,updated_at").eq("show_title_in_ticker", true));
+    // content_type column doesn't exist yet — all rows in this table are legacy announcements
+    legacySchema = true;
+    ({ data, error } = await buildQuery("id,title,content_html,show_title_in_ticker,position,updated_at"));
     if (error) {
       return NextResponse.json({ error: error.message || "Failed to load announcements." }, { status: 500 });
     }
   }
 
+  const rows = Array.isArray(data) ? data : [];
+  // Announcements and articles are completely separate systems.
+  // The ticker shows ONLY rows where content_type = 'announcement'.
+  // If content_type column is absent (very old schema), all rows were announcements.
+  const items = legacySchema
+    ? rows
+    : rows.filter((row) => String(row?.content_type || "").trim().toLowerCase() === "announcement");
+
   const speed = normalizeSpeed(settingsRes?.data?.value_json?.speed_seconds);
   const iconText = normalizeIconText(settingsRes?.data?.value_json?.icon_text || "•") || "•";
-  return NextResponse.json({ items: Array.isArray(data) ? data : [], speed_seconds: speed, icon_text: iconText });
+  return NextResponse.json({ items, speed_seconds: speed, icon_text: iconText });
 }

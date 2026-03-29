@@ -40,12 +40,14 @@ add column if not exists featured_image_bucket text not null default '';
 alter table public.admin_announcements
 add column if not exists content_type text not null default 'announcement';
 
+-- Classify legacy rows that have neither ticker nor pin signals as articles.
+-- Real announcements always have at least one of: is_pinned=true or show_title_in_ticker=true.
+-- Rows with neither signal are article-type content regardless of featured image.
 update public.admin_announcements
-set content_type = case
-  when coalesce(featured_image_path, '') <> '' or coalesce(featured_image_url, '') <> '' then 'article'
-  when coalesce(show_title_in_ticker, false) = true then 'announcement'
-  else 'announcement'
-end;
+set content_type = 'article'
+where content_type = 'announcement'
+  and coalesce(show_title_in_ticker, false) = false
+  and coalesce(is_pinned, false) = false;
 
 alter table public.admin_announcements
 drop constraint if exists admin_announcements_content_type_check;

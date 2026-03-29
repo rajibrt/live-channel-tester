@@ -30,18 +30,15 @@ export default function RightPanel({
     const card = selectedId ? channelRefs.current.get(selectedId) : null;
 
     if (!card) {
-      container.scrollTo({
-        top: 0,
-        behavior: "smooth",
-      });
+      container.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
 
-    card.scrollIntoView({
-      block: "center",
-      inline: "nearest",
-      behavior: "smooth",
-    });
+    // Scroll only within the panel — never touch window/page scroll.
+    const containerRect = container.getBoundingClientRect();
+    const cardRect = card.getBoundingClientRect();
+    const offset = cardRect.top - containerRect.top - containerRect.height / 2 + cardRect.height / 2;
+    container.scrollBy({ top: offset, behavior: "smooth" });
   }, [selectedChannel?.id, channels.length, categoryKey]);
 
   return (
