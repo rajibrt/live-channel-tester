@@ -1,9 +1,11 @@
 import { getSupabaseAdmin } from "../lib/supabaseAdmin";
 import { buildWatchPath } from "../lib/channelSlug";
+import { getPublicArticles } from "../lib/publicArticles";
 import { getBaseUrl } from "../lib/siteUrl";
 
 export default async function sitemap() {
   const baseUrl = getBaseUrl();
+  const publicArticles = await getPublicArticles().catch(() => []);
 
   const urls = [
     {
@@ -16,6 +18,12 @@ export default async function sitemap() {
       url: `${baseUrl}/client-login`,
       lastModified: new Date(),
       changeFrequency: "daily",
+      priority: 0.8,
+    },
+    {
+      url: `${baseUrl}/articles`,
+      lastModified: new Date(),
+      changeFrequency: "weekly",
       priority: 0.8,
     },
     {
@@ -55,6 +63,15 @@ export default async function sitemap() {
       priority: 0.4,
     },
   ];
+
+  for (const article of publicArticles) {
+    urls.push({
+      url: `${baseUrl}${article.path}`,
+      lastModified: article.updatedAt || article.publishedAt || new Date(),
+      changeFrequency: "monthly",
+      priority: 0.7,
+    });
+  }
 
   let channels = [];
   try {

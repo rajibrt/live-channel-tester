@@ -3,6 +3,10 @@ create table if not exists public.admin_announcements (
   id uuid primary key default gen_random_uuid(),
   title text not null,
   content_html text not null,
+  content_type text not null default 'announcement' check (content_type in ('announcement', 'article')),
+  featured_image_url text not null default '',
+  featured_image_path text not null default '',
+  featured_image_bucket text not null default '',
   is_published boolean not null default false,
   is_pinned boolean not null default false,
   position integer not null default 0,
@@ -23,6 +27,32 @@ add column if not exists show_title_in_ticker boolean not null default false;
 
 alter table public.admin_announcements
 add column if not exists position integer not null default 0;
+
+alter table public.admin_announcements
+add column if not exists featured_image_url text not null default '';
+
+alter table public.admin_announcements
+add column if not exists featured_image_path text not null default '';
+
+alter table public.admin_announcements
+add column if not exists featured_image_bucket text not null default '';
+
+alter table public.admin_announcements
+add column if not exists content_type text not null default 'announcement';
+
+update public.admin_announcements
+set content_type = case
+  when coalesce(featured_image_path, '') <> '' or coalesce(featured_image_url, '') <> '' then 'article'
+  when coalesce(show_title_in_ticker, false) = true then 'announcement'
+  else 'announcement'
+end;
+
+alter table public.admin_announcements
+drop constraint if exists admin_announcements_content_type_check;
+
+alter table public.admin_announcements
+add constraint admin_announcements_content_type_check
+check (content_type in ('announcement', 'article'));
 
 with ordered as (
   select id, row_number() over (order by created_at asc, id asc) as rn

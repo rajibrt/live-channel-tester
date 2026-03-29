@@ -258,6 +258,402 @@
   gap: 24px;
 }
 
+.articleShell,
+.articleDetailShell {
+  width: min(1100px, 100%);
+  margin: 0 auto;
+  display: grid;
+  gap: 24px;
+}
+
+.articleLandingHero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+  gap: 18px;
+}
+
+.articleLandingCopy,
+.articleLandingPanel,
+.articleFeatureStage {
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  background: color-mix(in oklab, var(--card) 92%, transparent);
+  box-shadow: var(--shadow-lg);
+}
+
+.articleLandingCopy {
+  padding: 28px;
+  background:
+    radial-gradient(circle at top left, color-mix(in oklab, var(--primary) 16%, transparent), transparent 42%),
+    color-mix(in oklab, var(--card) 94%, transparent);
+}
+
+.articleLandingPanel {
+  padding: 24px;
+  display: grid;
+  gap: 16px;
+  align-content: start;
+  background:
+    linear-gradient(180deg, color-mix(in oklab, var(--primary) 10%, transparent), transparent 45%),
+    color-mix(in oklab, var(--card) 94%, transparent);
+}
+
+.articleLandingLabel {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: color-mix(in oklab, var(--primary) 72%, var(--foreground));
+}
+
+.articleLandingStats {
+  display: grid;
+  gap: 14px;
+}
+
+.articleLandingStat {
+  display: grid;
+  gap: 8px;
+  padding: 16px 18px;
+  border: 1px solid color-mix(in oklab, var(--primary) 24%, var(--border));
+  border-radius: 18px;
+  background: color-mix(in oklab, var(--card) 96%, transparent);
+}
+
+.articleLandingStat span {
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+.articleLandingStat strong {
+  font-size: 1.24rem;
+  line-height: 1.35;
+  color: var(--foreground);
+}
+
+.articleHero,
+.articleDetailHeader {
+  display: grid;
+  gap: 12px;
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  background: color-mix(in oklab, var(--card) 92%, transparent);
+  box-shadow: var(--shadow-lg);
+}
+
+.homeEditorialSection,
+.homeTrustGrid {
+  display: grid;
+  gap: 18px;
+}
+
+.sectionHeading {
+  display: grid;
+  gap: 10px;
+}
+
+.sectionHeading h2 {
+  margin: 0;
+  font-size: clamp(1.5rem, 4vw, 2.2rem);
+}
+
+.sectionHeading p {
+  margin: 0;
+  color: var(--muted-foreground);
+  line-height: 1.7;
+}
+
+.articleFeaturedGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.articleFeatureStage {
+  padding: 24px;
+  display: grid;
+  gap: 18px;
+}
+
+.articleFeatureGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.articleLeadCard,
+.articleSupportCard,
+.articleLatestCard {
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  overflow: hidden;
+  background:
+    linear-gradient(145deg, color-mix(in oklab, var(--primary) 10%, transparent), transparent 58%),
+    color-mix(in oklab, var(--card) 95%, transparent);
+  box-shadow: var(--shadow-lg);
+}
+
+.articleLeadCard {
+  display: grid;
+}
+
+.articleLeadImage {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+
+.articleLeadBody {
+  display: grid;
+  gap: 14px;
+  padding: 22px;
+}
+
+.articleLeadBody h2,
+.articleSupportCopy h3,
+.articleLatestCopy h3 {
+  margin: 0;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+.articleLeadBody h2 {
+  font-size: clamp(1.6rem, 3vw, 2.3rem);
+}
+
+.articleLeadBody p:last-of-type,
+.articleSupportCopy p:last-of-type,
+.articleLatestCopy p:last-of-type {
+  margin: 0;
+  color: var(--muted-foreground);
+  line-height: 1.78;
+}
+
+.articleSupportRail {
+  display: grid;
+  gap: 16px;
+}
+
+.articleSupportCard {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+.articleSupportImage,
+.articleLatestImage {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.articleSupportImage {
+  aspect-ratio: 16 / 9;
+  min-height: auto;
+}
+
+.articleSupportCopy,
+.articleLatestCopy {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+}
+
+.articleSupportCopy {
+  padding: 18px;
+}
+
+.articleSupportCopy .secondaryLink {
+  margin-top: 4px;
+  justify-self: start;
+}
+
+.articleLatestGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.articleLatestCard {
+  display: grid;
+  align-content: start;
+}
+
+.articleLatestImage {
+  aspect-ratio: 16 / 9;
+}
+
+.featuredArticleCard,
+.articleListCard {
+  display: grid;
+  gap: 12px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background:
+    linear-gradient(135deg, color-mix(in oklab, var(--primary) 10%, transparent), transparent 70%),
+    color-mix(in oklab, var(--card) 94%, transparent);
+  box-shadow: var(--shadow-lg);
+}
+
+.featuredArticleCard h3,
+.articleListCard h3 {
+  margin: 0;
+  font-size: 1.18rem;
+}
+
+.featuredArticleCard p,
+.articleListCard p {
+  margin: 0;
+  color: var(--muted-foreground);
+  line-height: 1.72;
+}
+
+.articleList {
+  display: grid;
+  gap: 16px;
+}
+
+.articleListCard {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+}
+
+.articleListLead {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.articleListCopy {
+  display: grid;
+  gap: 10px;
+}
+
+.articleMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  margin: 0;
+  font-size: 0.92rem;
+  color: var(--muted-foreground);
+}
+
+.articleBody {
+  padding: 28px;
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  background: color-mix(in oklab, var(--card) 92%, transparent);
+  box-shadow: var(--shadow-lg);
+  line-height: 1.8;
+}
+
+.articleBody article,
+.articleBody section,
+.articleBody header,
+.articleBody footer,
+.articleBody div {
+  display: block;
+}
+
+.articleBody header {
+  margin: 0 0 22px;
+}
+
+.articleBody header > div {
+  display: grid;
+  gap: 12px;
+}
+
+.articleBody :is(h1, h2, h3, h4, h5, h6) {
+  margin: 28px 0 12px;
+  line-height: 1.3;
+  letter-spacing: -0.02em;
+}
+
+.articleBody h1 {
+  margin-top: 0;
+  font-size: clamp(2rem, 4vw, 3.25rem);
+  font-weight: 800;
+}
+
+.articleBody h2 {
+  font-size: clamp(1.5rem, 3vw, 2.2rem);
+  font-weight: 750;
+}
+
+.articleBody h3 {
+  font-size: clamp(1.2rem, 2vw, 1.5rem);
+  font-weight: 700;
+}
+
+.articleBody p {
+  font-size: 1.08rem;
+  color: color-mix(in oklab, var(--foreground) 92%, var(--muted-foreground));
+}
+
+.articleBody header p:first-child {
+  margin-bottom: 6px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+.articleBody :is(p, ul, ol) {
+  margin: 0 0 16px;
+}
+
+.articleBody header div:last-child {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  margin: 10px 0 0;
+  font-size: 0.92rem;
+  color: var(--muted-foreground);
+}
+
+.articleBody header div:last-child span {
+  position: relative;
+}
+
+.articleBody header div:last-child span + span::before {
+  content: "•";
+  margin-right: 14px;
+  color: color-mix(in oklab, var(--primary) 54%, var(--muted-foreground));
+}
+
+.articleBody ul,
+.articleBody ol {
+  padding-left: 22px;
+}
+
+.articleBody li {
+  margin: 0 0 10px;
+}
+
+.articleBody strong {
+  color: var(--foreground);
+  font-weight: 800;
+}
+
+.articleBody img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 22px 0;
+  border-radius: 18px;
+}
+
 .landingHero {
   display: grid;
   grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
@@ -725,6 +1121,11 @@
     flex-direction: column;
   }
 
+  .articleLandingHero,
+  .articleFeatureGrid {
+    grid-template-columns: 1fr;
+  }
+
   .landingCopy {
     order: 1;
   }
@@ -732,6 +1133,7 @@
   .heroShowcase {
     order: 2;
   }
+
 }
 
 @keyframes siteHeaderReveal {
@@ -988,6 +1390,40 @@
   .grid {
     grid-template-columns: 1fr;
   }
+
+  .articleFeaturedGrid,
+  .homeTrustGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .articleLandingCopy,
+  .articleLandingPanel,
+  .articleFeatureStage {
+    padding: 20px;
+  }
+
+  .articleLatestGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .articleSupportImage {
+    aspect-ratio: 16 / 9;
+    min-height: auto;
+  }
+
+  .articleListCard {
+    grid-template-columns: 1fr;
+  }
+
+  .articleListLead {
+    grid-template-columns: 1fr;
+  }
+
+  .articleBody,
+  .articleHero,
+  .articleDetailHeader {
+    padding: 20px;
+  }
 }
 
 @media (max-width: 480px) {
@@ -1076,5 +1512,11 @@
 
   .headerTickerTrack span {
     font-size: 0.76rem;
+  }
+
+  .articleBody,
+  .articleHero,
+  .articleDetailHeader {
+    padding: 16px;
   }
 }

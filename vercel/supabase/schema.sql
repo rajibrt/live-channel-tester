@@ -240,6 +240,9 @@ create table if not exists public.admin_announcements (
   id uuid primary key default gen_random_uuid(),
   title text not null,
   content_html text not null,
+  featured_image_url text not null default '',
+  featured_image_path text not null default '',
+  featured_image_bucket text not null default '',
   is_published boolean not null default false,
   is_pinned boolean not null default false,
   position integer not null default 0,
@@ -260,6 +263,15 @@ add column if not exists show_title_in_ticker boolean not null default false;
 
 alter table public.admin_announcements
 add column if not exists position integer not null default 0;
+
+alter table public.admin_announcements
+add column if not exists featured_image_url text not null default '';
+
+alter table public.admin_announcements
+add column if not exists featured_image_path text not null default '';
+
+alter table public.admin_announcements
+add column if not exists featured_image_bucket text not null default '';
 
 create table if not exists public.client_notification_reads (
   user_id uuid not null references public.client_users(user_id) on delete cascade,

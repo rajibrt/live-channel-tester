@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { Bold, Italic, Link2, List, ListOrdered, Palette, Underline } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Bold, Code2, Italic, Link2, List, ListOrdered, Palette, Underline } from "lucide-react";
 import { Button } from "../../../components/ui/button";
 import styles from "../page.module.css";
 
@@ -65,6 +65,8 @@ export default function RichArticleEditor({ value, onChange, placeholder = "Writ
   const editorRef = useRef(null);
   const colorInputRef = useRef(null);
   const localValueRef = useRef("");
+  const [htmlMode, setHtmlMode] = useState(false);
+  const [htmlDraft, setHtmlDraft] = useState("");
 
   useEffect(() => {
     const el = editorRef.current;
@@ -77,6 +79,11 @@ export default function RichArticleEditor({ value, onChange, placeholder = "Writ
     }
     localValueRef.current = nextHtml;
   }, [value]);
+
+  useEffect(() => {
+    if (!htmlMode) return;
+    setHtmlDraft(normalizeHtml(value));
+  }, [htmlMode, value]);
 
   const emitChange = () => {
     const el = editorRef.current;
@@ -111,6 +118,31 @@ export default function RichArticleEditor({ value, onChange, placeholder = "Writ
     run("foreColor", color);
   };
 
+  const toggleHtmlMode = () => {
+    setHtmlMode((prev) => {
+      const next = !prev;
+      if (!prev) {
+        const nextHtml = normalizeHtml(value);
+        setHtmlDraft(nextHtml);
+      }
+      return next;
+    });
+  };
+
+  const applyHtmlDraft = () => {
+    const next = normalizeHtml(htmlDraft);
+    localValueRef.current = next;
+    const el = editorRef.current;
+    if (el) {
+      el.innerHTML = next;
+    }
+    onChange(next);
+  };
+
+  const resetHtmlDraft = () => {
+    setHtmlDraft(normalizeHtml(value));
+  };
+
   return (
     <div className={styles.richEditor}>
       <div className={styles.richToolbar}>
@@ -143,7 +175,39 @@ export default function RichArticleEditor({ value, onChange, placeholder = "Writ
         <Button type="button" variant="outline" size="sm" className={styles.richToolBtn} onClick={openColorPicker} title="Text color">
           <Palette size={14} />
         </Button>
+        <div className={styles.richToolbarDivider} aria-hidden="true" />
+        <Button type="button" variant="outline" size="sm" className={styles.richToolBtn} onClick={toggleHtmlMode} title="Toggle HTML source mode">
+          <Code2 size={14} />
+          <span>{htmlMode ? "Hide HTML" : "HTML"}</span>
+        </Button>
+        {htmlMode ? (
+          <Button type="button" size="sm" className={styles.richApplyBtn} onClick={applyHtmlDraft} title="Apply HTML source">
+            Apply HTML
+          </Button>
+        ) : null}
       </div>
+      {htmlMode ? (
+        <div className={styles.richSourcePanel}>
+          <div className={styles.richSourceHeader}>
+            <strong>HTML Source Mode</strong>
+            <div className={styles.richSourceActions}>
+              <Button type="button" variant="outline" size="sm" className={styles.richToolBtn} onClick={resetHtmlDraft}>
+                Reset
+              </Button>
+              <Button type="button" size="sm" className={styles.richApplyBtn} onClick={applyHtmlDraft}>
+                Apply HTML
+              </Button>
+            </div>
+          </div>
+          <textarea
+            className={styles.richSourceInput}
+            value={htmlDraft}
+            onChange={(e) => setHtmlDraft(e.target.value)}
+            spellCheck={false}
+            placeholder="<p></p>"
+          />
+        </div>
+      ) : null}
       <div
         ref={editorRef}
         className={styles.richEditable}

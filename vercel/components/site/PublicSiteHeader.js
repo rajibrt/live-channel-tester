@@ -17,6 +17,7 @@ export default function PublicSiteHeader() {
   const { t } = useI18n();
   const navLinks = [
     { href: "/", label: t("publicSite.navHome") },
+    { href: "/articles", label: t("publicSite.navArticles") },
     { href: "/about", label: t("publicSite.navAbout") },
     { href: "/contact", label: t("publicSite.navContact") },
     { href: "/terms", label: t("publicSite.navTerms") },

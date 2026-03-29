@@ -6,7 +6,7 @@ export default function robots() {
     rules: [
       {
         userAgent: "*",
-        allow: ["/", "/watch/", "/client-login"],
+        allow: "/",
         disallow: ["/dashboard/", "/api/"],
       },
     ],

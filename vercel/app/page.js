@@ -4,7 +4,10 @@ import { getCurrentClient } from "../lib/clientAuth";
 import PendingApprovalCard from "../components/client/PendingApprovalCard";
 import { loadClientAccessSettingsCached } from "../lib/clientAccessSettings";
 import { getClientHomeData } from "../lib/clientHomeData";
+import { getFeaturedPublicArticles } from "../lib/publicArticles";
 import { buildHomePageMetadata, loadSiteSeoSettingsCached } from "../lib/siteSeoSettings";
+import { getLocaleFromRequest } from "../lib/i18n/server";
+import { localizeArticles } from "../lib/articleLocalization";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +21,7 @@ export async function generateMetadata() {
 }
 
 export default async function HomePage({ searchParams }) {
+  const locale = await getLocaleFromRequest();
   const params = await searchParams;
   const initialHomeMode = String(params?.mode || "").trim().toLowerCase() === "movies" ? "movies" : "";
   const initialMovieMode = String(params?.movie_mode || "").trim().toLowerCase();
@@ -29,7 +33,8 @@ export default async function HomePage({ searchParams }) {
   const initialMoviePage = Math.max(1, Number.parseInt(String(params?.movie_page || "1"), 10) || 1);
   const current = await getCurrentClient();
   if (!current) {
-    return <PublicHomePage />;
+    const featuredArticles = await localizeArticles(await getFeaturedPublicArticles(4), locale);
+    return <PublicHomePage featuredArticles={featuredArticles} />;
   }
 
   const approvalStatus = String(current?.client?.approval_status || "approved").toLowerCase();

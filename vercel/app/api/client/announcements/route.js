@@ -16,24 +16,36 @@ function normalizeIconText(value) {
 
 export async function GET() {
   const admin = getSupabaseAdmin();
-  const [{ data, error }, settingsRes] = await Promise.all([
+  const settingsPromise = admin
+    .from("admin_settings")
+    .select("value_json")
+    .eq("key", "announcement_ticker")
+    .maybeSingle();
+  const buildQuery = (selectClause) =>
     admin
-    .from("admin_announcements")
-    .select("id,title,content_html,show_title_in_ticker,position,updated_at")
-    .eq("is_published", true)
-    .eq("is_pinned", true)
-    .order("position", { ascending: true })
-    .order("updated_at", { ascending: false })
-    .limit(20),
-    admin
-      .from("admin_settings")
-      .select("value_json")
-      .eq("key", "announcement_ticker")
-      .maybeSingle(),
+      .from("admin_announcements")
+      .select(selectClause)
+      .eq("is_published", true)
+      .eq("is_pinned", true)
+      .order("position", { ascending: true })
+      .order("updated_at", { ascending: false })
+      .limit(20);
+
+  let [{ data, error }, settingsRes] = await Promise.all([
+    buildQuery("id,title,content_html,content_type,show_title_in_ticker,position,updated_at").eq("content_type", "announcement"),
+    settingsPromise,
   ]);
 
   if (error) {
-    return NextResponse.json({ error: error.message || "Failed to load announcements." }, { status: 500 });
+    const lower = String(error?.message || "").toLowerCase();
+    const missingContentType = String(error?.code || "") === "42703" || lower.includes("content_type");
+    if (!missingContentType) {
+      return NextResponse.json({ error: error.message || "Failed to load announcements." }, { status: 500 });
+    }
+    ({ data, error } = await buildQuery("id,title,content_html,show_title_in_ticker,position,updated_at").eq("show_title_in_ticker", true));
+    if (error) {
+      return NextResponse.json({ error: error.message || "Failed to load announcements." }, { status: 500 });
+    }
   }
 
   const speed = normalizeSpeed(settingsRes?.data?.value_json?.speed_seconds);

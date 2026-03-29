@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { deletePublicObject } from "./objectStorage";
 import { getSupabaseAdmin } from "./supabaseAdmin";
 import { getBaseUrl, toAbsoluteUrl } from "./siteUrl";
 import { formatSettingsDbError } from "./emailDelivery";
@@ -77,9 +78,14 @@ async function deleteManagedOgImage({ adminClient, bucket = "", path = "" }) {
   const safeBucket = toCleanString(bucket, 120);
   const safePath = toCleanString(path, 320);
   if (!safeBucket || !safePath) return;
-  const admin = adminClient || getSupabaseAdmin();
-  const { error } = await admin.storage.from(safeBucket).remove([safePath]);
-  if (error) throw new Error(`Failed to remove old Open Graph image: ${error.message}`);
+  try {
+    await deletePublicObject({ bucket: safeBucket, path: safePath });
+  } catch (error) {
+    const admin = adminClient || getSupabaseAdmin();
+    const { error: fallbackError } = await admin.storage.from(safeBucket).remove([safePath]);
+    if (fallbackError) throw new Error(`Failed to remove old Open Graph image: ${fallbackError.message}`);
+    if (error) throw error;
+  }
 }
 
 export async function saveSiteSeoSettings({ adminUserId = "", patch = {}, adminClient }) {

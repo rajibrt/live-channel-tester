@@ -12,6 +12,7 @@ export default function PublicSiteFooter() {
   const path = String(pathname || "");
   const { t } = useI18n();
   const footerLinks = [
+    { href: "/articles", label: t("publicSite.navArticles") },
     { href: "/about", label: t("publicSite.navAbout") },
     { href: "/contact", label: t("publicSite.navContact") },
     { href: "/privacy-policy", label: t("publicSite.privacyPolicy") },

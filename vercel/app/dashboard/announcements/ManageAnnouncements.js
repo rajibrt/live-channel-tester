@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, Check, Eye, EyeOff, Megaphone, Pencil, Pin, PinOff, Plus, Save, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, Eye, EyeOff, ImagePlus, Megaphone, Pencil, Pin, PinOff, Plus, Save, Trash2, X } from "lucide-react";
 import styles from "../page.module.css";
 import { Button } from "../../../components/ui/button";
 import {
@@ -23,6 +24,10 @@ const EMPTY_FORM = {
   id: "",
   title: "",
   content_html: "",
+  content_type: "article",
+  featured_image_url: "",
+  featured_image_path: "",
+  featured_image_bucket: "",
   is_published: false,
   is_pinned: false,
   show_title_in_ticker: false,
@@ -106,9 +111,17 @@ function TruncatedTooltipCell({ text = "-", className = "", maxLen = 120 }) {
   );
 }
 
-export default function ManageAnnouncements({ initialItems = [], loadError = "" }) {
+export default function ManageAnnouncements({ initialItems = [], loadError = "", mode = "articles" }) {
   const submitModeRef = useRef("default");
-  const [items, setItems] = useState(() => normalizeItemsOrder(initialItems));
+  const isAnnouncementMode = mode === "announcements";
+  const [items, setItems] = useState(() =>
+    normalizeItemsOrder(
+      initialItems.filter((row) => {
+        const kind = String(row?.content_type || "").trim().toLowerCase();
+        return isAnnouncementMode ? kind === "announcement" : kind === "article";
+      })
+    )
+  );
   const [error, setError] = useState(loadError);
   const [message, setMessage] = useState("");
   const [busyId, setBusyId] = useState("");
@@ -116,7 +129,6 @@ export default function ManageAnnouncements({ initialItems = [], loadError = "" 
   const [statusFilter, setStatusFilter] = useState("all");
   const [pinFilter, setPinFilter] = useState("all");
   const [sortMode, setSortMode] = useState("position");
-  const [createOpen, setCreateOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -127,6 +139,7 @@ export default function ManageAnnouncements({ initialItems = [], loadError = "" 
   const [tickerIconText, setTickerIconText] = useState("•");
   const [editingOrderId, setEditingOrderId] = useState("");
   const [orderDraft, setOrderDraft] = useState("");
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   const stats = useMemo(() => {
     const total = items.length;
@@ -140,8 +153,10 @@ export default function ManageAnnouncements({ initialItems = [], loadError = "" 
     const list = items.filter((row) => {
       if (statusFilter === "published" && !row.is_published) return false;
       if (statusFilter === "draft" && row.is_published) return false;
-      if (pinFilter === "pinned" && !row.is_pinned) return false;
-      if (pinFilter === "normal" && row.is_pinned) return false;
+      if (isAnnouncementMode) {
+        if (pinFilter === "pinned" && !row.is_pinned) return false;
+        if (pinFilter === "normal" && row.is_pinned) return false;
+      }
       if (!q) return true;
       const plain = stripHtml(row.content_html);
       return `${row.title} ${plain}`.toLowerCase().includes(q);
@@ -154,9 +169,10 @@ export default function ManageAnnouncements({ initialItems = [], loadError = "" 
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     });
     return list;
-  }, [items, searchTerm, statusFilter, pinFilter, sortMode]);
+  }, [items, searchTerm, statusFilter, pinFilter, sortMode, isAnnouncementMode]);
 
   useEffect(() => {
+    if (!isAnnouncementMode) return undefined;
     let active = true;
     const loadTickerSettings = async () => {
       try {
@@ -176,7 +192,7 @@ export default function ManageAnnouncements({ initialItems = [], loadError = "" 
     return () => {
       active = false;
     };
-  }, []);
+  }, [isAnnouncementMode]);
 
   const resetForm = () => {
     setForm(EMPTY_FORM);
@@ -187,12 +203,45 @@ export default function ManageAnnouncements({ initialItems = [], loadError = "" 
       id: String(row?.id || ""),
       title: String(row?.title || ""),
       content_html: String(row?.content_html || ""),
+      content_type: String(row?.content_type || (isAnnouncementMode ? "announcement" : "article")),
+      featured_image_url: String(row?.featured_image_url || ""),
+      featured_image_path: String(row?.featured_image_path || ""),
+      featured_image_bucket: String(row?.featured_image_bucket || ""),
       is_published: !!row?.is_published,
       is_pinned: !!row?.is_pinned,
       show_title_in_ticker: !!row?.show_title_in_ticker,
     });
     setEditOpen(true);
   };
+
+  async function uploadArticleImage(file) {
+    try {
+      if (!file) return;
+      setUploadingImage(true);
+      setError("");
+      setMessage("");
+      const data = new FormData();
+      data.append("file", file);
+      data.append("folder", "featured");
+      const res = await fetch("/api/admin/media/article-image-upload", {
+        method: "POST",
+        body: data,
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload?.error || "Failed to upload article image.");
+      setForm((prev) => ({
+        ...prev,
+        featured_image_url: String(payload?.preview_url || payload?.url || ""),
+        featured_image_path: String(payload?.path || ""),
+        featured_image_bucket: String(payload?.bucket || ""),
+      }));
+      setMessage("Featured image uploaded.");
+    } catch (err) {
+      setError(err?.message || "Failed to upload article image.");
+    } finally {
+      setUploadingImage(false);
+    }
+  }
 
   async function saveTickerSpeed() {
     setSavingTicker(true);
@@ -218,35 +267,6 @@ export default function ManageAnnouncements({ initialItems = [], loadError = "" 
     }
   }
 
-  async function handleCreate(event) {
-    event.preventDefault();
-    setError("");
-    setMessage("");
-    setSaving(true);
-    const isDraftSubmit = submitModeRef.current === "draft";
-    submitModeRef.current = "default";
-    try {
-      const res = await fetch("/api/admin/announcements", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          ...form,
-          is_published: isDraftSubmit ? false : !!form.is_published,
-        }),
-      });
-      const payload = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(payload?.error || "Failed to create article.");
-      setItems((prev) => normalizeItemsOrder([...prev, payload.item]));
-      setMessage("Article created.");
-      setCreateOpen(false);
-      resetForm();
-    } catch (err) {
-      setError(err?.message || "Failed to create article.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
   async function handleEdit(event) {
     event.preventDefault();
     if (!form.id) return;
@@ -262,6 +282,10 @@ export default function ManageAnnouncements({ initialItems = [], loadError = "" 
         body: JSON.stringify({
           title: form.title,
           content_html: form.content_html,
+          content_type: isAnnouncementMode ? "announcement" : "article",
+          featured_image_url: form.featured_image_url,
+          featured_image_path: form.featured_image_path,
+          featured_image_bucket: form.featured_image_bucket,
           is_published: isDraftSubmit ? false : !!form.is_published,
           is_pinned: form.is_pinned,
           show_title_in_ticker: form.show_title_in_ticker,
@@ -269,8 +293,15 @@ export default function ManageAnnouncements({ initialItems = [], loadError = "" 
       });
       const payload = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(payload?.error || "Failed to update article.");
-      setItems((prev) => normalizeItemsOrder(prev.map((x) => (String(x.id) === String(form.id) ? payload.item : x))));
-      setMessage("Article updated.");
+      const shouldKeep = String(payload.item?.content_type || "").trim().toLowerCase() === (isAnnouncementMode ? "announcement" : "article");
+      setItems((prev) =>
+        normalizeItemsOrder(
+          shouldKeep
+            ? prev.map((x) => (String(x.id) === String(form.id) ? payload.item : x))
+            : prev.filter((x) => String(x.id) !== String(form.id))
+        )
+      );
+      setMessage(isAnnouncementMode ? "Announcement updated." : "Article updated.");
       setEditOpen(false);
       resetForm();
     } catch (err) {
@@ -322,7 +353,7 @@ export default function ManageAnnouncements({ initialItems = [], loadError = "" 
     }
   }
 
-  async function saveAnnouncementOrder(nextRows, successMessage = "Announcement order updated.") {
+  async function saveAnnouncementOrder(nextRows, successMessage = isAnnouncementMode ? "Announcement order updated." : "Article order updated.") {
     const previous = normalizeItemsOrder(items);
     const previousById = new Map(previous.map((row) => [String(row.id), normalizePosition(row.position)]));
     const changedRows = nextRows.filter((row) => {
@@ -388,94 +419,19 @@ export default function ManageAnnouncements({ initialItems = [], loadError = "" 
   return (
     <section className={styles.form}>
       <div className={styles.stats}>
-        <article className={styles.statCard}><p>Total Articles</p><strong>{stats.total}</strong></article>
+        <article className={styles.statCard}><p>{isAnnouncementMode ? "Total Announcements" : "Total Articles"}</p><strong>{stats.total}</strong></article>
         <article className={styles.statCard}><p>Published</p><strong>{stats.published}</strong></article>
         <article className={styles.statCard}><p>Drafts</p><strong>{stats.draft}</strong></article>
-        <article className={styles.statCard}><p>Pinned</p><strong>{stats.pinned}</strong></article>
+        {isAnnouncementMode ? <article className={styles.statCard}><p>Pinned</p><strong>{stats.pinned}</strong></article> : null}
       </div>
 
       <div className={styles.controlRowEnd}>
-        <AlertDialog open={createOpen} onOpenChange={(open) => {
-          setCreateOpen(open);
-          if (!open) resetForm();
-        }}>
-          <AlertDialogTrigger asChild>
-            <Button type="button" className={styles.primaryBtnCompact}>
-              <Plus size={16} />
-              <span>Add Article</span>
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent className={styles.announceModal}>
-            <AlertDialogHeader>
-              <AlertDialogTitle>New Announcement</AlertDialogTitle>
-              <AlertDialogDescription>Add title and article body, then publish now or keep as draft.</AlertDialogDescription>
-            </AlertDialogHeader>
-            <form className={styles.form} onSubmit={handleCreate}>
-              <label className={styles.field}>
-                <span>Title</span>
-                <input
-                  type="text"
-                  value={form.title}
-                  onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))}
-                  placeholder="e.g. Maintenance Notice - 2:00 AM"
-                  required
-                />
-              </label>
-              <label className={styles.field}>
-                <span>Content / Article</span>
-                <RichArticleEditor
-                  value={form.content_html}
-                  onChange={(value) => setForm((prev) => ({ ...prev, content_html: value }))}
-                />
-              </label>
-              <div className={styles.formGrid}>
-                <label className={styles.checkRow}>
-                  <Switch
-                    checked={!!form.is_published}
-                    onCheckedChange={(checked) => setForm((prev) => ({ ...prev, is_published: checked }))}
-                  />
-                  <span>Publish now</span>
-                </label>
-                <label className={styles.checkRow}>
-                  <Switch
-                    checked={!!form.is_pinned}
-                    onCheckedChange={(checked) => setForm((prev) => ({ ...prev, is_pinned: checked }))}
-                  />
-                  <span>Pin to top</span>
-                </label>
-                <label className={styles.checkRow}>
-                  <Switch
-                    checked={!!form.show_title_in_ticker}
-                    onCheckedChange={(checked) => setForm((prev) => ({ ...prev, show_title_in_ticker: checked }))}
-                  />
-                  <span>Show title in ticker and open article in modal on click</span>
-                </label>
-              </div>
-              {error ? <p className={styles.errorText}>{error}</p> : null}
-              <AlertDialogFooter>
-                <AlertDialogCancel asChild>
-                  <Button type="button" variant="outline" className={`${styles.secondaryBtn} ${styles.modalActionBtn}`}>Cancel</Button>
-                </AlertDialogCancel>
-                <Button
-                  type="submit"
-                  variant="outline"
-                  className={`${styles.secondaryBtn} ${styles.modalActionBtn}`}
-                  disabled={saving}
-                  onClick={() => {
-                    submitModeRef.current = "draft";
-                  }}
-                >
-                  {saving ? "Saving..." : "Save as Draft"}
-                </Button>
-                <Button type="submit" className={`${styles.primaryBtn} ${styles.modalActionBtn}`} disabled={saving}>
-                  {saving ? "Saving..." : "Create Article"}
-                </Button>
-              </AlertDialogFooter>
-            </form>
-          </AlertDialogContent>
-        </AlertDialog>
+        <Link href={isAnnouncementMode ? "/dashboard/announcements/new" : "/dashboard/articles/new"} className={styles.primaryBtnCompact}>
+          <Plus size={16} />
+          <span>{isAnnouncementMode ? "Add Announcement" : "Add Article"}</span>
+        </Link>
 
-        <div className={styles.controlRow}>
+        {isAnnouncementMode ? <div className={styles.controlRow}>
           <label className={styles.field}>
             <span>Ticker Speed (Desktop, seconds)</span>
             <input
@@ -503,7 +459,7 @@ export default function ManageAnnouncements({ initialItems = [], loadError = "" 
             <Save size={16} />
             <span>{savingTicker ? "Saving..." : "Save Ticker Settings"}</span>
           </Button>
-        </div>
+        </div> : null}
 
         {message ? <p className={styles.successText}>{message}</p> : null}
       </div>
@@ -515,7 +471,7 @@ export default function ManageAnnouncements({ initialItems = [], loadError = "" 
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search title or article text"
+            placeholder={isAnnouncementMode ? "Search title or announcement text" : "Search title or article text"}
           />
         </label>
         <label className={styles.field}>
@@ -526,14 +482,16 @@ export default function ManageAnnouncements({ initialItems = [], loadError = "" 
             <option value="draft">Draft</option>
           </select>
         </label>
-        <label className={styles.field}>
-          <span>Pin Filter</span>
-          <select value={pinFilter} onChange={(e) => setPinFilter(e.target.value)}>
-            <option value="all">All</option>
-            <option value="pinned">Pinned</option>
-            <option value="normal">Not Pinned</option>
-          </select>
-        </label>
+        {isAnnouncementMode ? (
+          <label className={styles.field}>
+            <span>Pin Filter</span>
+            <select value={pinFilter} onChange={(e) => setPinFilter(e.target.value)}>
+              <option value="all">All</option>
+              <option value="pinned">Pinned</option>
+              <option value="normal">Not Pinned</option>
+            </select>
+          </label>
+        ) : null}
         <label className={styles.field}>
           <span>Sort</span>
           <select value={sortMode} onChange={(e) => setSortMode(e.target.value)}>
@@ -556,8 +514,8 @@ export default function ManageAnnouncements({ initialItems = [], loadError = "" 
                 <TableHead className={styles.colAnnounceOrder}>#</TableHead>
                 <TableHead className={styles.colAnnounceTitle}>Title</TableHead>
                 <TableHead className={styles.colAnnounceStatus}>Status</TableHead>
-                <TableHead className={styles.colAnnouncePin}>Pinned</TableHead>
-                <TableHead className={styles.colAnnounceMode}>Ticker Mode</TableHead>
+                {isAnnouncementMode ? <TableHead className={styles.colAnnouncePin}>Pinned</TableHead> : null}
+                {isAnnouncementMode ? <TableHead className={styles.colAnnounceMode}>Ticker Mode</TableHead> : null}
                 <TableHead className={styles.colAnnounceUpdated}>Updated</TableHead>
                 <TableHead className={styles.colAnnounceActions}>Actions</TableHead>
               </TableRow>
@@ -634,16 +592,20 @@ export default function ManageAnnouncements({ initialItems = [], loadError = "" 
                       {row.is_published ? "Published" : "Draft"}
                     </span>
                   </TableCell>
-                  <TableCell className={styles.colAnnouncePin}>
-                    <span className={row.is_pinned ? styles.badgeInfo : styles.badgeMuted}>
-                      {row.is_pinned ? "Pinned" : "Normal"}
-                    </span>
-                  </TableCell>
-                  <TableCell className={styles.colAnnounceMode}>
-                    <span className={row.show_title_in_ticker ? styles.badgeInfo : styles.badgeMuted}>
-                      {row.show_title_in_ticker ? "Title + Modal" : "Body Text"}
-                    </span>
-                  </TableCell>
+                  {isAnnouncementMode ? (
+                    <TableCell className={styles.colAnnouncePin}>
+                      <span className={row.is_pinned ? styles.badgeInfo : styles.badgeMuted}>
+                        {row.is_pinned ? "Pinned" : "Normal"}
+                      </span>
+                    </TableCell>
+                  ) : null}
+                  {isAnnouncementMode ? (
+                    <TableCell className={styles.colAnnounceMode}>
+                      <span className={row.show_title_in_ticker ? styles.badgeInfo : styles.badgeMuted}>
+                        {row.show_title_in_ticker ? "Title + Modal" : "Body Text"}
+                      </span>
+                    </TableCell>
+                  ) : null}
                   <TableCell className={styles.colAnnounceUpdated}>
                     <TruncatedTooltipCell text={row.updated_at ? new Date(row.updated_at).toLocaleString() : "-"} />
                   </TableCell>
@@ -673,23 +635,45 @@ export default function ManageAnnouncements({ initialItems = [], loadError = "" 
                           <TooltipContent>Move down</TooltipContent>
                         </Tooltip>
                       </Button>
+                      {isAnnouncementMode ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className={`${styles.secondaryBtn} ${styles.clientActionBtn}`}
+                          onClick={() => openEdit(row)}
+                          disabled={busyId === String(row.id)}
+                        >
+                          <Tooltip>
+                            <TooltipTrigger asChild><span><Pencil size={14} /></span></TooltipTrigger>
+                            <TooltipContent>Edit announcement</TooltipContent>
+                          </Tooltip>
+                        </Button>
+                      ) : (
+                        <Link
+                          href={`/dashboard/articles/${encodeURIComponent(String(row.id || ""))}`}
+                          className={`${styles.secondaryBtn} ${styles.clientActionBtn}`}
+                        >
+                          <Tooltip>
+                            <TooltipTrigger asChild><span><Pencil size={14} /></span></TooltipTrigger>
+                            <TooltipContent>Edit article</TooltipContent>
+                          </Tooltip>
+                        </Link>
+                      )}
                       <Button
                         type="button"
                         variant="outline"
                         className={`${styles.secondaryBtn} ${styles.clientActionBtn}`}
-                        onClick={() => openEdit(row)}
-                        disabled={busyId === String(row.id)}
-                      >
-                        <Tooltip>
-                          <TooltipTrigger asChild><span><Pencil size={14} /></span></TooltipTrigger>
-                          <TooltipContent>Edit article</TooltipContent>
-                        </Tooltip>
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className={`${styles.secondaryBtn} ${styles.clientActionBtn}`}
-                        onClick={() => patchRow(row.id, { is_published: !row.is_published }, row.is_published ? "Moved to draft." : "Published successfully.")}
+                        onClick={() =>
+                          patchRow(
+                            row.id,
+                            { is_published: !row.is_published },
+                            row.is_published
+                              ? "Moved to draft."
+                              : isAnnouncementMode
+                                ? "Announcement published successfully."
+                                : "Article published successfully."
+                          )
+                        }
                         disabled={busyId === String(row.id)}
                       >
                         <Tooltip>
@@ -697,18 +681,20 @@ export default function ManageAnnouncements({ initialItems = [], loadError = "" 
                           <TooltipContent>{row.is_published ? "Unpublish" : "Publish"}</TooltipContent>
                         </Tooltip>
                       </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className={`${styles.secondaryBtn} ${styles.clientActionBtn}`}
-                        onClick={() => patchRow(row.id, { is_pinned: !row.is_pinned }, row.is_pinned ? "Unpinned." : "Pinned to top.")}
-                        disabled={busyId === String(row.id)}
-                      >
-                        <Tooltip>
-                          <TooltipTrigger asChild><span>{row.is_pinned ? <PinOff size={14} /> : <Pin size={14} />}</span></TooltipTrigger>
-                          <TooltipContent>{row.is_pinned ? "Unpin" : "Pin to top"}</TooltipContent>
-                        </Tooltip>
-                      </Button>
+                      {isAnnouncementMode ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className={`${styles.secondaryBtn} ${styles.clientActionBtn}`}
+                          onClick={() => patchRow(row.id, { is_pinned: !row.is_pinned }, row.is_pinned ? "Unpinned." : "Pinned to top.")}
+                          disabled={busyId === String(row.id)}
+                        >
+                          <Tooltip>
+                            <TooltipTrigger asChild><span>{row.is_pinned ? <PinOff size={14} /> : <Pin size={14} />}</span></TooltipTrigger>
+                            <TooltipContent>{row.is_pinned ? "Unpin" : "Pin to top"}</TooltipContent>
+                          </Tooltip>
+                        </Button>
+                      ) : null}
                       <Button
                         type="button"
                         variant="outline"
@@ -730,7 +716,7 @@ export default function ManageAnnouncements({ initialItems = [], loadError = "" 
               ))}
               {!filteredItems.length ? (
                 <TableRow>
-                  <TableCell colSpan={7} className={styles.pending}>No article found.</TableCell>
+                  <TableCell colSpan={isAnnouncementMode ? 7 : 5} className={styles.pending}>No {isAnnouncementMode ? "announcement" : "article"} found.</TableCell>
                 </TableRow>
               ) : null}
             </TableBody>
@@ -738,85 +724,115 @@ export default function ManageAnnouncements({ initialItems = [], loadError = "" 
         </div>
       </TooltipProvider>
 
-      <AlertDialog open={editOpen} onOpenChange={(open) => {
-        setEditOpen(open);
-        if (!open) resetForm();
-      }}>
-        <AlertDialogContent className={styles.announceModal}>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Edit Article</AlertDialogTitle>
-            <AlertDialogDescription>Update article details then save changes.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <form className={styles.form} onSubmit={handleEdit}>
-            <label className={styles.field}>
-              <span>Title</span>
-              <input
-                type="text"
-                value={form.title}
-                onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))}
-                required
-              />
-            </label>
-            <label className={styles.field}>
-              <span>Content / Article</span>
-              <RichArticleEditor
-                value={form.content_html}
-                onChange={(value) => setForm((prev) => ({ ...prev, content_html: value }))}
-              />
-            </label>
-            <div className={styles.formGrid}>
-              <label className={styles.checkRow}>
-                <Switch
-                  checked={!!form.is_published}
-                  onCheckedChange={(checked) => setForm((prev) => ({ ...prev, is_published: checked }))}
+      {isAnnouncementMode ? (
+        <AlertDialog open={editOpen} onOpenChange={(open) => {
+          setEditOpen(open);
+          if (!open) resetForm();
+        }}>
+          <AlertDialogContent className={styles.announceModal}>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Edit Announcement</AlertDialogTitle>
+              <AlertDialogDescription>Update announcement details then save changes.</AlertDialogDescription>
+            </AlertDialogHeader>
+            <form className={styles.form} onSubmit={handleEdit}>
+              <label className={styles.field}>
+                <span>Title</span>
+                <input
+                  type="text"
+                  value={form.title}
+                  onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))}
+                  required
                 />
-                <span>Published</span>
               </label>
-              <label className={styles.checkRow}>
-                <Switch
-                  checked={!!form.is_pinned}
-                  onCheckedChange={(checked) => setForm((prev) => ({ ...prev, is_pinned: checked }))}
+              <label className={styles.field}>
+                <span>Content / Article</span>
+                <RichArticleEditor
+                  value={form.content_html}
+                  onChange={(value) => setForm((prev) => ({ ...prev, content_html: value }))}
                 />
-                <span>Pinned</span>
               </label>
-              <label className={styles.checkRow}>
-                <Switch
-                  checked={!!form.show_title_in_ticker}
-                  onCheckedChange={(checked) => setForm((prev) => ({ ...prev, show_title_in_ticker: checked }))}
-                />
-                <span>Show title in ticker and open article in modal on click</span>
-              </label>
-            </div>
-            {error ? <p className={styles.errorText}>{error}</p> : null}
-            <AlertDialogFooter>
-              <AlertDialogCancel asChild>
-                <Button type="button" variant="outline" className={`${styles.secondaryBtn} ${styles.modalActionBtn}`}>Cancel</Button>
-              </AlertDialogCancel>
-              <Button
-                type="submit"
-                variant="outline"
-                className={`${styles.secondaryBtn} ${styles.modalActionBtn}`}
-                disabled={saving}
-                onClick={() => {
-                  submitModeRef.current = "draft";
-                }}
-              >
-                {saving ? "Saving..." : "Save as Draft"}
-              </Button>
-              <Button type="submit" className={`${styles.primaryBtn} ${styles.modalActionBtn}`} disabled={saving}>
-                {saving ? "Saving..." : "Save Changes"}
-              </Button>
-            </AlertDialogFooter>
-          </form>
-        </AlertDialogContent>
-      </AlertDialog>
+              <div className={`${styles.field} ${styles.full}`}>
+                <span className={styles.statLabelWithIcon}><ImagePlus size={14} /><span>Featured Image</span></span>
+                <div className={styles.logoFieldRow}>
+                  <input
+                    className={styles.inlineInput}
+                    type="text"
+                    value={form.featured_image_url}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        featured_image_url: e.target.value,
+                        featured_image_path: "",
+                        featured_image_bucket: "",
+                      }))
+                    }
+                    placeholder="https://your-site.example/article-cover.jpg or /api/media/object?..."
+                  />
+                  <label className={styles.uploadLogoBtn}>
+                    {uploadingImage ? "Uploading..." : "Upload image"}
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      disabled={uploadingImage}
+                      onChange={(e) => uploadArticleImage(e.target.files?.[0])}
+                      style={{ display: "none" }}
+                    />
+                  </label>
+                </div>
+                <small className={styles.fieldHint}>Recommended: wide cover image, JPG/PNG/WebP, under 5MB.</small>
+                {form.featured_image_url ? (
+                  <div className={styles.articleImagePreview}>
+                    <img src={form.featured_image_url} alt="Featured preview" className={styles.articleImagePreviewImg} />
+                  </div>
+                ) : null}
+              </div>
+              <div className={styles.formGrid}>
+                <label className={styles.checkRow}>
+                  <Switch
+                    checked={!!form.is_published}
+                    onCheckedChange={(checked) => setForm((prev) => ({ ...prev, is_published: checked }))}
+                  />
+                  <span>Published</span>
+                </label>
+                <label className={styles.checkRow}>
+                  <Switch
+                    checked={!!form.is_pinned}
+                    onCheckedChange={(checked) => setForm((prev) => ({ ...prev, is_pinned: checked }))}
+                  />
+                  <span>Pinned</span>
+                </label>
+              </div>
+              {error ? <p className={styles.errorText}>{error}</p> : null}
+              <AlertDialogFooter>
+                <AlertDialogCancel asChild>
+                  <Button type="button" variant="outline" className={`${styles.secondaryBtn} ${styles.modalActionBtn}`}>Cancel</Button>
+                </AlertDialogCancel>
+                <Button
+                  type="submit"
+                  variant="outline"
+                  className={`${styles.secondaryBtn} ${styles.modalActionBtn}`}
+                  disabled={saving}
+                  onClick={() => {
+                    submitModeRef.current = "draft";
+                  }}
+                >
+                  {saving ? "Saving..." : "Save as Draft"}
+                </Button>
+                <Button type="submit" className={`${styles.primaryBtn} ${styles.modalActionBtn}`} disabled={saving}>
+                  {saving ? "Saving..." : "Save Changes"}
+                </Button>
+              </AlertDialogFooter>
+            </form>
+          </AlertDialogContent>
+        </AlertDialog>
+      ) : null}
 
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete article?</AlertDialogTitle>
+            <AlertDialogTitle>Delete {isAnnouncementMode ? "announcement" : "article"}?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. Article title: <strong>{deleteTarget?.title || "-"}</strong>
+              This action cannot be undone. {isAnnouncementMode ? "Announcement" : "Article"} title: <strong>{deleteTarget?.title || "-"}</strong>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -832,7 +848,9 @@ export default function ManageAnnouncements({ initialItems = [], loadError = "" 
 
       <p className={styles.hint}>
         <Megaphone size={14} style={{ verticalAlign: "text-bottom", marginRight: 6 }} />
-        Use this module for maintenance alerts, update notes, and featured articles.
+        {isAnnouncementMode
+          ? "Use this module for maintenance alerts, notices, and ticker updates."
+          : "Use this module for editorial articles and featured reading content."}
       </p>
     </section>
   );

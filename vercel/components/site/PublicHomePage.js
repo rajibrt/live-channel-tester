@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useI18n } from "../i18n/LanguageProvider";
 import styles from "./public-pages.module.css";
 
-export default function PublicHomePage() {
+export default function PublicHomePage({ featuredArticles = [] }) {
   const { t } = useI18n();
 
   return (
@@ -58,6 +58,46 @@ export default function PublicHomePage() {
       <section className={styles.noticeBox}>
         <p className={styles.noticeTitle}>{t("publicSite.sourceNoticeTitle")}</p>
         <p className={styles.noticeText}>{t("publicSite.sourceNoticeBody")}</p>
+      </section>
+
+      <section className={styles.homeEditorialSection}>
+        <div className={styles.sectionHeading}>
+          <p className={styles.eyebrow}>{t("publicSite.editorialEyebrow")}</p>
+          <h2>{t("publicSite.editorialTitle")}</h2>
+          <p>{t("publicSite.editorialIntro")}</p>
+        </div>
+        <div className={styles.articleFeaturedGrid}>
+          {featuredArticles.map((article) => (
+            <article key={article.slug} className={styles.featuredArticleCard}>
+              {article.featuredImageUrl ? (
+                <img src={article.featuredImageUrl} alt={article.title} className={styles.articleCardImage} loading="lazy" />
+              ) : null}
+              <p className={styles.articleMeta}>
+                <span>{article.readingMinutes} {t("publicSite.readingMinutes")}</span>
+              </p>
+              <h3>{article.title}</h3>
+              <p>{article.excerpt}</p>
+              <Link href={article.path} className={styles.primaryLink}>
+                {t("publicSite.readArticle")}
+              </Link>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className={styles.homeTrustGrid}>
+        <article className={styles.infoCard}>
+          <strong>{t("publicSite.trustTitle1")}</strong>
+          <p>{t("publicSite.trustBody1")}</p>
+        </article>
+        <article className={styles.infoCard}>
+          <strong>{t("publicSite.trustTitle2")}</strong>
+          <p>{t("publicSite.trustBody2")}</p>
+        </article>
+        <article className={styles.infoCard}>
+          <strong>{t("publicSite.trustTitle3")}</strong>
+          <p>{t("publicSite.trustBody3")}</p>
+        </article>
       </section>
     </main>
   );

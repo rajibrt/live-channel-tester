@@ -7,19 +7,10 @@ const ADSENSE_CLIENT = "ca-pub-3010934061489506";
 
 function shouldDisableAds(pathname) {
   const path = String(pathname || "");
-  if (!path) return false;
-  return (
-    path.startsWith("/dashboard") ||
-    path.startsWith("/login") ||
-    path.startsWith("/client-login") ||
-    path.startsWith("/admin-reset-password") ||
-    path.startsWith("/privacy-policy") ||
-    path.startsWith("/cookie-policy") ||
-    path.startsWith("/terms") ||
-    path.startsWith("/dmca") ||
-    path.startsWith("/about") ||
-    path.startsWith("/contact")
-  );
+  if (!path) return true;
+  if (path === "/") return false;
+  if (path === "/articles" || path.startsWith("/articles/")) return false;
+  return true;
 }
 
 export default function PublicAdSenseScript() {

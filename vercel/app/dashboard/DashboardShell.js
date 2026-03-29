@@ -14,6 +14,7 @@ import {
   Menu,
   Megaphone,
   MonitorPlay,
+  Newspaper,
   Settings,
   Tv,
   Users,
@@ -38,6 +39,7 @@ function createNavGroups(t) {
         { href: '/dashboard/playlists', label: t('dashboardShell.navPlaylists'), icon: ListVideo },
         { href: '/dashboard/channels', label: t('dashboardShell.navAddChannel'), icon: Tv },
         { href: '/dashboard/movies', label: t('dashboardShell.navMovies'), icon: Film },
+        { href: '/dashboard/articles', label: t('dashboardShell.navArticles'), icon: Newspaper },
         { href: '/dashboard/announcements', label: t('dashboardShell.navAnnouncements'), icon: Megaphone },
       ],
     },
@@ -80,6 +82,12 @@ function sectionMeta(pathname, t) {
     return {
       title: t('dashboardShell.titleMovies'),
       subtitle: t('dashboardShell.subtitleMovies'),
+    }
+  }
+  if (pathname.startsWith('/dashboard/articles')) {
+    return {
+      title: t('dashboardShell.titleArticles'),
+      subtitle: t('dashboardShell.subtitleArticles'),
     }
   }
   if (pathname.startsWith('/dashboard/announcements')) {

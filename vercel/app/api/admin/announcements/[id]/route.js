@@ -10,13 +10,23 @@ function formatDbError(error, fallback) {
   const code = String(error?.code || "");
   const lower = message.toLowerCase();
   if (code === "PGRST205" || code === "42P01" || lower.includes("schema cache") || lower.includes("does not exist")) {
-    return "Announcements module এখনও initialize হয়নি। Supabase SQL Editor-এ `vercel/supabase/schema.sql` (বা `vercel/supabase/announcements.sql`) রান করুন।";
+    return "Announcements database table এখনও initialize হয়নি। নিজের object bucket শুধু file upload-এর জন্য, article table create করে না। Supabase SQL Editor-এ `vercel/supabase/announcements.sql` রান করুন।";
   }
   return message;
 }
 
 function cleanText(value) {
   return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function normalizeContentType(value, fallback = "announcement") {
+  return String(value || "").trim().toLowerCase() === "article" ? "article" : fallback;
+}
+
+function cleanUrl(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  return /^https?:\/\//i.test(text) ? text : "";
 }
 
 function stripHtml(html) {
@@ -38,11 +48,19 @@ function normalizePosition(value) {
   return Math.max(0, Math.floor(num));
 }
 
+function inferContentType(row) {
+  return String(row?.featured_image_path || row?.featured_image_url || "").trim() ? "article" : "announcement";
+}
+
 function mapRow(row) {
   return {
     id: row?.id,
     title: String(row?.title || ""),
     content_html: String(row?.content_html || ""),
+    content_type: normalizeContentType(row?.content_type, inferContentType(row)),
+    featured_image_url: String(row?.featured_image_url || ""),
+    featured_image_path: String(row?.featured_image_path || ""),
+    featured_image_bucket: String(row?.featured_image_bucket || ""),
     position: normalizePosition(row?.position),
     is_published: !!row?.is_published,
     is_pinned: !!row?.is_pinned,
@@ -80,6 +98,22 @@ export async function PATCH(request, { params }) {
     announcementBody = plain;
   }
 
+  if (Object.prototype.hasOwnProperty.call(body, "featured_image_url")) {
+    patch.featured_image_url = cleanUrl(body.featured_image_url);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, "featured_image_path")) {
+    patch.featured_image_path = cleanText(body.featured_image_path);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, "featured_image_bucket")) {
+    patch.featured_image_bucket = cleanText(body.featured_image_bucket);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, "content_type")) {
+    patch.content_type = normalizeContentType(body.content_type, "announcement");
+  }
+
   if (Object.prototype.hasOwnProperty.call(body, "is_pinned")) {
     patch.is_pinned = !!body.is_pinned;
   }
@@ -108,12 +142,28 @@ export async function PATCH(request, { params }) {
   patch.updated_by_admin = auth.current.user.id;
 
   const admin = getSupabaseAdmin();
-  const { data, error } = await admin
+  let data;
+  let error;
+  ({ data, error } = await admin
     .from(TABLE)
     .update(patch)
     .eq("id", id)
-    .select("id,title,content_html,position,is_published,is_pinned,show_title_in_ticker,created_at,updated_at,published_at")
-    .single();
+    .select("id,title,content_html,content_type,featured_image_url,featured_image_path,featured_image_bucket,position,is_published,is_pinned,show_title_in_ticker,created_at,updated_at,published_at")
+    .single());
+
+  if (error) {
+    const lower = String(error?.message || "").toLowerCase();
+    const missingContentType = String(error?.code || "") === "42703" || lower.includes("content_type");
+    if (missingContentType) {
+      const { content_type, ...legacyPatch } = patch;
+      ({ data, error } = await admin
+        .from(TABLE)
+        .update(legacyPatch)
+        .eq("id", id)
+        .select("id,title,content_html,featured_image_url,featured_image_path,featured_image_bucket,position,is_published,is_pinned,show_title_in_ticker,created_at,updated_at,published_at")
+        .single());
+    }
+  }
 
   if (error) return NextResponse.json({ error: formatDbError(error, "Failed to update announcement.") }, { status: 500 });
 

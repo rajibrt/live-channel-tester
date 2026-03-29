@@ -20,6 +20,9 @@
     "import:apache-movies": "node scripts/import-apache-movies.mjs"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1019.0",
+    "@aws-sdk/lib-storage": "^3.1019.0",
+    "@aws-sdk/s3-request-presigner": "^3.1019.0",
     "@radix-ui/react-alert-dialog": "^1.1.15",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@supabase/supabase-js": "^2.52.1",

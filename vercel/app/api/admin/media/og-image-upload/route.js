@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "../../../../../lib/adminApi";
-import { getSupabaseAdmin } from "../../../../../lib/supabaseAdmin";
+import { ensureSupabaseBucket, getObjectStorageProvider, uploadPublicObject } from "../../../../../lib/objectStorage";
 
 export const runtime = "nodejs";
 
@@ -8,25 +8,6 @@ function safeName(name) {
   return String(name || "og-image")
     .replace(/[^a-zA-Z0-9._-]/g, "_")
     .replace(/_+/g, "_");
-}
-
-async function ensureBucket(supabase, bucket) {
-  const { error } = await supabase.storage.createBucket(bucket, {
-    public: true,
-    fileSizeLimit: 5 * 1024 * 1024,
-    allowedMimeTypes: ["image/png", "image/jpeg", "image/webp", "image/jpg"],
-  });
-
-  const message = String(error?.message || "").toLowerCase();
-  const alreadyExists =
-    !error ||
-    message.includes("already exists") ||
-    message.includes("duplicate") ||
-    message.includes("exists");
-
-  if (!alreadyExists) {
-    throw new Error(`Open Graph bucket setup failed: ${error.message}`);
-  }
 }
 
 export async function POST(request) {
@@ -49,31 +30,24 @@ export async function POST(request) {
       return NextResponse.json({ error: "Image too large. Max 5MB." }, { status: 400 });
     }
 
-    const bucket = process.env.OG_IMAGE_BUCKET || "og-images";
-    const supabase = getSupabaseAdmin();
-    await ensureBucket(supabase, bucket);
+    const bucket = process.env.OG_IMAGE_BUCKET || process.env.OBJECT_STORAGE_BUCKET_IMAGES || "og-images";
+    if (getObjectStorageProvider() === "supabase") {
+      await ensureSupabaseBucket(bucket, {
+        fileSizeLimit: 5 * 1024 * 1024,
+        allowedMimeTypes: ["image/png", "image/jpeg", "image/webp", "image/jpg"],
+      });
+    }
     const ext = safeName(file.name || "og-image.png").split(".").pop() || "png";
     const filePath = `open-graph/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
     const bytes = Buffer.from(await file.arrayBuffer());
+    const uploaded = await uploadPublicObject({
+      bucket,
+      key: filePath,
+      bytes,
+      contentType: type,
+    });
 
-    const upload = await supabase.storage
-      .from(bucket)
-      .upload(filePath, bytes, { contentType: type, upsert: true });
-
-    if (upload.error) {
-      return NextResponse.json(
-        { error: `Open Graph image upload failed: ${upload.error.message}. Ensure storage bucket "${bucket}" exists.` },
-        { status: 500 }
-      );
-    }
-
-    const { data } = supabase.storage.from(bucket).getPublicUrl(filePath);
-    const url = data?.publicUrl || "";
-    if (!url) {
-      return NextResponse.json({ error: "Upload succeeded but public URL not available." }, { status: 500 });
-    }
-
-    return NextResponse.json({ ok: true, url, path: filePath, bucket });
+    return NextResponse.json({ ok: true, url: uploaded.url, path: uploaded.path, bucket: uploaded.bucket });
   } catch (error) {
     return NextResponse.json({ error: error?.message || "Failed to upload Open Graph image." }, { status: 500 });
   }

@@ -257,14 +257,14 @@ export default async function DashboardPage() {
           <Link href="/dashboard/clients" className={styles.navCta}>Open Clients</Link>
         </article>
         <article className={styles.card}>
-          <h2>Announcements</h2>
-          <p className={styles.hint}>Post updates, maintenance notices, and featured articles.</p>
-          <Link href="/dashboard/announcements" className={styles.navCta}>Open Announcements</Link>
+          <h2>Articles</h2>
+          <p className={styles.hint}>Manage editorial articles, guides, and featured reading content.</p>
+          <Link href="/dashboard/articles" className={styles.navCta}>Open Articles</Link>
         </article>
         <article className={styles.card}>
-          <h2>Local Check</h2>
-          <p className={styles.hint}>Run Local IP/ISP check with progress + live preview.</p>
-          <Link href="/dashboard/local-check" className={styles.navCta}>Open Local Check</Link>
+          <h2>Announcements</h2>
+          <p className={styles.hint}>Post ticker updates, maintenance notices, and alert-style announcements.</p>
+          <Link href="/dashboard/announcements" className={styles.navCta}>Open Announcements</Link>
         </article>
         <article className={styles.card}>
           <h2>Last Cron Run</h2>
@@ -283,6 +283,11 @@ export default async function DashboardPage() {
               Turn Cron {cronEnabled ? "OFF" : "ON"}
             </button>
           </form>
+        </article>
+        <article className={styles.card}>
+          <h2>Local Check</h2>
+          <p className={styles.hint}>Run Local IP/ISP check with progress + live preview.</p>
+          <Link href="/dashboard/local-check" className={styles.navCta}>Open Local Check</Link>
         </article>
       </section>
 
