@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '../ui/button'
 import {
@@ -886,7 +887,7 @@ export default function TopNavbar({
         >
           <Icon name='Menu' size={18} />
         </Button>
-        <div className={styles.brandWrap}>
+        <Link href='/' className={styles.brandWrap}>
           <div className={styles.brandLogo}>
             <img
               src='/favicon-32x32.png'
@@ -895,7 +896,7 @@ export default function TopNavbar({
             />
           </div>
           <h1 className={styles.brandText}>WEBTVBD</h1>
-        </div>
+        </Link>
       </div>
 
       <div className={styles.topMiddle}>

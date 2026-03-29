@@ -128,7 +128,7 @@ export default function ManageAnnouncements({ initialItems = [], loadError = "",
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [pinFilter, setPinFilter] = useState("all");
-  const [sortMode, setSortMode] = useState("position");
+  const [sortMode, setSortMode] = useState(isAnnouncementMode ? "position" : "newest");
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -495,7 +495,7 @@ export default function ManageAnnouncements({ initialItems = [], loadError = "",
         <label className={styles.field}>
           <span>Sort</span>
           <select value={sortMode} onChange={(e) => setSortMode(e.target.value)}>
-            <option value="position">Custom Position</option>
+            {isAnnouncementMode ? <option value="position">Custom Position</option> : null}
             <option value="newest">Newest</option>
             <option value="oldest">Oldest</option>
             <option value="title_asc">Title A-Z</option>

@@ -36,6 +36,14 @@ function formatDate(value, locale) {
   }).format(date);
 }
 
+function inferImageType(url) {
+  const value = String(url || "").toLowerCase();
+  if (value.includes(".png")) return "image/png";
+  if (value.includes(".jpg") || value.includes(".jpeg")) return "image/jpeg";
+  if (value.includes(".webp")) return "image/webp";
+  return "image/jpeg";
+}
+
 export async function generateMetadata({ params }) {
   const resolved = await params;
   const article = await getPublicArticleBySlug(resolved?.article);
@@ -46,16 +54,19 @@ export async function generateMetadata({ params }) {
     };
   }
 
-  const socialImage = article.featuredImageUrl
+  const socialImageUrl = article.socialImageUrl || article.featuredImageUrl || "";
+  const socialImage = socialImageUrl
     ? [
         {
-          url: article.featuredImageUrl,
+          url: socialImageUrl,
+          secureUrl: socialImageUrl,
+          type: inferImageType(socialImageUrl),
           width: 1200,
           height: 630,
           alt: article.title,
         },
       ]
-    : undefined;
+    : [];
 
   return {
     title: `${article.title} | WEBTVBD`,
@@ -72,7 +83,7 @@ export async function generateMetadata({ params }) {
       card: "summary_large_image",
       title: article.title,
       description: article.description,
-      images: socialImage,
+      images: socialImageUrl ? [socialImageUrl] : [],
     },
   };
 }

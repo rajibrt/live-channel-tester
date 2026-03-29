@@ -74,6 +74,36 @@ function buildS3PublicUrl(bucket, key) {
   }
 }
 
+export function buildPublicObjectUrl(bucket, key) {
+  const safeBucket = cleanText(bucket);
+  const safeKey = cleanText(key);
+  if (!safeBucket || !safeKey) return "";
+
+  if (getObjectStorageProvider() === "s3") {
+    return buildS3PublicUrl(safeBucket, safeKey);
+  }
+
+  try {
+    const supabase = getSupabaseAdmin();
+    const { data } = supabase.storage.from(safeBucket).getPublicUrl(safeKey);
+    return cleanText(data?.publicUrl);
+  } catch {
+    return "";
+  }
+}
+
+export function resolvePublicObjectUrl({ bucket, path, fallbackUrl = "" }) {
+  const safeBucket = cleanText(bucket);
+  const safePath = cleanText(path);
+  const safeFallbackUrl = cleanText(fallbackUrl);
+
+  if (safeBucket && safePath) {
+    return buildPublicObjectUrl(safeBucket, safePath) || safeFallbackUrl;
+  }
+
+  return safeFallbackUrl;
+}
+
 export async function ensureSupabaseBucket(bucket, options = {}) {
   const supabase = getSupabaseAdmin();
   const { error } = await supabase.storage.createBucket(bucket, {

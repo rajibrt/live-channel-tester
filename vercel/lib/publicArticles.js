@@ -1,5 +1,5 @@
 import { cache } from "react";
-import { resolveObjectUrl } from "./objectStorage";
+import { resolveObjectUrl, resolvePublicObjectUrl } from "./objectStorage";
 import { getSupabaseAdmin } from "./supabaseAdmin";
 import { toAbsoluteUrl } from "./siteUrl";
 
@@ -64,6 +64,11 @@ async function normalizeArticle(row) {
     path: row?.featured_image_path,
     fallbackUrl: row?.featured_image_url,
   });
+  const socialImageUrl = resolvePublicObjectUrl({
+    bucket: row?.featured_image_bucket,
+    path: row?.featured_image_path,
+    fallbackUrl: row?.featured_image_url,
+  });
 
   return {
     id: String(row?.id || ""),
@@ -77,6 +82,7 @@ async function normalizeArticle(row) {
     readingMinutes: estimateReadingMinutes(plain),
     html: String(row?.content_html || ""),
     featuredImageUrl: cleanUrl(featuredImageUrl),
+    socialImageUrl: cleanUrl(toAbsoluteUrl(socialImageUrl)),
     path,
     canonicalUrl: toAbsoluteUrl(path),
   };
