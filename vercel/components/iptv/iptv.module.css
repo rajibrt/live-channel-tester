@@ -235,32 +235,43 @@
   right: 0;
   z-index: 80;
   width: min(92vw, 360px);
+  max-height: min(calc(100dvh - 84px), 520px);
   border-radius: 12px;
   border: 1px solid var(--border);
   background: color-mix(in oklab, var(--card) 96%, transparent);
   box-shadow: var(--shadow-2xl);
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .notificationHeader {
   padding: 10px;
   border-bottom: 1px solid var(--border);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .notificationHeader strong {
   font-size: 14px;
+  min-width: 0;
+  flex: 1 1 100%;
 }
 
 .notificationHeaderActions {
-  display: inline-flex;
+  display: flex;
   align-items: center;
+  justify-content: flex-start;
+  flex-wrap: wrap;
   gap: 8px;
   font-size: 12px;
   color: var(--muted-foreground);
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .notificationMarkAllBtn {
@@ -272,6 +283,8 @@
   color: var(--foreground);
   background: color-mix(in oklab, var(--card) 90%, transparent);
   cursor: pointer;
+  max-width: 100%;
+  white-space: normal;
 }
 
 .notificationMarkAllBtn:disabled {
@@ -280,7 +293,9 @@
 }
 
 .notificationList {
-  max-height: min(52vh, 360px);
+  flex: 1;
+  min-height: 0;
+  max-height: none;
   overflow: auto;
   padding: 6px;
   display: grid;
@@ -314,7 +329,7 @@
 
 .notificationItemTop {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
 }
@@ -323,9 +338,13 @@
   font-size: 13px;
   font-weight: 600;
   min-width: 0;
-  white-space: nowrap;
+  flex: 1 1 auto;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .notificationDot {
@@ -334,6 +353,7 @@
   border-radius: 999px;
   background: var(--primary);
   flex: 0 0 auto;
+  margin-top: 4px;
 }
 
 .notificationItemMeta {
@@ -408,6 +428,25 @@
 
 .profileModal {
   max-width: 520px;
+}
+
+.pushModal {
+  max-width: min(560px, calc(100vw - 24px));
+}
+
+.pushModalBody {
+  display: grid;
+  gap: 12px;
+}
+
+.pushModalLanguageRow {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: -4px;
+}
+
+.pushModalStatus {
+  margin: 0;
 }
 
 .profileForm {
@@ -491,10 +530,16 @@
 .profilePrimaryBtn,
 .profileSecondaryBtn {
   border-radius: 10px;
-  padding: 9px 12px;
+  min-height: 46px;
+  padding: 11px 18px;
   font: inherit;
+  font-size: 16px;
+  line-height: 1;
   font-weight: 600;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .profilePrimaryBtn {
@@ -1053,7 +1098,7 @@
 .videoShell {
   position: relative;
   aspect-ratio: 16 / 9;
-  border-radius: 20px;
+  border-radius: 0;
   overflow: hidden;
   background: var(--muted);
   box-shadow: var(--shadow-2xl);
@@ -2185,7 +2230,7 @@
   }
 
   .videoShell {
-    border-radius: 14px;
+    border-radius: 0;
   }
 
   .fullscreenPanel {
@@ -2222,6 +2267,30 @@
 }
 
 @media (max-width: 640px) {
+  .pushModal {
+    width: calc(100vw - 24px);
+    max-width: calc(100vw - 24px);
+    padding-left: 16px;
+    padding-right: 16px;
+    padding-top: 16px;
+    padding-bottom: 16px;
+  }
+
+  .pushModalBody {
+    gap: 10px;
+  }
+
+  .pushModalLanguageRow {
+    margin-top: -2px;
+  }
+
+  .pushModal :global([data-slot="alert-dialog-title"]) {
+    font-size: 18px !important;
+    line-height: 1.15 !important;
+    letter-spacing: -0.02em !important;
+    white-space: nowrap;
+  }
+
   .topNavbar {
     padding: 0 8px;
   }

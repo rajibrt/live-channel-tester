@@ -229,7 +229,7 @@ export default function IptvHomeClient({
   });
   const [cookieLanguage, setCookieLanguage] = useState(() => {
     const v = String(initialClientState?.cookiePrefs?.language || "").toLowerCase();
-    return v === "bn" ? "bn" : "en";
+    return v === "en" ? "en" : "bn";
   });
   const [favorites, setFavorites] = usePersistentArray(
     "favorites",
@@ -1320,6 +1320,7 @@ export default function IptvHomeClient({
         debugStats={debugStats}
         clientLabel={currentClient?.fullName || currentClient?.email || "Client"}
         clientProfile={currentClient}
+        language={cookieLanguage}
       />
       <section className={styles.contentWrap}>
         <div className={`${styles.drawerLeft} ${showLeftSidebar ? styles.drawerLeftOpen : ""}`}>

@@ -32,6 +32,12 @@ export function slugify(value) {
     .slice(0, 90);
 }
 
+export function buildPublicArticlePath(id, title) {
+  const safeId = String(id || "").trim();
+  const safeTitle = cleanText(title) || "article";
+  return `/articles/news-${safeId}-${slugify(safeTitle) || "article"}`;
+}
+
 function estimateReadingMinutes(text) {
   const words = cleanText(text).split(" ").filter(Boolean).length;
   return Math.max(2, Math.ceil(words / 180));
@@ -40,7 +46,8 @@ function estimateReadingMinutes(text) {
 async function normalizeArticle(row) {
   const title = cleanText(row?.title) || "Untitled article";
   const plain = stripHtml(row?.content_html);
-  const slug = `news-${String(row?.id || "").trim()}-${slugify(title) || "article"}`;
+  const path = buildPublicArticlePath(row?.id, title);
+  const slug = path.split("/").pop() || `news-${String(row?.id || "").trim()}-${slugify(title) || "article"}`;
   const excerpt = plain.slice(0, 190);
   const publishedAt = String(row?.published_at || row?.updated_at || row?.created_at || "");
   const updatedAt = String(row?.updated_at || row?.published_at || row?.created_at || "");
@@ -62,8 +69,8 @@ async function normalizeArticle(row) {
     readingMinutes: estimateReadingMinutes(plain),
     html: String(row?.content_html || ""),
     featuredImageUrl: cleanUrl(featuredImageUrl),
-    path: `/articles/${slug}`,
-    canonicalUrl: toAbsoluteUrl(`/articles/${slug}`),
+    path,
+    canonicalUrl: toAbsoluteUrl(path),
   };
 }
 

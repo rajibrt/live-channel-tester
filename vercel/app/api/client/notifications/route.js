@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireClientApi } from "../../../../lib/clientApi";
+import { buildPublicArticlePath } from "../../../../lib/publicArticles";
 import { getSupabaseAdmin } from "../../../../lib/supabaseAdmin";
 
 const MAX_ITEMS = 25;
@@ -12,12 +13,27 @@ export async function GET() {
   const userId = auth.current.user.id;
   const admin = getSupabaseAdmin();
 
-  const { data: announcements, error } = await admin
-    .from("admin_announcements")
-    .select("id,title,content_html,is_pinned,published_at,updated_at,created_at")
-    .eq("is_published", true)
-    .order("updated_at", { ascending: false })
-    .limit(MAX_ITEMS);
+  const buildQuery = (selectClause) =>
+    admin
+      .from("admin_announcements")
+      .select(selectClause)
+      .eq("is_published", true)
+      .order("updated_at", { ascending: false })
+      .limit(MAX_ITEMS);
+
+  let { data: announcements, error } = await buildQuery(
+    "id,title,content_html,content_type,featured_image_url,featured_image_path,is_pinned,published_at,updated_at,created_at"
+  );
+
+  if (error) {
+    const lower = String(error?.message || "").toLowerCase();
+    const missingContentType = String(error?.code || "") === "42703" || lower.includes("content_type");
+    if (missingContentType) {
+      ({ data: announcements, error } = await buildQuery(
+        "id,title,content_html,featured_image_url,featured_image_path,is_pinned,published_at,updated_at,created_at"
+      ));
+    }
+  }
 
   if (error) {
     return NextResponse.json({ error: error.message || "Failed to load notifications." }, { status: 500 });
@@ -42,6 +58,15 @@ export async function GET() {
       id,
       title: String(row.title || "Announcement"),
       content_html: String(row.content_html || ""),
+      content_type: String(row.content_type || "").trim().toLowerCase() === "article"
+        || (!String(row.content_type || "").trim() && !!String(row.featured_image_path || row.featured_image_url || "").trim())
+        ? "article"
+        : "announcement",
+      path:
+        String(row.content_type || "").trim().toLowerCase() === "article"
+        || (!String(row.content_type || "").trim() && !!String(row.featured_image_path || row.featured_image_url || "").trim())
+          ? buildPublicArticlePath(row.id, row.title)
+          : "",
       is_pinned: !!row.is_pinned,
       published_at: row.published_at || null,
       updated_at: row.updated_at || row.created_at || null,

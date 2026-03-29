@@ -91,6 +91,8 @@ function isValidInstallUrl(value) {
   }
 }
 
+const PUSH_REMINDER_DELAY_MS = 2 * 60 * 1000
+
 function isNativeAppRuntime(windowRef) {
   try {
     const cap = windowRef?.Capacitor
@@ -293,6 +295,7 @@ export default function TopNavbar({
   debugStats,
   clientLabel,
   clientProfile,
+  language = 'bn',
 }) {
   const [open, setOpen] = useState(false)
   const [showNewPassword, setShowNewPassword] = useState(false)
@@ -324,6 +327,7 @@ export default function TopNavbar({
   const [pushError, setPushError] = useState('')
   const [showInstallCta, setShowInstallCta] = useState(false)
   const [showPushCta, setShowPushCta] = useState(false)
+  const [pushDialogLanguage, setPushDialogLanguage] = useState('bn')
   const vapidPublicKeyRef = useRef(
     String(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || '').trim(),
   )
@@ -345,6 +349,48 @@ export default function TopNavbar({
     () => String(clientProfile?.mobileNumber || ''),
     [clientProfile?.mobileNumber],
   )
+  const copy = useMemo(() => {
+    const isBn = String(pushDialogLanguage || 'bn').trim().toLowerCase() !== 'en'
+    return isBn
+      ? {
+          pushTitle: 'পুশ নোটিফিকেশন চালু করুন',
+          pushDescription:
+            'ঘোষণা ও আপডেটের ইনস্ট্যান্ট অ্যালার্ট পেতে পুশ নোটিফিকেশন চালু রাখা প্রয়োজন।',
+          pushProgress: 'পুশ সেটআপ চলছে।',
+          pushEnabled: 'পুশ নোটিফিকেশন চালু আছে।',
+          pushDisabled: 'পুশ নোটিফিকেশন বর্তমানে বন্ধ আছে।',
+          pushEnableBtn: 'পুশ চালু করুন',
+          pushEnablingBtn: 'চালু করা হচ্ছে...',
+          pushCloseBtn: 'বন্ধ করুন',
+          pushSwitchBtn: 'English',
+        }
+      : {
+          pushTitle: 'Enable Push Notifications',
+          pushDescription:
+            'Push notifications must stay enabled to receive instant alerts for announcements and updates.',
+          pushProgress: 'Push setup is in progress.',
+          pushEnabled: 'Push notifications are enabled.',
+          pushDisabled: 'Push notifications are currently off.',
+          pushEnableBtn: 'Enable Push',
+          pushEnablingBtn: 'Enabling...',
+          pushCloseBtn: 'Close',
+          pushSwitchBtn: 'বাংলা',
+        }
+  }, [pushDialogLanguage])
+
+  useEffect(() => {
+    if (showPushCta) {
+      setPushDialogLanguage('bn')
+    }
+  }, [showPushCta])
+
+  useEffect(() => {
+    if (!pushReady || pushEnabled || showPushCta) return undefined
+    const timer = window.setTimeout(() => {
+      setShowPushCta(true)
+    }, PUSH_REMINDER_DELAY_MS)
+    return () => window.clearTimeout(timer)
+  }, [pushReady, pushEnabled, showPushCta])
 
   useEffect(() => {
     let active = true
@@ -557,14 +603,8 @@ export default function TopNavbar({
               user_agent: navigator.userAgent,
             }),
           }).catch(() => {})
-        } else if (Notification.permission === 'default') {
-          try {
-            const prompted =
-              window.localStorage.getItem(pushPromptedKeyRef.current) === '1'
-            if (!prompted) setShowPushCta(true)
-          } catch {
-            setShowPushCta(true)
-          }
+        } else {
+          setShowPushCta(true)
         }
       } catch {
         setPushReady(false)
@@ -632,8 +672,10 @@ export default function TopNavbar({
       })
       if (!saveRes.ok) throw new Error('Failed to enable push notifications.')
       setPushEnabled(true)
+      setShowPushCta(false)
     } catch (err) {
       setPushEnabled(false)
+      setShowPushCta(true)
       setPushError(err?.message || 'Failed to enable push notifications.')
     } finally {
       setPushBusy(false)
@@ -663,6 +705,7 @@ export default function TopNavbar({
         }).catch(() => {})
       }
       setPushEnabled(false)
+      setShowPushCta(true)
     } catch (err) {
       setPushError(err?.message || 'Failed to disable push notifications.')
     } finally {
@@ -754,15 +797,6 @@ export default function TopNavbar({
         installDismissKeyRef.current,
         String(Date.now()),
       )
-    } catch {
-      // ignore localStorage errors
-    }
-  }
-
-  function dismissPushCta() {
-    setShowPushCta(false)
-    try {
-      window.localStorage.setItem(pushPromptedKeyRef.current, '1')
     } catch {
       // ignore localStorage errors
     }
@@ -1012,12 +1046,20 @@ export default function TopNavbar({
                             await markNotificationsRead({
                               announcementId: item.id,
                             })
+                          setNotificationMenuOpen(false)
+                          if (
+                            String(item.content_type || '').trim().toLowerCase() ===
+                              'article' &&
+                            String(item.path || '').startsWith('/articles/')
+                          ) {
+                            window.open(String(item.path), '_blank', 'noopener,noreferrer')
+                            return
+                          }
                           setActiveTickerArticle({
                             id: item.id,
                             title: item.title || 'Announcement',
                             content_html: item.content_html || '',
                           })
-                          setNotificationMenuOpen(false)
                         }}
                       >
                         <div className={styles.notificationItemTop}>
@@ -1260,37 +1302,88 @@ export default function TopNavbar({
           </div>
         </div>
       ) : null}
-      {showPushCta && pushReady && !showInstallCta ? (
-        <div
-          className={styles.mobileActionPrompt}
-          role='status'
-          aria-live='polite'
-        >
-          <div className={styles.mobileActionPromptText}>
-            <strong>Enable Push Notifications</strong>
-            <span>Get instant alerts for new announcements.</span>
+      {pushError ? <p className={styles.pushInlineError}>{pushError}</p> : null}
+
+      <AlertDialog
+        open={showPushCta && pushReady}
+        onOpenChange={(nextOpen) => {
+          if (!pushReady) return
+          setShowPushCta(nextOpen)
+        }}
+      >
+        <AlertDialogContent className={`${styles.profileModal} ${styles.pushModal}`}>
+          <AlertDialogHeader>
+            <AlertDialogTitle
+              style={{
+                fontSize:
+                  pushDialogLanguage === 'bn'
+                    ? 'clamp(16px, 4.8vw, 30px)'
+                    : 'clamp(18px, 4.6vw, 28px)',
+                lineHeight: 1.2,
+                letterSpacing: '-0.03em',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {copy.pushTitle}
+            </AlertDialogTitle>
+            <AlertDialogDescription
+              style={{
+                fontSize: pushDialogLanguage === 'bn' ? '18px' : '17px',
+                lineHeight: pushDialogLanguage === 'bn' ? 1.7 : 1.65,
+              }}
+            >
+              {copy.pushDescription}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className={styles.pushModalBody}>
+            <div className={styles.pushModalLanguageRow}>
+              <button
+                type='button'
+                className={styles.profileSecondaryBtn}
+                onClick={() =>
+                  setPushDialogLanguage((prev) => (prev === 'en' ? 'bn' : 'en'))
+                }
+              >
+                {copy.pushSwitchBtn}
+              </button>
+            </div>
+            <p
+              className={styles.pushModalStatus}
+              style={{
+                margin: 0,
+                fontSize: pushDialogLanguage === 'bn' ? '16px' : '15px',
+                lineHeight: pushDialogLanguage === 'bn' ? 1.7 : 1.6,
+              }}
+            >
+              <span>
+                {pushBusy
+                  ? copy.pushProgress
+                  : pushEnabled
+                    ? copy.pushEnabled
+                    : copy.pushDisabled}
+              </span>
+            </p>
           </div>
-          <div className={styles.mobileActionPromptActions}>
+          <AlertDialogFooter>
             <button
               type='button'
-              className={styles.mobilePromptBtn}
+              className={styles.profileSecondaryBtn}
+              onClick={() => setShowPushCta(false)}
+              disabled={pushBusy}
+            >
+              {copy.pushCloseBtn}
+            </button>
+            <button
+              type='button'
+              className={styles.profilePrimaryBtn}
               onClick={enablePushNotifications}
               disabled={pushBusy}
             >
-              <Icon name='Bell' size={14} />
-              {pushBusy ? 'Enabling...' : 'Allow'}
+              {pushBusy ? copy.pushEnablingBtn : copy.pushEnableBtn}
             </button>
-            <button
-              type='button'
-              className={styles.mobilePromptGhostBtn}
-              onClick={dismissPushCta}
-            >
-              Later
-            </button>
-          </div>
-        </div>
-      ) : null}
-      {pushError ? <p className={styles.pushInlineError}>{pushError}</p> : null}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog
         open={!!activeTickerArticle}
