@@ -54,7 +54,9 @@ export async function generateMetadata({ params }) {
     };
   }
 
-  const socialImageUrl = article.socialImageUrl || article.featuredImageUrl || "";
+  const socialImageUrl = article.featuredImageUrl
+    ? `${article.canonicalUrl.replace(/\/+$/, "")}/share-image?v=${encodeURIComponent(article.updatedAt || article.publishedAt || "1")}`
+    : (article.socialImageUrl || article.featuredImageUrl || "");
   const socialImage = socialImageUrl
     ? [
         {

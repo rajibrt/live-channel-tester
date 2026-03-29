@@ -83,6 +83,9 @@ async function normalizeArticle(row) {
     html: String(row?.content_html || ""),
     featuredImageUrl: cleanUrl(featuredImageUrl),
     socialImageUrl: cleanUrl(toAbsoluteUrl(socialImageUrl)),
+    featuredImageBucket: cleanText(row?.featured_image_bucket),
+    featuredImagePath: cleanText(row?.featured_image_path),
+    featuredImageFallbackUrl: cleanUrl(row?.featured_image_url),
     path,
     canonicalUrl: toAbsoluteUrl(path),
   };
