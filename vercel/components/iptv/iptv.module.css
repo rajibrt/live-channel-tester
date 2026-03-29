@@ -1343,6 +1343,81 @@
   border-color: color-mix(in oklab, var(--accent) 60%, var(--border));
 }
 
+.fsControlDock {
+  position: absolute;
+  left: 50%;
+  bottom: max(12px, env(safe-area-inset-bottom, 0px) + 8px);
+  transform: translateX(-50%);
+  z-index: 4;
+  width: min(92vw, 760px);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  box-sizing: border-box;
+  pointer-events: auto;
+}
+
+.fsControlCluster,
+.fsVolumeWrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.fsVolumeWrap {
+  flex: 1 1 auto;
+  justify-content: flex-end;
+}
+
+.fsControlBtn {
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--foreground);
+  background: color-mix(in oklab, var(--muted) 75%, transparent);
+  cursor: pointer;
+  transition:
+    transform 0.18s ease,
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.fsControlBtnActive {
+  color: var(--primary-foreground);
+  background: color-mix(in oklab, var(--primary) 72%, transparent);
+  border-color: var(--ring);
+  box-shadow: var(--shadow-lg);
+}
+
+.fsControlBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.fsVolumeSlider {
+  width: min(200px, 26vw);
+  accent-color: var(--primary);
+}
+
+.fsVolumeValue {
+  min-width: 46px;
+  text-align: right;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
 .videoBackdrop {
   position: absolute;
   inset: 0;
@@ -2236,18 +2311,26 @@
   .fullscreenPanel {
     width: min(210px, 34vw);
   }
+
+  .fsControlDock {
+    width: min(96vw, 720px);
+  }
 }
 
 @media (max-height: 520px) and (orientation: landscape) {
   .fullscreenOverlay {
     padding: 6px;
+    padding-bottom: 48px;
     gap: 6px;
+    align-items: flex-start;
   }
 
   .fullscreenPanel {
-    width: min(180px, 32vw);
+    width: min(168px, 28vw);
     border-radius: 12px;
     padding: 6px;
+    height: calc(100% - 42px);
+    max-height: calc(100% - 42px);
   }
 
   .fullscreenPanelTitle {
@@ -2262,6 +2345,42 @@
 
   .fullscreenListBtn {
     padding: 6px 8px;
+    font-size: 12px;
+  }
+
+  .fsControlDock {
+    width: calc(100% - 12px);
+    bottom: max(6px, env(safe-area-inset-bottom, 0px) + 4px);
+    padding: 6px 8px;
+    border-radius: 12px;
+    gap: 8px;
+    justify-content: space-between;
+  }
+
+  .fsControlCluster {
+    width: auto;
+    flex-wrap: nowrap;
+    gap: 6px;
+  }
+
+  .fsVolumeWrap {
+    width: auto;
+    flex: 0 1 auto;
+    gap: 6px;
+  }
+
+  .fsControlBtn {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+  }
+
+  .fsVolumeSlider {
+    width: min(108px, 18vw);
+  }
+
+  .fsVolumeValue {
+    min-width: 38px;
     font-size: 12px;
   }
 }
@@ -2362,6 +2481,36 @@
   .pushInlineError {
     left: 8px;
     right: 8px;
+  }
+
+  .fsControlDock {
+    width: calc(100vw - 16px);
+    border-radius: 14px;
+    padding: 8px 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+  }
+
+  .fsControlCluster {
+    width: 100%;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .fsVolumeWrap {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .fsControlBtn {
+    width: 42px;
+    height: 42px;
+    border-radius: 11px;
+  }
+
+  .fsVolumeSlider {
+    width: min(150px, 42vw);
   }
 
   .channelInfo {

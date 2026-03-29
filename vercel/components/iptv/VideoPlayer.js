@@ -663,6 +663,16 @@ export default function VideoPlayer({
     video.pause();
   };
 
+  const handlePlayPause = async () => {
+    const video = videoRef.current;
+    if (!video || !hasStream) return;
+    if (video.paused) {
+      await handlePlay();
+      return;
+    }
+    handlePause();
+  };
+
   const handleStop = () => {
     const video = videoRef.current;
     if (!video) return;
@@ -1004,6 +1014,91 @@ export default function VideoPlayer({
                 ))}
               </div>
             </aside>
+
+            <div
+              className={`${styles.fsControlDock} ${isDark ? styles.darkGlass : styles.lightGlass}`}
+              onPointerDown={() => {
+                fsInteractionActiveRef.current = true;
+                showPanels({ keepVisible: true });
+              }}
+              onPointerUp={() => {
+                fsInteractionActiveRef.current = false;
+                scheduleFsPanelsHide(1200);
+              }}
+              onTouchStart={() => {
+                fsInteractionActiveRef.current = true;
+                showPanels({ keepVisible: true });
+              }}
+              onTouchEnd={() => {
+                fsInteractionActiveRef.current = false;
+                scheduleFsPanelsHide(1200);
+              }}
+            >
+              <div className={styles.fsControlCluster}>
+                <button
+                  type="button"
+                  className={`${styles.fsControlBtn} ${(isPlayingActive || isPauseActive) ? styles.fsControlBtnActive : ""}`}
+                  onClick={handlePlayPause}
+                  disabled={!hasStream}
+                  aria-label={isPaused ? "Play" : "Pause"}
+                  title={isPaused ? "Play" : "Pause"}
+                >
+                  <Icon name={isPaused ? "Play" : "Pause"} size={18} />
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.fsControlBtn} ${isStopActive ? styles.fsControlBtnActive : ""}`}
+                  onClick={handleStop}
+                  disabled={!hasStream}
+                  aria-label="Stop"
+                  title="Stop"
+                >
+                  <Icon name="Square" size={16} />
+                </button>
+                <button
+                  type="button"
+                  className={styles.fsControlBtn}
+                  onClick={onPrevChannel}
+                  disabled={!hasChannelNav}
+                  aria-label="Previous channel"
+                  title="Previous"
+                >
+                  <Icon name="ChevronLeft" size={18} />
+                </button>
+                <button
+                  type="button"
+                  className={styles.fsControlBtn}
+                  onClick={onNextChannel}
+                  disabled={!hasChannelNav}
+                  aria-label="Next channel"
+                  title="Next"
+                >
+                  <Icon name="ChevronRight" size={18} />
+                </button>
+              </div>
+              <div className={styles.fsVolumeWrap}>
+                <button
+                  type="button"
+                  className={`${styles.fsControlBtn} ${isMuted ? styles.fsControlBtnActive : ""}`}
+                  onClick={handleToggleMute}
+                  aria-label={isMuted ? "Unmute" : "Mute"}
+                  title={isMuted ? "Unmute" : "Mute"}
+                >
+                  <Icon name={isMuted ? "VolumeX" : "Volume2"} size={18} />
+                </button>
+                <input
+                  className={styles.fsVolumeSlider}
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="1"
+                  value={volumePercent}
+                  onChange={handleVolumeInput}
+                  aria-label="Volume"
+                />
+                <span className={styles.fsVolumeValue}>{volumePercent}%</span>
+              </div>
+            </div>
           </div>
         ) : null}
 
@@ -1034,25 +1129,14 @@ export default function VideoPlayer({
         <div className={styles.playerButtons}>
           <button
             type="button"
-            className={`${styles.navBtn} ${isPlayingActive ? styles.navBtnActive : styles.navBtnInactive}`}
-            onClick={handlePlay}
+            className={`${styles.navBtn} ${(isPlayingActive || isPauseActive) ? styles.navBtnActive : styles.navBtnInactive}`}
+            onClick={handlePlayPause}
             disabled={!hasStream}
             aria-pressed={isPlayingActive}
-            aria-label="Play"
+            aria-label={isPaused ? "Play" : "Pause"}
           >
-            <Icon name="Play" size={16} />
-            <span className={styles.controlLabel}>Play</span>
-          </button>
-          <button
-            type="button"
-            className={`${styles.navBtn} ${isPauseActive ? styles.navBtnActive : styles.navBtnInactive}`}
-            onClick={handlePause}
-            disabled={!hasStream || isPaused}
-            aria-pressed={isPauseActive}
-            aria-label="Pause"
-          >
-            <Icon name="Pause" size={16} />
-            <span className={styles.controlLabel}>Pause</span>
+            <Icon name={isPaused ? "Play" : "Pause"} size={16} />
+            <span className={styles.controlLabel}>{isPaused ? "Play" : "Pause"}</span>
           </button>
           <button
             type="button"
