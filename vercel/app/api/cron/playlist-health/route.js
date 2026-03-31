@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "../../../../lib/supabaseAdmin";
+import { normalizeStreamUrl } from "../../../../lib/streamUrl";
 
 export const runtime = "nodejs";
 
@@ -15,7 +16,56 @@ function chunk(arr, size) {
   return out;
 }
 
-async function checkStream(url, timeoutSec) {
+function isLikelyPlaylist(url, contentType, text) {
+  const rawUrl = String(url || "").toLowerCase();
+  const type = String(contentType || "").toLowerCase();
+  const trimmed = String(text || "").trimStart();
+  return (
+    rawUrl.includes(".m3u8") ||
+    type.includes("mpegurl") ||
+    type.includes("vnd.apple.mpegurl") ||
+    trimmed.startsWith("#EXTM3U")
+  );
+}
+
+function isMediaStreamContentType(contentType) {
+  const type = String(contentType || "").toLowerCase();
+  return type.startsWith("video/") || type.startsWith("audio/");
+}
+
+function extractVariantUrl(baseUrl, text) {
+  const lines = String(text || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  for (let i = 0; i < lines.length; i += 1) {
+    if (!lines[i].startsWith("#EXT-X-STREAM-INF")) continue;
+    const next = lines[i + 1];
+    if (!next || next.startsWith("#")) continue;
+    try {
+      return new URL(next, baseUrl).toString();
+    } catch {
+      return "";
+    }
+  }
+  return "";
+}
+
+function extractFirstMediaUri(baseUrl, text) {
+  const lines = String(text || "").split(/\r?\n/);
+  for (const rawLine of lines) {
+    const line = String(rawLine || "").trim();
+    if (!line || line.startsWith("#")) continue;
+    try {
+      return new URL(line, baseUrl).toString();
+    } catch {
+      return "";
+    }
+  }
+  return "";
+}
+
+async function fetchText(url, timeoutSec) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), Math.max(1, timeoutSec) * 1000);
   try {
@@ -24,6 +74,68 @@ async function checkStream(url, timeoutSec) {
       redirect: "follow",
       cache: "no-store",
       signal: controller.signal,
+      headers: {
+        "user-agent": "Mozilla/5.0",
+        accept: "*/*",
+      },
+    });
+    const text = await res.text();
+    return {
+      ok: res.ok,
+      status: res.status,
+      text,
+      finalUrl: res.url || url,
+      contentType: res.headers.get("content-type") || "",
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function fetchStatus(url, timeoutSec) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), Math.max(1, timeoutSec) * 1000);
+  try {
+    const res = await fetch(url, {
+      method: "GET",
+      redirect: "follow",
+      cache: "no-store",
+      signal: controller.signal,
+      headers: {
+        "user-agent": "Mozilla/5.0",
+        accept: "*/*",
+        range: "bytes=0-0",
+      },
+    });
+    try {
+      await res.body?.cancel?.();
+    } catch {
+      // ignore body cancellation issues
+    }
+    return res.status;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function checkStream(url, timeoutSec) {
+  const target = normalizeStreamUrl(url);
+  if (!target) {
+    return { isLive: false, reason: "empty_url" };
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), Math.max(1, timeoutSec) * 1000);
+  try {
+    const res = await fetch(target, {
+      method: "GET",
+      redirect: "follow",
+      cache: "no-store",
+      signal: controller.signal,
+      headers: {
+        "user-agent": "Mozilla/5.0",
+        accept: "*/*",
+      },
     });
 
     if (!res.ok) {
@@ -32,16 +144,48 @@ async function checkStream(url, timeoutSec) {
 
     const contentType = String(res.headers.get("content-type") || "").toLowerCase();
     const text = await res.text();
-    const trimmed = text.trimStart();
-    if (
-      trimmed.startsWith("#EXTM3U") ||
-      trimmed.includes("#EXTINF") ||
-      contentType.includes("mpegurl") ||
-      contentType.includes("vnd.apple.mpegurl") ||
-      contentType.startsWith("video/") ||
-      contentType.startsWith("audio/")
-    ) {
-      return { isLive: true, reason: "ok" };
+    const finalUrl = res.url || target;
+
+    if (isLikelyPlaylist(finalUrl, contentType, text)) {
+      if (!String(text || "").trimStart().startsWith("#EXTM3U")) {
+        return { isLive: false, reason: "not_m3u8" };
+      }
+
+      const variantUrl = extractVariantUrl(finalUrl, text);
+      if (variantUrl) {
+        const variant = await fetchText(variantUrl, timeoutSec);
+        if (!variant.ok) {
+          return { isLive: false, reason: `variant_http_${variant.status}` };
+        }
+        if (!String(variant.text || "").trimStart().startsWith("#EXTM3U")) {
+          return { isLive: false, reason: "variant_not_m3u8" };
+        }
+        const segmentUrl = extractFirstMediaUri(variant.finalUrl, variant.text);
+        if (segmentUrl) {
+          const segmentStatus = await fetchStatus(segmentUrl, timeoutSec);
+          if (segmentStatus !== 200 && segmentStatus !== 206) {
+            return { isLive: false, reason: `segment_http_${segmentStatus}` };
+          }
+        }
+        return { isLive: true, reason: "ok_master" };
+      }
+
+      const mediaUrl = extractFirstMediaUri(finalUrl, text);
+      if (mediaUrl) {
+        const mediaStatus = await fetchStatus(mediaUrl, timeoutSec);
+        if (mediaStatus !== 200 && mediaStatus !== 206) {
+          return { isLive: false, reason: `segment_http_${mediaStatus}` };
+        }
+      }
+      return { isLive: true, reason: "ok_media" };
+    }
+
+    if (isMediaStreamContentType(contentType)) {
+      return { isLive: true, reason: "ok_direct_media" };
+    }
+
+    if (String(text || "").trimStart().includes("#EXTINF")) {
+      return { isLive: true, reason: "ok_playlist" };
     }
     return { isLive: false, reason: "not_playlist" };
   } catch (e) {

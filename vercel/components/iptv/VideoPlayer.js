@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "./icons";
 import styles from "./iptv.module.css";
-import { resolveBrowserPlaybackUrl } from "../../lib/streamUrl";
+import { isPrivateNetworkUrl, resolveBrowserPlaybackUrl } from "../../lib/streamUrl";
 
 function isHlsUrl(url) {
   return /\.m3u8(\?|$)/i.test(String(url || ""));
@@ -280,6 +280,7 @@ export default function VideoPlayer({
       channel.streamUrl,
       typeof window !== "undefined" ? window.location?.protocol : ""
     );
+    const isPrivateSource = isPrivateNetworkUrl(source);
     const forceProxy = process.env.NEXT_PUBLIC_FORCE_STREAM_PROXY === "1";
     const sourceForPlayback = forceProxy ? resolveBrowserPlaybackUrl(source, "https:") : source;
 
