@@ -225,6 +225,7 @@ export async function GET(request) {
 
   const urlValue = request.nextUrl.searchParams.get("url") || "";
   const startValue = request.nextUrl.searchParams.get("start");
+  const videoMode = String(request.nextUrl.searchParams.get("video") || "").trim().toLowerCase();
   const startSeconds = Math.max(0, Number(startValue || 0) || 0);
   const target = normalizeStreamUrl(urlValue);
   if (!target) {
@@ -319,8 +320,14 @@ export async function GET(request) {
   const ffmpegBin = String(process.env.FFMPEG_PATH || "ffmpeg").trim() || "ffmpeg";
   const ffprobeBin = String(process.env.FFPROBE_PATH || "ffprobe").trim() || "ffprobe";
   const forceVideoReencodeRaw = String(process.env.STREAM_TRANSCODE_FORCE_VIDEO_REENCODE || "true").trim();
-  const forceVideoReencodeRequested =
+  const forceVideoReencodeRequestedByEnv =
     forceVideoReencodeRaw && !/^(0|false|no|off)$/i.test(forceVideoReencodeRaw);
+  const forceVideoReencodeRequested =
+    videoMode === "transcode"
+      ? true
+      : videoMode === "copy"
+        ? false
+        : forceVideoReencodeRequestedByEnv;
   const sourceVideoCodec = await probePrimaryVideoCodec(ffprobeBin, target);
   const sourceNeedsReencode = Boolean(sourceVideoCodec) && sourceVideoCodec !== "h264";
   const shouldTryReencode = forceVideoReencodeRequested || sourceNeedsReencode;

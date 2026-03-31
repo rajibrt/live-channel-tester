@@ -258,6 +258,7 @@ export default async function WatchChannelPage({ params, searchParams }) {
       initialMovieGenre={String(query?.movie_genre || "").trim().toLowerCase()}
       initialMovieLanguage={String(query?.movie_language || "").trim().toLowerCase()}
       initialMovieYear={String(query?.movie_year || "").trim()}
+      initialMovieSearch={String(query?.movie_search || "").trim()}
       initialMovieFilterView={String(query?.movie_filter_view || "").trim().toLowerCase() === "genres" ? "genres" : "categories"}
       initialMoviePage={Math.max(1, Number.parseInt(String(query?.movie_page || "1"), 10) || 1)}
       initialClientState={boot.initialClientState}

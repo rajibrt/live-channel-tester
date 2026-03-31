@@ -23,6 +23,7 @@ export async function GET(request) {
     genre: String(searchParams.get("genre") || ""),
     language: String(searchParams.get("language") || ""),
     year: String(searchParams.get("year") || ""),
+    search: String(searchParams.get("search") || ""),
   });
 
   return NextResponse.json({

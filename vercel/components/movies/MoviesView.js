@@ -27,18 +27,6 @@ function text(value) {
   return String(value || "").trim();
 }
 
-function normalizeSearchValue(value) {
-  return text(value).toLowerCase();
-}
-
-function parseMovieSearchQuery(rawSearch) {
-  const normalized = normalizeSearchValue(rawSearch);
-  const genreMatch = normalized.match(/\bgenres?:\s*([a-z0-9\-\s,]+)/i);
-  const genreQuery = genreMatch ? text(genreMatch[1]).toLowerCase() : "";
-  const cleanText = genreMatch ? normalized.replace(genreMatch[0], " ").trim() : normalized;
-  return { textQuery: cleanText, genreQuery };
-}
-
 function buildPageItems(currentPage, totalPages) {
   const total = Math.max(1, Number(totalPages || 1));
   const current = Math.min(Math.max(1, Number(currentPage || 1)), total);
@@ -84,6 +72,8 @@ export default function MoviesView({
   totalMovies = 0,
   totalMoviePages = 1,
   isPageLoading = false,
+  searchValue = "",
+  onSearchChange,
   onPageChange,
   initialSelectedMovieSlug = "",
   filterMode = "all",
@@ -110,7 +100,7 @@ export default function MoviesView({
   const [continueItems, setContinueItems] = useState(() =>
     Array.isArray(initialContinueWatching) ? initialContinueWatching : []
   );
-  const [search, setSearch] = useState("");
+  const [searchDraft, setSearchDraft] = useState(() => String(searchValue || ""));
   const [moviesPage, setMoviesPage] = useState(() => Math.max(1, Number(initialPage || 1)));
   const [moviesPageSize, setMoviesPageSize] = useState(() => Math.max(1, Number(initialPageSize || DEFAULT_MOVIES_PAGE_SIZE)));
   const [continuePage, setContinuePage] = useState(1);
@@ -145,6 +135,10 @@ export default function MoviesView({
   useEffect(() => {
     setMoviesPageSize(Math.max(1, Number(initialPageSize || DEFAULT_MOVIES_PAGE_SIZE)));
   }, [initialPageSize]);
+
+  useEffect(() => {
+    setSearchDraft(String(searchValue || ""));
+  }, [searchValue]);
 
   useEffect(() => {
     if (!movies.length) return;
@@ -201,7 +195,9 @@ export default function MoviesView({
     });
   }, [movieCategories, categoryCounts]);
 
-  const { textQuery, genreQuery } = useMemo(() => parseMovieSearchQuery(search), [search]);
+  const search = String(searchValue || "");
+  const isSearchSyncing = String(searchDraft || "") !== search;
+  const isSearchLoading = Boolean(String(search || "").trim()) && Boolean(isPageLoading);
   const normalizedMode = String(filterMode || "all").toLowerCase();
   const inlineCategory = String(categorySlug || "").trim().toLowerCase();
   const normalizedCategory = showInlineFilters
@@ -230,7 +226,7 @@ export default function MoviesView({
         skipGenre = false,
         skipLanguage = false,
         skipYear = false,
-        includeSearch = true,
+        includeSearch = false,
       } = options;
       return list.filter((movie) => {
         if (!skipCategory && normalizedCategory && !movie.categorySlugs?.includes(normalizedCategory)) return false;
@@ -249,18 +245,14 @@ export default function MoviesView({
         if (!skipYear && normalizedYear && String(movie?.releaseYear || "") !== normalizedYear) return false;
 
         if (!includeSearch) return true;
-        const genresHay = (movie.imdbGenres || []).join(" ").toLowerCase();
-        if (genreQuery && !genresHay.includes(genreQuery)) return false;
-        if (!textQuery) return true;
-        const hay = `${movie.title || ""} ${movie.synopsis || ""} ${genresHay} ${(movie.imdbDirectors || []).join(" ")} ${(movie.imdbWriters || []).join(" ")} ${(movie.imdbStars || []).join(" ")} ${(movie.imdbCountries || []).join(" ")} ${(movie.imdbLanguages || []).join(" ")}`.toLowerCase();
-        return hay.includes(textQuery);
+        return true;
       });
     },
-    [genreQuery, normalizedCategory, normalizedGenre, normalizedLanguage, normalizedYear, textQuery]
+    [normalizedCategory, normalizedGenre, normalizedLanguage, normalizedYear]
   );
 
   const filteredMovies = useMemo(() => {
-    return applyMovieFilters(modeScopedMovies, { includeSearch: true });
+    return applyMovieFilters(modeScopedMovies, { includeSearch: false });
   }, [applyMovieFilters, modeScopedMovies]);
 
   const facetedGenreOptions = useMemo(() => {
@@ -333,8 +325,7 @@ export default function MoviesView({
   }, []);
 
   const hasLocalClientFilters =
-    Boolean(String(search || "").trim()) ||
-    (showInlineFilters ? String(categorySlug || "").trim().toLowerCase() !== "all" : false);
+    showInlineFilters ? String(categorySlug || "").trim().toLowerCase() !== "all" : false;
   const totalFilteredMovies = hasLocalClientFilters ? filteredMovies.length : Number(totalMovies || filteredMovies.length);
   const totalPages = hasLocalClientFilters
     ? Math.max(1, Math.ceil(filteredMovies.length / moviesPageSize))
@@ -360,7 +351,17 @@ export default function MoviesView({
 
   useEffect(() => {
     setMoviesPage(1);
-  }, [search, filterMode, filterCategorySlug, filterGenreSlug, filterLanguageSlug, filterYear, categorySlug, showInlineFilters]);
+  }, [searchValue, filterMode, filterCategorySlug, filterGenreSlug, filterLanguageSlug, filterYear, categorySlug, showInlineFilters]);
+
+  useEffect(() => {
+    const normalizedDraft = String(searchDraft || "");
+    const normalizedValue = String(searchValue || "");
+    if (normalizedDraft === normalizedValue) return undefined;
+    const timer = window.setTimeout(() => {
+      onSearchChange?.(normalizedDraft);
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [onSearchChange, searchDraft, searchValue]);
 
   const goToMoviePage = useCallback(
     (page) => {
@@ -417,7 +418,6 @@ export default function MoviesView({
   }, [variant, selectedMovieId]);
 
   useEffect(() => {
-    setSearch("");
     setMoviesPage(1);
     if (showInlineFilters) setCategorySlug("all");
   }, [externalFilterResetToken, showInlineFilters]);
@@ -650,15 +650,24 @@ export default function MoviesView({
         <section className={`${styles.sectionCard} ${styles.sectionControls}`}>
           <header className={styles.sectionTop}>
             <h3 className={styles.sectionTitle}>Search & Filtering</h3>
-            <span className={styles.sectionHint}>Live results</span>
+            <span className={styles.sectionHint}>
+              {isSearchSyncing ? "Typing..." : isSearchLoading ? "Searching..." : "Live results"}
+            </span>
           </header>
           <div className={styles.searchRow}>
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search movies or genre:horror"
-              className={`${styles.searchInput} ${styles.searchInputCentered}`}
-            />
+            <div className={styles.searchInputWrap}>
+              <input
+                value={searchDraft}
+                onChange={(event) => setSearchDraft(event.target.value)}
+                placeholder="Search movies or genre:horror"
+                className={`${styles.searchInput} ${styles.searchInputCentered}`}
+              />
+              {isSearchSyncing || isSearchLoading ? (
+                <span className={styles.searchStatusBadge}>
+                  {isSearchSyncing ? "Waiting..." : "Searching..."}
+                </span>
+              ) : null}
+            </div>
           </div>
           <div className={styles.filters}>
             {showInlineFilters ? (
@@ -780,6 +789,10 @@ export default function MoviesView({
                     key={tag.key}
                     className={styles.activeFilterChip}
                     onClick={() => {
+                      if (tag.key === "search") {
+                        setSearchDraft("");
+                        onSearchChange?.("");
+                      }
                       if (tag.key === "category") onSelectCategoryFilter?.("");
                       if (tag.key === "genre") onSelectGenreFilter?.("");
                       if (tag.key === "language") onSelectLanguageFilter?.("");
@@ -819,7 +832,7 @@ export default function MoviesView({
               onToggleFavorite={handleToggleFavorite}
               onMetricsChange={handleGridMetricsChange}
             />
-            {isPageLoading && !hasLocalClientFilters ? (
+            {isPageLoading && !hasLocalClientFilters && !String(search || "").trim() ? (
               <div className={styles.gridLoadingOverlay} aria-live="polite">
                 <div className={`${styles.gridLoadingCard} ${styles.gridLoadingCardFloating}`}>
                   <span className={styles.loadingSpinner} aria-hidden="true" />
@@ -876,9 +889,24 @@ export default function MoviesView({
           </div>
         </section>
       </div>
-      {activeFilterTags.length ? (
+      {!showInlineFilters || activeFilterTags.length ? (
         <div className={styles.filterDock}>
           <div className={styles.filterDockInner}>
+            <div className={styles.filterDockSearchRow}>
+              <div className={styles.filterDockSearchWrap}>
+                <input
+                  value={searchDraft}
+                  onChange={(event) => setSearchDraft(event.target.value)}
+                  placeholder="Search movies..."
+                  className={`${styles.searchInput} ${styles.filterDockSearchInput}`}
+                />
+                {isSearchSyncing || isSearchLoading ? (
+                  <span className={styles.searchStatusBadge}>
+                    {isSearchSyncing ? "Waiting..." : "Searching..."}
+                  </span>
+                ) : null}
+              </div>
+            </div>
             <div className={styles.filterDockRow}>
               <div className={styles.filterDockChips}>
                 {activeFilterTags.map((tag) => (
@@ -887,7 +915,10 @@ export default function MoviesView({
                     type="button"
                     className={styles.activeFilterChip}
                     onClick={() => {
-                      if (tag.key === "search") setSearch("");
+                      if (tag.key === "search") {
+                        setSearchDraft("");
+                        onSearchChange?.("");
+                      }
                       if (tag.key === "inline_category") setCategorySlug("all");
                       if (tag.key === "category") onSelectCategoryFilter?.("");
                       if (tag.key === "genre") onSelectGenreFilter?.("");
@@ -901,17 +932,20 @@ export default function MoviesView({
                   </button>
                 ))}
               </div>
-              <button
-                type="button"
-                className={styles.filterDockClearBtn}
-                onClick={() => {
-                  setSearch("");
-                  if (showInlineFilters) setCategorySlug("all");
-                  onResetFilters?.();
-                }}
-              >
-                Clear All Filters
-              </button>
+              {activeFilterTags.length ? (
+                <button
+                  type="button"
+                  className={styles.filterDockClearBtn}
+                  onClick={() => {
+                    setSearchDraft("");
+                    onSearchChange?.("");
+                    if (showInlineFilters) setCategorySlug("all");
+                    onResetFilters?.();
+                  }}
+                >
+                  Clear All Filters
+                </button>
+              ) : null}
             </div>
           </div>
         </div>

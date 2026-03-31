@@ -31,6 +31,25 @@ function loadHlsScript() {
   });
 }
 
+async function tryStartPlayback(video, { allowMutedFallback = false } = {}) {
+  if (!video) return false;
+  try {
+    await video.play();
+    return true;
+  } catch {
+    if (!allowMutedFallback || video.muted) return false;
+  }
+
+  try {
+    video.muted = true;
+    video.volume = 0;
+    await video.play();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export default function VideoPlayer({
   channel,
   isDark,
@@ -284,11 +303,13 @@ export default function VideoPlayer({
     const forceProxy = process.env.NEXT_PUBLIC_FORCE_STREAM_PROXY === "1";
     const sourceForPlayback = forceProxy ? resolveBrowserPlaybackUrl(source, "https:") : source;
 
-    const startNativePlayback = () => {
+    const startNativePlayback = async () => {
       video.src = sourceForPlayback;
-      video.play().catch(() => {
-        // autoplay can be blocked
-      });
+      video.load();
+      const started = await tryStartPlayback(video, { allowMutedFallback: true });
+      if (!started && !cancelled && !playbackStarted) {
+        setStatus("idle");
+      }
     };
 
     reportAttempt();
@@ -298,7 +319,7 @@ export default function VideoPlayer({
         // Some private-network .m3u8 sources work with native video tag faster/more reliably.
         // Prefer native path first to match dashboard quick-preview behavior.
         if (isPrivateSource && isHlsUrl(sourceForPlayback)) {
-          startNativePlayback();
+          await startNativePlayback();
           return;
         }
 
@@ -313,9 +334,7 @@ export default function VideoPlayer({
             hls.attachMedia(video);
             hls.on(Hls.Events.MANIFEST_PARSED, () => {
               if (!cancelled) setStatus("playing");
-              video.play().catch(() => {
-                // autoplay can be blocked
-              });
+              tryStartPlayback(video, { allowMutedFallback: true }).catch(() => {});
             });
             hls.on(Hls.Events.ERROR, (_event, data) => {
               if (!data?.fatal || cancelled) return;
@@ -323,7 +342,7 @@ export default function VideoPlayer({
               hlsRef.current = null;
               if (!hlsNativeFallbackTriedRef.current) {
                 hlsNativeFallbackTriedRef.current = true;
-                startNativePlayback();
+                startNativePlayback().catch(() => {});
                 return;
               }
               setErrorMessage("Stream unavailable");
@@ -337,12 +356,12 @@ export default function VideoPlayer({
           }
         }
 
-        startNativePlayback();
+        await startNativePlayback();
       } catch {
         if (cancelled) return;
         if (!hlsNativeFallbackTriedRef.current) {
           hlsNativeFallbackTriedRef.current = true;
-          startNativePlayback();
+          startNativePlayback().catch(() => {});
           return;
         }
         setErrorMessage("Stream unavailable");
@@ -823,6 +842,7 @@ export default function VideoPlayer({
           ref={videoRef}
           className={`${styles.videoElement} ${videoFitMode === "contain" ? styles.videoElementContain : ""}`}
           playsInline
+          preload="metadata"
         />
 
         {showVolumeHud ? <div className={styles.volumeHud}>Volume {volumePercent}%</div> : null}

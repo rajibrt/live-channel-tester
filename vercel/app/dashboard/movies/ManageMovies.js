@@ -3,6 +3,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Clapperboard, FolderPlus, Pencil, Trash2 } from "lucide-react";
+import {
+  resolveBrowserPlaybackUrl,
+  shouldForceVideoTranscode,
+  toStreamTranscodeUrl,
+} from "../../../lib/streamUrl";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../../components/ui/table";
 import {
   Pagination,
@@ -22,6 +27,32 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import styles from "../page.module.css";
+
+function isHlsUrl(url) {
+  return /\.m3u8(\?|$)/i.test(String(url || ""));
+}
+
+function loadHlsScript() {
+  if (typeof window === "undefined") return Promise.resolve(null);
+  if (window.Hls) return Promise.resolve(window.Hls);
+
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector('script[data-hls-script="1"]');
+    if (existing) {
+      existing.addEventListener("load", () => resolve(window.Hls || null), { once: true });
+      existing.addEventListener("error", () => reject(new Error("Failed to load HLS script.")), { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js";
+    script.async = true;
+    script.dataset.hlsScript = "1";
+    script.onload = () => resolve(window.Hls || null);
+    script.onerror = () => reject(new Error("Failed to load HLS script."));
+    document.head.appendChild(script);
+  });
+}
 
 function toSlug(value) {
   return String(value || "")
@@ -318,6 +349,8 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
   const [omdbUsageInfo, setOmdbUsageInfo] = useState(null);
   const [previewSourceUrl, setPreviewSourceUrl] = useState("");
   const [previewTitle, setPreviewTitle] = useState("");
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState("");
   const [imdbImagePreviewUrls, setImdbImagePreviewUrls] = useState([]);
   const [importingMovies, setImportingMovies] = useState(false);
   const [importingPrepared, setImportingPrepared] = useState(false);
@@ -360,6 +393,8 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
   });
 
   const [movieForm, setMovieForm] = useState({ ...EMPTY_MOVIE_FORM });
+  const [previewVideoEl, setPreviewVideoEl] = useState(null);
+  const previewHlsRef = useRef(null);
   const isMovieFormDirty = useMemo(
     () => showMovieForm && serializeMovieForm(movieForm) !== movieFormInitialSnapshot,
     [movieForm, movieFormInitialSnapshot, showMovieForm]
@@ -488,6 +523,8 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
   };
 
   const closeSourcePreview = () => {
+    setPreviewLoading(false);
+    setPreviewError("");
     setPreviewSourceUrl("");
     setPreviewTitle("");
   };
@@ -495,12 +532,14 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
   const openSourcePreview = () => {
     const source = String(movieForm.source_url || "").trim();
     if (!source) {
-      setError("Source URL দিন, তারপর Preview চাপুন।");
+      setError("Source URL দিন, তারপর Test Link চাপুন।");
       return;
     }
     setError("");
+    setPreviewError("");
+    setPreviewLoading(true);
     setPreviewSourceUrl(source);
-    setPreviewTitle(String(movieForm.title || "Source Preview"));
+    setPreviewTitle(String(movieForm.title || "Link Test Preview"));
   };
 
   const confirmDiscardMovieForm = () => {
@@ -532,6 +571,119 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
       window.removeEventListener("popstate", handlePopState);
     };
   }, [isMovieFormDirty]);
+
+  useEffect(() => {
+    if (!previewSourceUrl) return undefined;
+
+    const video = previewVideoEl;
+    const source = resolveBrowserPlaybackUrl(
+      previewSourceUrl,
+      typeof window === "undefined" ? "" : window.location.protocol
+    );
+    if (!video) return undefined;
+
+    if (previewHlsRef.current) {
+      previewHlsRef.current.destroy();
+      previewHlsRef.current = null;
+    }
+    video.pause();
+    video.removeAttribute("src");
+    video.load();
+
+    setPreviewError("");
+    setPreviewLoading(true);
+    let cancelled = false;
+    let nativeFallbackTried = false;
+    let compatibilityFallbackTried = false;
+    const compatibilitySource = shouldForceVideoTranscode(previewSourceUrl)
+      ? toStreamTranscodeUrl(previewSourceUrl, { video: "transcode" })
+      : "";
+
+    const onCanPlay = () => {
+      if (cancelled) return;
+      setPreviewLoading(false);
+      setPreviewError("");
+    };
+
+    const onError = () => {
+      if (cancelled) return;
+      if (!compatibilityFallbackTried && compatibilitySource) {
+        compatibilityFallbackTried = true;
+        video.pause();
+        video.src = compatibilitySource;
+        video.load();
+        video.play().catch(() => {});
+        return;
+      }
+      setPreviewLoading(false);
+      setPreviewError("Unable to play this movie link.");
+    };
+
+    video.addEventListener("loadedmetadata", onCanPlay);
+    video.addEventListener("canplay", onCanPlay);
+    video.addEventListener("playing", onCanPlay);
+    video.addEventListener("error", onError);
+
+    const startNativePlayback = () => {
+      video.src = source;
+      video.load();
+      video.play().catch(() => {});
+    };
+
+    (async () => {
+      try {
+        if (isHlsUrl(source)) {
+          const Hls = await loadHlsScript();
+          if (cancelled) return;
+          if (Hls?.isSupported?.()) {
+            const hls = new Hls({ lowLatencyMode: true, maxBufferLength: 30 });
+            previewHlsRef.current = hls;
+            hls.loadSource(source);
+            hls.attachMedia(video);
+            hls.on(Hls.Events.MANIFEST_PARSED, () => {
+              if (cancelled) return;
+              setPreviewLoading(false);
+              video.play().catch(() => {});
+            });
+            hls.on(Hls.Events.ERROR, (_event, data) => {
+              if (!data?.fatal || cancelled) return;
+              hls.destroy();
+              previewHlsRef.current = null;
+              if (!nativeFallbackTried) {
+                nativeFallbackTried = true;
+                startNativePlayback();
+                return;
+              }
+              setPreviewLoading(false);
+              setPreviewError("Unable to play this movie link.");
+            });
+            return;
+          }
+        }
+        startNativePlayback();
+      } catch {
+        if (cancelled) return;
+        setPreviewLoading(false);
+        setPreviewError("Unable to load movie link preview.");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      video.removeEventListener("loadedmetadata", onCanPlay);
+      video.removeEventListener("canplay", onCanPlay);
+      video.removeEventListener("playing", onCanPlay);
+      video.removeEventListener("error", onError);
+      if (previewHlsRef.current) {
+        previewHlsRef.current.destroy();
+        previewHlsRef.current = null;
+      }
+      video.pause();
+      video.removeAttribute("src");
+      video.load();
+      setPreviewLoading(false);
+    };
+  }, [previewSourceUrl, previewVideoEl]);
 
   const refreshCategories = async () => {
     const res = await fetch("/api/admin/movie-categories", { cache: "no-store" });
@@ -1058,6 +1210,21 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
     setShowMovieForm(true);
   };
 
+  const openMoviePreview = (row) => {
+    if (!row) return;
+    const firstSource = Array.isArray(row.sources) ? row.sources[0] : null;
+    const source = String(firstSource?.source_url || "").trim();
+    if (!source) {
+      setError("এই মুভির source URL পাওয়া যায়নি।");
+      return;
+    }
+    setError("");
+    setPreviewError("");
+    setPreviewLoading(true);
+    setPreviewSourceUrl(source);
+    setPreviewTitle(String(row.title || "Movie Preview"));
+  };
+
   const handleDeleteSelectedMovies = async () => {
     const selectedIds = Object.entries(movieRowSelection)
       .filter(([, checked]) => Boolean(checked))
@@ -1266,8 +1433,23 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
         enableSorting: false,
         enableColumnFilter: false,
       },
+      {
+        id: "preview",
+        header: "Preview",
+        enableSorting: false,
+        enableColumnFilter: false,
+        cell: ({ row }) => (
+          <button
+            type="button"
+            className={styles.previewCellBtn}
+            onClick={() => openMoviePreview(row.original)}
+          >
+            Preview
+          </button>
+        ),
+      },
     ],
-    [handleDeleteMovie, openMovieEditor]
+    [handleDeleteMovie, openMovieEditor, openMoviePreview]
   );
 
   const movieTable = useReactTable({
@@ -2211,7 +2393,7 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
                   placeholder="https://.../movie.m3u8"
                 />
                 <button type="button" className={styles.ghostBtn} onClick={openSourcePreview}>
-                  Preview
+                  Test Link
                 </button>
               </div>
             </label>
@@ -2341,19 +2523,31 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
         <div className={styles.modalWrap} onClick={closeSourcePreview}>
           <div className={styles.modalCard} onClick={(e) => e.stopPropagation()}>
             <div className={styles.modalHeader}>
-              <h4>{previewTitle || "Source Preview"}</h4>
+              <h4>{previewTitle || "Link Test Preview"}</h4>
               <button type="button" className={styles.closeBtn} onClick={closeSourcePreview}>
                 Close
               </button>
             </div>
+            <p className={styles.hint}>Test the current movie source link before saving.</p>
+            {previewLoading ? <p className={styles.pending}>Loading link preview...</p> : null}
+            {previewError ? <p className={styles.errorText}>{previewError}</p> : null}
             <video
+              ref={setPreviewVideoEl}
               key={previewSourceUrl}
               className={styles.video}
               controls
+              autoPlay
               playsInline
               preload="metadata"
-              src={previewSourceUrl}
-            />
+            >
+              Your browser does not support video playback.
+            </video>
+            <p className={styles.pending}>
+              Open direct link:{" "}
+              <a href={previewSourceUrl} target="_blank" rel="noreferrer" className={styles.url}>
+                {previewSourceUrl}
+              </a>
+            </p>
           </div>
         </div>
       ) : null}

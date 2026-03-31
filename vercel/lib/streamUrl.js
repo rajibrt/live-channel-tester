@@ -56,10 +56,21 @@ export function shouldUseAudioTranscode(value) {
   return hasTranscodeFallbackExtension(normalized);
 }
 
-export function toStreamTranscodeUrl(value) {
+export function shouldForceVideoTranscode(value) {
+  const normalized = normalizeStreamUrl(value);
+  if (!normalized) return false;
+  return hasTranscodeFallbackExtension(normalized);
+}
+
+export function toStreamTranscodeUrl(value, options = {}) {
   const normalized = normalizeStreamUrl(value);
   if (!normalized) return "";
-  return `/api/stream-transcode?url=${encodeURIComponent(normalized)}`;
+  const params = new URLSearchParams();
+  params.set("url", normalized);
+  if (String(options?.video || "").trim().toLowerCase() === "transcode") {
+    params.set("video", "transcode");
+  }
+  return `/api/stream-transcode?${params.toString()}`;
 }
 
 export function resolveBrowserPlaybackUrl(value, protocol = "") {

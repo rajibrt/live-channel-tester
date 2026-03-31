@@ -151,6 +151,7 @@ function toMovieShape(movie, categoryRows, sourceRows, progressRow, isFavorite) 
           playbackUrl,
         }
       : null,
+    rawPlaybackUrl: normalizedSource,
     playbackUrl,
     isFavorite: Boolean(isFavorite),
     progress: {
@@ -181,20 +182,55 @@ function normalizeMovieFilterOptions(options = {}) {
   const genre = text(options?.genre).toLowerCase();
   const language = text(options?.language).toLowerCase();
   const year = text(options?.year);
+  const search = text(options?.search).toLowerCase();
   return {
     mode: mode === "favorites" || mode === "recent" || mode === "watched" ? mode : "all",
     category,
     genre,
     language,
     year,
+    search,
   };
 }
 
 function hasMoviePageFilters(options = {}) {
   const filters = normalizeMovieFilterOptions(options);
   return Boolean(
-    filters.category || filters.genre || filters.language || filters.year || filters.mode !== "all"
+    filters.category || filters.genre || filters.language || filters.year || filters.search || filters.mode !== "all"
   );
+}
+
+function parseMovieSearchQuery(rawSearch) {
+  const normalized = text(rawSearch).toLowerCase();
+  const genreMatch = normalized.match(/\bgenres?:\s*([a-z0-9\-\s,]+)/i);
+  const genreQuery = genreMatch ? text(genreMatch[1]).toLowerCase() : "";
+  const textQuery = genreMatch ? normalized.replace(genreMatch[0], " ").trim() : normalized;
+  return { textQuery, genreQuery };
+}
+
+function matchesMovieSearch(movie, rawSearch) {
+  const { textQuery, genreQuery } = parseMovieSearchQuery(rawSearch);
+  if (!textQuery && !genreQuery) return true;
+
+  const genresHay = (Array.isArray(movie?.imdbGenres) ? movie.imdbGenres : []).join(" ").toLowerCase();
+  if (genreQuery && !genresHay.includes(genreQuery)) return false;
+  if (!textQuery) return true;
+
+  const haystack = [
+    movie?.title,
+    movie?.synopsis,
+    genresHay,
+    ...(Array.isArray(movie?.imdbDirectors) ? movie.imdbDirectors : []),
+    ...(Array.isArray(movie?.imdbWriters) ? movie.imdbWriters : []),
+    ...(Array.isArray(movie?.imdbStars) ? movie.imdbStars : []),
+    ...(Array.isArray(movie?.imdbCountries) ? movie.imdbCountries : []),
+    ...(Array.isArray(movie?.imdbLanguages) ? movie.imdbLanguages : []),
+    movie?.imdbId,
+  ]
+    .map((value) => text(value).toLowerCase())
+    .join(" ");
+
+  return haystack.includes(textQuery);
 }
 
 function filterMovieCatalogRows(movies, options = {}) {
@@ -233,6 +269,10 @@ function filterMovieCatalogRows(movies, options = {}) {
     }
 
     if (filters.year && String(movie?.releaseYear || "") !== filters.year) {
+      return false;
+    }
+
+    if (!matchesMovieSearch(movie, filters.search)) {
       return false;
     }
 
@@ -663,9 +703,16 @@ export async function getMoviesPageForUser(userId, options = {}) {
         return {
           row,
           movieId,
+          title: text(row?.title),
+          synopsis: text(row?.synopsis),
           categorySlugs: categorySlugsByMovie.get(movieId) || [],
           imdbGenres: toStringList(row?.imdb_genres),
+          imdbDirectors: toStringList(row?.imdb_directors),
+          imdbWriters: toStringList(row?.imdb_writers),
+          imdbStars: toStringList(row?.imdb_stars),
+          imdbCountries: toStringList(row?.imdb_countries),
           imdbLanguages: toStringList(row?.imdb_languages),
+          imdbId: text(row?.imdb_id),
           releaseYear: Number.isFinite(Number(row?.release_year)) ? Number(row.release_year) : null,
           isFavorite: favoriteSet.has(movieId),
           positionSeconds: Number(progress?.position_seconds || 0),
@@ -685,6 +732,7 @@ export async function getMoviesPageForUser(userId, options = {}) {
         if (filters.genre && !movie.imdbGenres.some((entry) => text(entry).toLowerCase() === filters.genre)) return false;
         if (filters.language && !movie.imdbLanguages.some((entry) => text(entry).toLowerCase() === filters.language)) return false;
         if (filters.year && String(movie.releaseYear || "") !== filters.year) return false;
+        if (!matchesMovieSearch(movie, filters.search)) return false;
         return true;
       });
 
