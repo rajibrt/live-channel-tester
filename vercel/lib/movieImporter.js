@@ -4,7 +4,7 @@ import { fetchMovieMetadataByTitle } from "./movieMetadataProvider";
 import { inferVideoQualityLabelFromUrl } from "./videoQuality";
 import { normalizeStreamUrl } from "./streamUrl";
 
-const VIDEO_EXTENSIONS = new Set([".mp4", ".mkv", ".avi", ".mov", ".m4v", ".webm", ".ts", ".flv"]);
+const VIDEO_EXTENSIONS = new Set([".mp4", ".mkv", ".avi", ".mov", ".m4v", ".webm", ".ts", ".flv", ".m3u8", ".mpd"]);
 const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".avif"]);
 
 const DEFAULT_EXCLUDE_RE = [
@@ -129,6 +129,33 @@ function isVideoFile(urlString) {
   }
 }
 
+function isManifestFile(urlString) {
+  try {
+    const u = new URL(urlString);
+    const pathname = text(u.pathname).toLowerCase();
+    return pathname.endsWith(".m3u8") || pathname.endsWith(".mpd");
+  } catch {
+    return false;
+  }
+}
+
+function isSegmentFile(urlString) {
+  try {
+    const u = new URL(urlString);
+    const pathname = text(u.pathname).toLowerCase();
+    const fileName = pathname.split("/").pop() || "";
+    return (
+      pathname.endsWith(".ts") ||
+      pathname.endsWith(".m4s") ||
+      pathname.endsWith(".cmfv") ||
+      pathname.endsWith(".cmfa") ||
+      /^index\d+\.(ts|m4s)$/i.test(fileName)
+    );
+  } catch {
+    return false;
+  }
+}
+
 function isImageFile(urlString) {
   try {
     const u = new URL(urlString);
@@ -151,8 +178,22 @@ function cleanMovieTitle(rawName) {
   name = name.replace(/\.[a-z0-9]{2,5}$/i, "");
   name = name.replace(/\[[^\]]*]/g, " ");
   name = name.replace(/\([^)]*?(x264|x265|h\.?264|h\.?265|web.?dl|webrip|bluray|brrip|dvdrip|hdrip|aac|ddp|atmos|dual audio|esub).*?\)/gi, " ");
+  name = name.replace(/[-–—]{2,}/g, " ");
+  name = name.replace(/\s*[-–—]\s*/g, " ");
   name = name.replace(/\b(2160p|1440p|1080p|720p|576p|480p|360p)\b/gi, " ");
-  name = name.replace(/\b(x264|x265|h\.?264|h\.?265|web.?dl|webrip|bluray|brrip|dvdrip|hdrip|aac|ddp|atmos|dual audio|esub|yify|yts)\b/gi, " ");
+  name = name.replace(
+    /\b(x264|x265|h\.?264|h\.?265|hevc|avc|web.?dl|web.?rip|bluray|blu.?ray|brrip|dvdrip|hdrip|hdrip|hdtc|hdts|camrip|predvd|aac|ddp|ac3|eac3|atmos|dual audio|esub|yify|yts|reencoded|remux|proper|extended|uncut|unrated|org|original)\b/gi,
+    " "
+  );
+  name = name.replace(
+    /\b(hindi dubbed|bengali dubbed|bangla dubbed|english dubbed|tamil dubbed|telugu dubbed|malayalam dubbed|kannada dubbed|multi audio)\b/gi,
+    " "
+  );
+  name = name.replace(
+    /\b(hindi|bengali|bangla|english|tamil|telugu|malayalam|kannada|punjabi|urdu|arabic|korean|japanese|french|spanish|german)\b/gi,
+    " "
+  );
+  name = name.replace(/\b(19\d{2}|20\d{2})\b/g, " ");
   name = name.replace(/[._]+/g, " ");
   name = name.replace(/\s{2,}/g, " ").trim();
   return name;
@@ -208,15 +249,42 @@ async function fetchListing(url, fetchImpl) {
   return await res.text();
 }
 
+function scorePlayableSource(urlString) {
+  try {
+    const u = new URL(urlString);
+    const pathname = text(u.pathname).toLowerCase();
+    const fileName = pathname.split("/").pop() || "";
+    const ext = pickExt(pathname);
+    let score = 0;
+
+    if (isManifestFile(urlString)) score += 1000;
+    if (/^index\.(m3u8|mpd)$/i.test(fileName)) score += 200;
+    if (/master\.(m3u8|mpd)$/i.test(fileName)) score += 180;
+    if (/playlist\.(m3u8|mpd)$/i.test(fileName)) score += 160;
+
+    if (ext === ".mp4") score += 900;
+    else if (ext === ".m4v") score += 860;
+    else if (ext === ".mov") score += 840;
+    else if (ext === ".webm") score += 820;
+    else if (ext === ".mkv") score += 800;
+    else if (ext === ".avi") score += 760;
+    else if (ext === ".flv") score += 720;
+    else if (ext === ".ts") score += 100;
+
+    if (isSegmentFile(urlString)) score -= 1000;
+    if (/sample|trailer|teaser|clip/i.test(fileName)) score -= 300;
+
+    return score;
+  } catch {
+    return -9999;
+  }
+}
+
 function pickBestVideo(videoUrls) {
   if (!videoUrls.length) return "";
-  const priority = [".mkv", ".mp4", ".m4v", ".mov", ".avi", ".webm", ".ts", ".flv"];
   return [...videoUrls].sort((a, b) => {
-    const ea = priority.indexOf(pickExt(new URL(a).pathname));
-    const eb = priority.indexOf(pickExt(new URL(b).pathname));
-    const na = ea < 0 ? 999 : ea;
-    const nb = eb < 0 ? 999 : eb;
-    if (na !== nb) return na - nb;
+    const scoreDiff = scorePlayableSource(b) - scorePlayableSource(a);
+    if (scoreDiff !== 0) return scoreDiff;
     return a.localeCompare(b);
   })[0];
 }

@@ -9,8 +9,23 @@ function normalizeLookupTitle(raw) {
   const input = text(raw);
   if (!input) return "";
   return input
+    .replace(/[-–—]{2,}/g, " ")
+    .replace(/\s*[-–—]\s*/g, " ")
     .replace(/\((19\d{2}|20\d{2})\)\s*$/g, "")
     .replace(/\[(19\d{2}|20\d{2})\]\s*$/g, "")
+    .replace(
+      /\b(2160p|1440p|1080p|720p|576p|480p|360p|x264|x265|h\.?264|h\.?265|hevc|avc|web.?dl|web.?rip|bluray|blu.?ray|brrip|dvdrip|hdrip|hdtc|hdts|camrip|predvd|aac|ddp|ac3|eac3|atmos|dual audio|esub|reencoded|remux|proper|extended|uncut|unrated|org|original)\b/gi,
+      " "
+    )
+    .replace(
+      /\b(hindi dubbed|bengali dubbed|bangla dubbed|english dubbed|tamil dubbed|telugu dubbed|malayalam dubbed|kannada dubbed|multi audio)\b/gi,
+      " "
+    )
+    .replace(
+      /\b(hindi|bengali|bangla|english|tamil|telugu|malayalam|kannada|punjabi|urdu|arabic|korean|japanese|french|spanish|german)\b/gi,
+      " "
+    )
+    .replace(/\b(19\d{2}|20\d{2})\b/g, " ")
     .replace(/\s{2,}/g, " ")
     .trim();
 }

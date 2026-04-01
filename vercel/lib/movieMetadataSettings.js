@@ -188,7 +188,7 @@ function nextPoolIndex(pool, lastHash) {
   if (!lastHash) return 0;
   const idx = pool.findIndex((row) => row.hash === lastHash);
   if (idx < 0) return 0;
-  return idx;
+  return (idx + 1) % pool.length;
 }
 
 function shouldRotateForError(message) {
@@ -256,10 +256,10 @@ export async function fetchOmdbJsonWithRotation({
       payload = await fetchOmdb(`https://www.omdbapi.com/?${params.toString()}`, signal);
     } catch (error) {
       lastError = error?.message || "OMDb request failed";
+      usage.last_key_hash = key.hash;
       continue;
     }
 
-    usage.counts[key.hash] = Math.max(0, Math.min(DAILY_OMDB_LIMIT_PER_KEY, used + 1));
     usage.last_key_hash = key.hash;
     const responseOk = String(payload?.Response || "").toLowerCase() === "true";
     if (!responseOk) {
@@ -269,7 +269,10 @@ export async function fetchOmdbJsonWithRotation({
         usage.counts[key.hash] = DAILY_OMDB_LIMIT_PER_KEY;
         continue;
       }
+      continue;
     }
+
+    usage.counts[key.hash] = Math.max(0, Math.min(DAILY_OMDB_LIMIT_PER_KEY, used + 1));
 
     const saved = await saveMovieMetadataSettings({
       adminUserId,

@@ -577,11 +577,20 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
       setError("Source URL দিন, তারপর Test Link চাপুন।");
       return;
     }
+    openPreviewForSource(String(movieForm.title || "Link Test Preview"), source);
+  };
+
+  const openPreviewForSource = (title, sourceUrl) => {
+    const source = String(sourceUrl || "").trim();
+    if (!source) {
+      setError("Preview করার জন্য source URL পাওয়া যায়নি।");
+      return;
+    }
     setError("");
     setPreviewError("");
     setPreviewLoading(true);
     setPreviewSourceUrl(source);
-    setPreviewTitle(String(movieForm.title || "Link Test Preview"));
+    setPreviewTitle(String(title || "Link Test Preview"));
   };
 
   const handleValidateSource = async () => {
@@ -1289,16 +1298,7 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
   const openMoviePreview = (row) => {
     if (!row) return;
     const firstSource = Array.isArray(row.sources) ? row.sources[0] : null;
-    const source = String(firstSource?.source_url || "").trim();
-    if (!source) {
-      setError("এই মুভির source URL পাওয়া যায়নি।");
-      return;
-    }
-    setError("");
-    setPreviewError("");
-    setPreviewLoading(true);
-    setPreviewSourceUrl(source);
-    setPreviewTitle(String(row.title || "Movie Preview"));
+    openPreviewForSource(String(row.title || "Movie Preview"), String(firstSource?.source_url || ""));
   };
 
   const handleDeleteSelectedMovies = async () => {
@@ -2076,7 +2076,7 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
           </div>
         </div>
         <p className={styles.hint}>
-          প্রতি লাইনে একটি OMDb API key দিন। একটি key limit (1000/day) শেষ বা invalid না হওয়া পর্যন্ত সেটাই ব্যবহার হবে, তারপর পরের key শুরু হবে।
+          প্রতি লাইনে একটি OMDb API key দিন। Successful OMDb data response এ usage count হবে। কোনো key response না দিলে, invalid হলে, বা usable data না এলে next key try করবে।
         </p>
         <label className={styles.field}>
           <span>OMDb API Keys (one per line)</span>
@@ -2370,6 +2370,7 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
                     <th>Auto Category</th>
                     <th>Metadata</th>
                     <th>Status</th>
+                    <th>Preview</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2439,12 +2440,22 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
                       <td>
                         <span className={statusClass}>{status}</span>
                       </td>
+                      <td>
+                        <button
+                          type="button"
+                          className={styles.ghostBtn}
+                          onClick={() => openPreviewForSource(row.title || "Movie Preview", row?.source_url || row?.url || "")}
+                          disabled={!String(row?.source_url || row?.url || "").trim()}
+                        >
+                          Preview
+                        </button>
+                      </td>
                     </tr>
                     );
                   })}
                   {!preparedItems.length ? (
                     <tr>
-                      <td colSpan={7}>No scan result yet.</td>
+                      <td colSpan={8}>No scan result yet.</td>
                     </tr>
                   ) : null}
                 </tbody>
@@ -2466,6 +2477,7 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
                     <th>Title</th>
                     <th>Category</th>
                     <th>Source URL</th>
+                    <th>Preview</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2476,11 +2488,21 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
                       <td style={{ maxWidth: 460, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                         {row.source_url || "-"}
                       </td>
+                      <td>
+                        <button
+                          type="button"
+                          className={styles.ghostBtn}
+                          onClick={() => openPreviewForSource(row.title || "Movie Preview", row?.source_url || row?.url || "")}
+                          disabled={!String(row?.source_url || row?.url || "").trim()}
+                        >
+                          Preview
+                        </button>
+                      </td>
                     </tr>
                   ))}
                   {!scanRawItems.length ? (
                     <tr>
-                      <td colSpan={3}>Scanning চলছে... প্রথম মুভি পেলে এখানে সাথে সাথে দেখাবে।</td>
+                      <td colSpan={4}>Scanning চলছে... প্রথম মুভি পেলে এখানে সাথে সাথে দেখাবে।</td>
                     </tr>
                   ) : null}
                 </tbody>
