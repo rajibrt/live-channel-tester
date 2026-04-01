@@ -254,6 +254,7 @@ export default function IptvHomeClient({
   const [hasRestoredChannel, setHasRestoredChannel] = useState(false);
   const movieCatalogRequestRef = useRef(false);
   const lastLoadedMovieQueryRef = useRef("");
+  const desiredMovieQueryRef = useRef("");
   const moviePageCacheRef = useRef(new Map());
   const moviePageRequestRef = useRef(new Map());
   const watchSessionRef = useRef({ channelId: "", channelName: "", startedAt: 0 });
@@ -354,6 +355,10 @@ export default function IptvHomeClient({
       }),
     [movieCatalog.pageSize, movieListPage, movieMode, selectedMovieCategory, selectedMovieGenre, selectedMovieLanguage, selectedMovieYear, movieSearchQuery]
   );
+
+  useEffect(() => {
+    desiredMovieQueryRef.current = currentMovieRequestKey;
+  }, [currentMovieRequestKey]);
 
   const ensureMovieCatalogLoaded = useCallback(() => {
     if (movieCatalogRequestRef.current || movieCatalogStatus === "ready") return;
@@ -473,7 +478,7 @@ export default function IptvHomeClient({
     const existingRequest = moviePageRequestRef.current.get(cacheKey);
     if (existingRequest) {
       const payload = await existingRequest.catch(() => null);
-      if (payload && !options?.background) {
+      if (payload && !options?.background && desiredMovieQueryRef.current === cacheKey) {
         const nextMovies = Array.isArray(payload?.movies) ? payload.movies : [];
         setMovieCatalog((prev) => ({
           ...prev,
@@ -527,7 +532,7 @@ export default function IptvHomeClient({
 
     try {
       const payload = await requestPromise;
-      if (!options?.background) {
+      if (!options?.background && desiredMovieQueryRef.current === cacheKey) {
         const nextMovies = Array.isArray(payload?.movies) ? payload.movies : [];
         setMovieCatalog((prev) => ({
           ...prev,
@@ -552,7 +557,9 @@ export default function IptvHomeClient({
       });
       return payload;
     } catch {
-      if (!options?.background) setMoviePageLoading(false);
+      if (!options?.background && desiredMovieQueryRef.current === cacheKey) {
+        setMoviePageLoading(false);
+      }
       return null;
     }
   }, [movieMode, selectedMovieCategory, selectedMovieGenre, selectedMovieLanguage, selectedMovieYear, movieSearchQuery]);
@@ -566,10 +573,10 @@ export default function IptvHomeClient({
 
   useEffect(() => {
     if (homeMode !== "movies" || movieViewMode !== "browse") return;
-    if (movieCatalogStatus !== "ready" || moviePageLoading) return;
+    if (movieCatalogStatus !== "ready") return;
     if (lastLoadedMovieQueryRef.current === currentMovieRequestKey) return;
     loadMoviePage(movieListPage, movieCatalog.pageSize || DEFAULT_MOVIES_PAGE_SIZE);
-  }, [currentMovieRequestKey, homeMode, loadMoviePage, movieCatalog.pageSize, movieCatalogStatus, movieListPage, moviePageLoading, movieViewMode]);
+  }, [currentMovieRequestKey, homeMode, loadMoviePage, movieCatalog.pageSize, movieCatalogStatus, movieListPage, movieViewMode]);
 
   useEffect(() => {
     if (homeMode !== "movies" || movieViewMode !== "browse") return;
@@ -607,12 +614,59 @@ export default function IptvHomeClient({
 
     try {
       const savedView = String(window.localStorage.getItem(LAST_MOVIE_VIEW_KEY) || "").trim().toLowerCase();
+      const savedMode = String(window.localStorage.getItem(LAST_MODE_KEY) || "").trim().toLowerCase();
       const savedSlug = String(window.localStorage.getItem("iptv:v1:last-movie-slug") || "").trim().toLowerCase();
       if (savedView === "watch" && savedSlug) {
         setHomeMode("movies");
         setMovieViewMode("watch");
         setActiveMovieSlug(savedSlug);
         window.history.replaceState(window.history.state, "", `/movie/${encodeURIComponent(savedSlug)}`);
+        setRouteStateReady(true);
+        return;
+      }
+      if (savedMode === "movies" || savedView === "browse") {
+        let savedFilters = {};
+        try {
+          const rawSavedFilters = window.localStorage.getItem(LAST_MOVIE_FILTER_KEY);
+          savedFilters = rawSavedFilters ? JSON.parse(rawSavedFilters) || {} : {};
+        } catch {
+          savedFilters = {};
+        }
+
+        const restoredMode = String(savedFilters?.mode || "all").trim().toLowerCase();
+        const restoredCategory = String(savedFilters?.category || "").trim().toLowerCase();
+        const restoredGenre = String(savedFilters?.genre || "").trim().toLowerCase();
+        const restoredLanguage = String(savedFilters?.language || "").trim().toLowerCase();
+        const restoredYear = String(savedFilters?.year || "").trim();
+        const restoredSearch = String(savedFilters?.search || "").trim();
+        const restoredFilterView = String(savedFilters?.filter_view || "").trim().toLowerCase() === "genres" ? "genres" : "categories";
+
+        setHomeMode("movies");
+        setMovieViewMode("browse");
+        setMovieListPage(1);
+        setMovieMode(
+          restoredMode === "favorites" || restoredMode === "recent" || restoredMode === "watched" ? restoredMode : "all"
+        );
+        setSelectedMovieCategory(restoredCategory);
+        setSelectedMovieGenre(restoredGenre);
+        setSelectedMovieLanguage(restoredLanguage);
+        setSelectedMovieYear(restoredYear);
+        setMovieSearchQuery(restoredSearch);
+        setMovieFilterView(restoredFilterView);
+        window.history.replaceState(
+          window.history.state,
+          "",
+          buildMovieListUrl(
+            restoredMode,
+            restoredCategory,
+            restoredGenre,
+            restoredLanguage,
+            restoredYear,
+            restoredFilterView,
+            1,
+            restoredSearch
+          )
+        );
         setRouteStateReady(true);
         return;
       }

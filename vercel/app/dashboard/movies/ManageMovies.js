@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { ArrowLeft, Clapperboard, FolderPlus, Pencil, Trash2 } from "lucide-react";
 import {
   resolveBrowserPlaybackUrl,
@@ -319,9 +318,9 @@ function IndeterminateCheckbox({ indeterminate, ...props }) {
 }
 
 export default function ManageMovies({ initialCategories = [], initialMovies = [], categorySlug = "" }) {
-  const router = useRouter();
   const currentCategorySlug = String(categorySlug || "").trim().toLowerCase();
-  const isCategoryDetailsPage = Boolean(currentCategorySlug);
+  const [activeCategorySlug, setActiveCategorySlug] = useState(currentCategorySlug);
+  const isCategoryDetailsPage = Boolean(activeCategorySlug);
   const [categories, setCategories] = useState(Array.isArray(initialCategories) ? initialCategories : []);
   const [movies, setMovies] = useState(Array.isArray(initialMovies) ? initialMovies : []);
   const [savingCategory, setSavingCategory] = useState(false);
@@ -343,6 +342,9 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
   const [moviePagination, setMoviePagination] = useState({ pageIndex: 0, pageSize: 25 });
   const [refreshingMovieMetadata, setRefreshingMovieMetadata] = useState(false);
   const [metadataRefreshSummary, setMetadataRefreshSummary] = useState(null);
+  const [checkingBrokenMovies, setCheckingBrokenMovies] = useState(false);
+  const [brokenMovieCleanupSummary, setBrokenMovieCleanupSummary] = useState(null);
+  const [brokenMovieCleanupCurrentTitle, setBrokenMovieCleanupCurrentTitle] = useState("");
   const [movieMetadataSettingsLoading, setMovieMetadataSettingsLoading] = useState(false);
   const [movieMetadataSettingsSaving, setMovieMetadataSettingsSaving] = useState(false);
   const [omdbKeysText, setOmdbKeysText] = useState("");
@@ -351,6 +353,9 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
   const [previewTitle, setPreviewTitle] = useState("");
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState("");
+  const [sourceCheckLoading, setSourceCheckLoading] = useState(false);
+  const [sourceCheckResult, setSourceCheckResult] = useState(null);
+  const [sourceCheckUrl, setSourceCheckUrl] = useState("");
   const [imdbImagePreviewUrls, setImdbImagePreviewUrls] = useState([]);
   const [importingMovies, setImportingMovies] = useState(false);
   const [importingPrepared, setImportingPrepared] = useState(false);
@@ -445,9 +450,40 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
     selectAllCheckboxRef.current.indeterminate = someSelectableSelected;
   }, [someSelectableSelected]);
 
+  useEffect(() => {
+    setActiveCategorySlug(currentCategorySlug);
+  }, [currentCategorySlug]);
+
+  useEffect(() => {
+    const onPopState = () => {
+      const rawPath = typeof window === "undefined" ? "" : String(window.location.pathname || "");
+      const match = rawPath.match(/^\/dashboard\/movies\/category\/([^/]+)$/i);
+      if (match?.[1]) {
+        setActiveCategorySlug(decodeURIComponent(match[1]).trim().toLowerCase());
+        return;
+      }
+      if (/^\/dashboard\/movies\/?$/i.test(rawPath)) {
+        setActiveCategorySlug("");
+      }
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
+  const navigateMovieCategory = (nextSlug = "") => {
+    const normalized = String(nextSlug || "").trim().toLowerCase();
+    const nextPath = normalized
+      ? `/dashboard/movies/category/${encodeURIComponent(normalized)}`
+      : "/dashboard/movies";
+    if (typeof window !== "undefined") {
+      window.history.pushState({ movieCategorySlug: normalized }, "", nextPath);
+    }
+    setActiveCategorySlug(normalized);
+  };
+
   const selectedCategory = useMemo(
-    () => categories.find((row) => String(row?.slug || "").trim().toLowerCase() === currentCategorySlug) || null,
-    [categories, currentCategorySlug]
+    () => categories.find((row) => String(row?.slug || "").trim().toLowerCase() === activeCategorySlug) || null,
+    [categories, activeCategorySlug]
   );
 
   const moviesInSelectedCategory = useMemo(() => {
@@ -503,6 +539,9 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
     setMovieFormInitialSnapshot(serializeMovieForm(next));
     setImdbQuery("");
     setImdbImagePreviewUrls([]);
+    setSourceCheckLoading(false);
+    setSourceCheckResult(null);
+    setSourceCheckUrl("");
   };
   const closeMovieForm = () => {
     if (!confirmDiscardMovieForm()) return;
@@ -515,6 +554,9 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
       ...EMPTY_MOVIE_FORM,
       category_ids: selectedCategory ? [Number(selectedCategory.id)] : [],
     };
+    setSourceCheckLoading(false);
+    setSourceCheckResult(null);
+    setSourceCheckUrl("");
     setShowMovieForm(true);
     setImdbQuery("");
     setImdbImagePreviewUrls([]);
@@ -540,6 +582,37 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
     setPreviewLoading(true);
     setPreviewSourceUrl(source);
     setPreviewTitle(String(movieForm.title || "Link Test Preview"));
+  };
+
+  const handleValidateSource = async () => {
+    const source = String(movieForm.source_url || "").trim();
+    if (!source) {
+      setError("Source URL দিন, তারপর Validate Live চাপুন।");
+      return;
+    }
+    setError("");
+    setSourceCheckLoading(true);
+    try {
+      const res = await fetch("/api/admin/movie-source-check", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ url: source }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload?.error || "Source validation failed");
+      setSourceCheckResult(payload);
+      setSourceCheckUrl(source);
+    } catch (err) {
+      setSourceCheckResult({
+        verdict: "fail",
+        summary: String(err?.message || "Source validation failed"),
+        reasons: [],
+        checks: null,
+      });
+      setSourceCheckUrl(source);
+    } finally {
+      setSourceCheckLoading(false);
+    }
   };
 
   const confirmDiscardMovieForm = () => {
@@ -1205,6 +1278,9 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
       [...new Set([row.poster_url, row.backdrop_url].map((v) => String(v || "").trim()).filter(Boolean))]
     );
     setImdbQuery(String(row.imdb_id || ""));
+    setSourceCheckLoading(false);
+    setSourceCheckResult(null);
+    setSourceCheckUrl("");
     setMovieForm(next);
     setMovieFormInitialSnapshot(serializeMovieForm(next));
     setShowMovieForm(true);
@@ -1261,6 +1337,115 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
       setMessage(`${deleted}টি movie deleted.`);
     }
     setSavingMovie(false);
+  };
+
+  const handleCheckAndDeleteBrokenMovies = async () => {
+    const rows = Array.isArray(moviesInSelectedCategory) ? moviesInSelectedCategory : [];
+    if (!rows.length) {
+      setError("এই category-তে কোনো movie পাওয়া যায়নি।");
+      return;
+    }
+
+    const ok = window.confirm(
+      `এই category-এর ${rows.length}টা movie check করা হবে। যেগুলোর source clearly broken/live-unsafe, সেগুলো database থেকে delete হবে। Continue করবেন?`
+    );
+    if (!ok) return;
+
+    setCheckingBrokenMovies(true);
+    setBrokenMovieCleanupSummary(null);
+    setBrokenMovieCleanupCurrentTitle("");
+    setError("");
+    setMessage("");
+
+    const summary = {
+      total: rows.length,
+      checked: 0,
+      remaining: rows.length,
+      deleted: 0,
+      safe: 0,
+      warnings: 0,
+      missingSource: 0,
+      validationErrors: 0,
+      deletedTitles: [],
+    };
+
+    try {
+      for (const row of rows) {
+        setBrokenMovieCleanupCurrentTitle(String(row?.title || ""));
+        summary.checked += 1;
+        summary.remaining = Math.max(0, summary.total - summary.checked);
+        setBrokenMovieCleanupSummary({ ...summary, deletedTitles: [...summary.deletedTitles] });
+        const firstSource = Array.isArray(row?.sources) ? row.sources[0] : null;
+        const sourceUrl = String(firstSource?.source_url || "").trim();
+        if (!sourceUrl) {
+          summary.missingSource += 1;
+          setBrokenMovieCleanupSummary({ ...summary, deletedTitles: [...summary.deletedTitles] });
+          continue;
+        }
+
+        let validation = null;
+        try {
+          const validateRes = await fetch("/api/admin/movie-source-check", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ url: sourceUrl }),
+          });
+          validation = await validateRes.json().catch(() => ({}));
+          if (!validateRes.ok) {
+            summary.validationErrors += 1;
+            setBrokenMovieCleanupSummary({ ...summary, deletedTitles: [...summary.deletedTitles] });
+            continue;
+          }
+        } catch {
+          summary.validationErrors += 1;
+          setBrokenMovieCleanupSummary({ ...summary, deletedTitles: [...summary.deletedTitles] });
+          continue;
+        }
+
+        const verdict = String(validation?.verdict || "").toLowerCase();
+        if (verdict === "fail") {
+          try {
+            const deleteRes = await fetch(`/api/admin/movies/${encodeURIComponent(row.id)}`, {
+              method: "DELETE",
+            });
+            const deletePayload = await deleteRes.json().catch(() => ({}));
+            if (!deleteRes.ok) {
+              throw new Error(deletePayload?.error || "Movie delete failed");
+            }
+            summary.deleted += 1;
+            summary.deletedTitles.push(String(row?.title || `#${row?.id || "?"}`));
+            setMovies((prev) => prev.filter((item) => String(item?.id || "") !== String(row?.id || "")));
+            setMovieRowSelection((prev) => {
+              if (!prev[String(row?.id || "")]) return prev;
+              const next = { ...prev };
+              delete next[String(row?.id || "")];
+              return next;
+            });
+          } catch {
+            summary.validationErrors += 1;
+          }
+          setBrokenMovieCleanupSummary({ ...summary, deletedTitles: [...summary.deletedTitles] });
+          continue;
+        }
+
+        if (verdict === "warning") {
+          summary.warnings += 1;
+        } else {
+          summary.safe += 1;
+        }
+        setBrokenMovieCleanupSummary({ ...summary, deletedTitles: [...summary.deletedTitles] });
+      }
+
+      setBrokenMovieCleanupSummary(summary);
+      setMessage(
+        `Broken source check done. Checked ${summary.checked}, deleted ${summary.deleted}, safe ${summary.safe}, warnings ${summary.warnings}.`
+      );
+    } catch (err) {
+      setError(err?.message || "Broken movie cleanup failed");
+    } finally {
+      setCheckingBrokenMovies(false);
+      setBrokenMovieCleanupCurrentTitle("");
+    }
   };
 
   const handleRefreshMissingMetadata = async () => {
@@ -1477,14 +1662,210 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
     () => buildPageItems(movieCurrentPage, movieTotalPages),
     [movieCurrentPage, movieTotalPages]
   );
+  const renderMovieTableHeader = (suffix = "top", compact = false) => (
+    <>
+      {!compact ? <div className={styles.formGrid}>
+        <label className={styles.field}>
+          <span>Search Movie</span>
+          <input
+            value={movieSearch}
+            onChange={(e) => {
+              const value = e.target.value;
+              setMovieSearch(value);
+              setMovieColumnFilters((prev) => {
+                const next = prev.filter((item) => item.id !== "title");
+                if (String(value || "").trim()) next.push({ id: "title", value });
+                return next;
+              });
+            }}
+            placeholder="Search by movie title or slug"
+          />
+        </label>
+        <label className={styles.field}>
+          <span>Status</span>
+          <select
+            value={movieStatusFilter}
+            onChange={(e) => {
+              const value = e.target.value;
+              setMovieStatusFilter(value);
+              setMovieColumnFilters((prev) => {
+                const next = prev.filter((item) => item.id !== "status");
+                if (value === "published") next.push({ id: "status", value: "Published" });
+                if (value === "hidden") next.push({ id: "status", value: "Hidden" });
+                return next;
+              });
+            }}
+          >
+            <option value="all">All Status</option>
+            <option value="published">Published</option>
+            <option value="hidden">Hidden</option>
+          </select>
+        </label>
+        <label className={styles.field}>
+          <span>Data Filter</span>
+          <select
+            value={movieDataFilter}
+            onChange={(e) => {
+              const value = e.target.value;
+              setMovieDataFilter(value);
+              setMovieColumnFilters((prev) => {
+                const next = prev.filter((item) => item.id !== "metadata_state");
+                if (value !== "all") next.push({ id: "metadata_state", value });
+                return next;
+              });
+            }}
+          >
+            <option value="all">All Data</option>
+            <option value="complete">Complete (Source + Metadata)</option>
+            <option value="metadata_missing">Metadata Missing</option>
+            <option value="metadata_partial">Partial Metadata</option>
+            <option value="source_missing">Source Missing</option>
+            <option value="missing_both">Missing Both</option>
+          </select>
+        </label>
+      </div> : null}
+      {!compact ? <div className={styles.actions}>
+        <button type="button" className={styles.ghostBtn} onClick={() => movieTable.toggleAllRowsSelected(true)}>
+          Select All
+        </button>
+        <button type="button" className={styles.ghostBtn} onClick={() => movieTable.toggleAllRowsSelected(false)}>
+          Deselect All
+        </button>
+        <button type="button" className={styles.deleteBtn} onClick={handleDeleteSelectedMovies} disabled={savingMovie}>
+          <Trash2 size={14} aria-hidden="true" />
+          Delete Selected ({movieTable.getSelectedRowModel().rows.length})
+        </button>
+        <button
+          type="button"
+          className={styles.primaryBtn}
+          onClick={handleRefreshMissingMetadata}
+          disabled={refreshingMovieMetadata || movieTable.getSelectedRowModel().rows.length === 0}
+        >
+          {refreshingMovieMetadata
+            ? "Refreshing Metadata..."
+            : `Refetch Selected Metadata (${movieTable.getSelectedRowModel().rows.length})`}
+        </button>
+        {isCategoryDetailsPage ? (
+          <button
+            type="button"
+            className={styles.ghostBtn}
+            onClick={handleCheckAndDeleteBrokenMovies}
+            disabled={checkingBrokenMovies || !moviesInSelectedCategory.length}
+          >
+            {checkingBrokenMovies
+              ? `Checking ${moviesInSelectedCategory.length}...`
+              : "Check & Delete Broken"}
+          </button>
+        ) : null}
+      </div> : null}
+      {!compact && metadataRefreshSummary ? (
+        <p className={styles.hint} style={{ marginBottom: 8 }}>
+          Metadata Refresh: Processed {metadataRefreshSummary.processed} | Success {metadataRefreshSummary.succeeded} | Failed{" "}
+          {metadataRefreshSummary.failed}
+        </p>
+      ) : null}
+      {!compact && brokenMovieCleanupSummary ? (
+        <div className={styles.resultBox} style={{ marginBottom: 8 }}>
+          <p className={styles.hint} style={{ margin: 0 }}>
+            Total: {brokenMovieCleanupSummary.total} | Checked: {brokenMovieCleanupSummary.checked} | Remaining:{" "}
+            {brokenMovieCleanupSummary.remaining} | Deleted: {brokenMovieCleanupSummary.deleted} | Safe:{" "}
+            {brokenMovieCleanupSummary.safe} | Warnings: {brokenMovieCleanupSummary.warnings} | Missing Source:{" "}
+            {brokenMovieCleanupSummary.missingSource} | Validation Errors:{" "}
+            {brokenMovieCleanupSummary.validationErrors}
+          </p>
+          {checkingBrokenMovies && brokenMovieCleanupCurrentTitle ? (
+            <p className={styles.hint} style={{ margin: 0 }}>
+              Checking now: {brokenMovieCleanupCurrentTitle}
+            </p>
+          ) : null}
+          {brokenMovieCleanupSummary.deletedTitles?.length ? (
+            <p className={styles.errorText}>
+              Deleted: {brokenMovieCleanupSummary.deletedTitles.join(", ")}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+      <div className={styles.paginationBar} key={`movie-table-header-${suffix}`}>
+        <div className={styles.paginationInfo}>
+          <span>
+            Showing {movieTable.getRowModel().rows.length} of {movieTable.getFilteredRowModel().rows.length} movies
+          </span>
+          <label className={styles.pageSizeControl}>
+            <span>Rows per page</span>
+            <select
+              value={movieTable.getState().pagination.pageSize}
+              onChange={(e) => movieTable.setPageSize(Number(e.target.value))}
+            >
+              {[10, 25, 50, 100, 200].map((size) => (
+                <option key={size} value={size}>
+                  {size}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div className={styles.paginationActions}>
+          <Pagination className={styles.paginationNavInline}>
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationLink
+                  size="default"
+                  onClick={() => movieTable.setPageIndex(0)}
+                  disabled={!movieTable.getCanPreviousPage()}
+                >
+                  First
+                </PaginationLink>
+              </PaginationItem>
+              <PaginationItem>
+                <PaginationPrevious
+                  onClick={() => movieTable.previousPage()}
+                  disabled={!movieTable.getCanPreviousPage()}
+                />
+              </PaginationItem>
+              {moviePageItems.map((item) => (
+                <PaginationItem key={`${suffix}-${String(item)}`}>
+                  {typeof item === "number" ? (
+                    <PaginationLink
+                      isActive={item === movieCurrentPage}
+                      size="icon"
+                      onClick={() => movieTable.setPageIndex(Math.max(item - 1, 0))}
+                    >
+                      {item}
+                    </PaginationLink>
+                  ) : (
+                    <PaginationEllipsis />
+                  )}
+                </PaginationItem>
+              ))}
+              <PaginationItem>
+                <PaginationNext
+                  onClick={() => movieTable.nextPage()}
+                  disabled={!movieTable.getCanNextPage()}
+                />
+              </PaginationItem>
+              <PaginationItem>
+                <PaginationLink
+                  size="default"
+                  onClick={() => movieTable.setPageIndex(Math.max(movieTable.getPageCount() - 1, 0))}
+                  disabled={!movieTable.getCanNextPage()}
+                >
+                  Last
+                </PaginationLink>
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
+        </div>
+      </div>
+    </>
+  );
 
   useEffect(() => {
     setMovieRowSelection({});
-  }, [currentCategorySlug, movies]);
+  }, [activeCategorySlug, movies]);
 
   useEffect(() => {
     setMoviePagination((prev) => ({ ...prev, pageIndex: 0 }));
-  }, [currentCategorySlug, movieSearch, movieStatusFilter, movieDataFilter]);
+  }, [activeCategorySlug, movieSearch, movieStatusFilter, movieDataFilter]);
 
   useEffect(() => {
     refreshMovieMetadataSettings().catch(() => {});
@@ -1554,7 +1935,7 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
                         className={styles.rowLinkBtn}
                         onClick={() => {
                           if (!confirmDiscardMovieForm()) return;
-                          router.push(`/dashboard/movies/category/${encodeURIComponent(String(row.slug || ""))}`);
+                          navigateMovieCategory(String(row.slug || ""));
                         }}
                       >
                         {row.name}
@@ -1611,7 +1992,7 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
               className={styles.ghostBtn}
               onClick={() => {
                 if (!confirmDiscardMovieForm()) return;
-                router.push("/dashboard/movies");
+                navigateMovieCategory("");
               }}
             >
               <ArrowLeft size={14} aria-hidden="true" />
@@ -1631,165 +2012,7 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
           {selectedCategory ? <p className={styles.hint}>Movies under this category.</p> : null}
           {selectedCategory ? (
             <>
-          <div className={styles.formGrid}>
-            <label className={styles.field}>
-              <span>Search Movie</span>
-              <input
-                value={movieSearch}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  setMovieSearch(value);
-                  setMovieColumnFilters((prev) => {
-                    const next = prev.filter((item) => item.id !== "title");
-                    if (String(value || "").trim()) next.push({ id: "title", value });
-                    return next;
-                  });
-                }}
-                placeholder="Search by movie title or slug"
-              />
-            </label>
-            <label className={styles.field}>
-              <span>Status</span>
-              <select
-                value={movieStatusFilter}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  setMovieStatusFilter(value);
-                  setMovieColumnFilters((prev) => {
-                    const next = prev.filter((item) => item.id !== "status");
-                    if (value === "published") next.push({ id: "status", value: "Published" });
-                    if (value === "hidden") next.push({ id: "status", value: "Hidden" });
-                    return next;
-                  });
-                }}
-              >
-                <option value="all">All Status</option>
-                <option value="published">Published</option>
-                <option value="hidden">Hidden</option>
-              </select>
-            </label>
-            <label className={styles.field}>
-              <span>Data Filter</span>
-              <select
-                value={movieDataFilter}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  setMovieDataFilter(value);
-                  setMovieColumnFilters((prev) => {
-                    const next = prev.filter((item) => item.id !== "metadata_state");
-                    if (value !== "all") next.push({ id: "metadata_state", value });
-                    return next;
-                  });
-                }}
-              >
-                <option value="all">All Data</option>
-                <option value="complete">Complete (Source + Metadata)</option>
-                <option value="metadata_missing">Metadata Missing</option>
-                <option value="metadata_partial">Partial Metadata</option>
-                <option value="source_missing">Source Missing</option>
-                <option value="missing_both">Missing Both</option>
-              </select>
-            </label>
-          </div>
-          <div className={styles.actions}>
-            <button type="button" className={styles.ghostBtn} onClick={() => movieTable.toggleAllRowsSelected(true)}>
-              Select All
-            </button>
-            <button type="button" className={styles.ghostBtn} onClick={() => movieTable.toggleAllRowsSelected(false)}>
-              Deselect All
-            </button>
-            <button type="button" className={styles.deleteBtn} onClick={handleDeleteSelectedMovies} disabled={savingMovie}>
-              <Trash2 size={14} aria-hidden="true" />
-              Delete Selected ({movieTable.getSelectedRowModel().rows.length})
-            </button>
-            <button
-              type="button"
-              className={styles.primaryBtn}
-              onClick={handleRefreshMissingMetadata}
-              disabled={refreshingMovieMetadata || movieTable.getSelectedRowModel().rows.length === 0}
-            >
-              {refreshingMovieMetadata
-                ? "Refreshing Metadata..."
-                : `Refetch Selected Metadata (${movieTable.getSelectedRowModel().rows.length})`}
-            </button>
-          </div>
-          {metadataRefreshSummary ? (
-            <p className={styles.hint} style={{ marginBottom: 8 }}>
-              Metadata Refresh: Processed {metadataRefreshSummary.processed} | Success {metadataRefreshSummary.succeeded} | Failed{" "}
-              {metadataRefreshSummary.failed}
-            </p>
-          ) : null}
-          <div className={styles.paginationBar}>
-            <div className={styles.paginationInfo}>
-              <span>
-                Showing {movieTable.getRowModel().rows.length} of {movieTable.getFilteredRowModel().rows.length} movies
-              </span>
-              <label className={styles.pageSizeControl}>
-                <span>Rows per page</span>
-                <select
-                  value={movieTable.getState().pagination.pageSize}
-                  onChange={(e) => movieTable.setPageSize(Number(e.target.value))}
-                >
-                  {[10, 25, 50, 100, 200].map((size) => (
-                    <option key={size} value={size}>
-                      {size}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            <div className={styles.paginationActions}>
-              <Pagination className={styles.paginationNavInline}>
-                <PaginationContent>
-                  <PaginationItem>
-                    <PaginationLink
-                      size="default"
-                      onClick={() => movieTable.setPageIndex(0)}
-                      disabled={!movieTable.getCanPreviousPage()}
-                    >
-                      First
-                    </PaginationLink>
-                  </PaginationItem>
-                  <PaginationItem>
-                    <PaginationPrevious
-                      onClick={() => movieTable.previousPage()}
-                      disabled={!movieTable.getCanPreviousPage()}
-                    />
-                  </PaginationItem>
-                  {moviePageItems.map((item) => (
-                    <PaginationItem key={String(item)}>
-                      {typeof item === "number" ? (
-                        <PaginationLink
-                          isActive={item === movieCurrentPage}
-                          size="icon"
-                          onClick={() => movieTable.setPageIndex(Math.max(item - 1, 0))}
-                        >
-                          {item}
-                        </PaginationLink>
-                      ) : (
-                        <PaginationEllipsis />
-                      )}
-                    </PaginationItem>
-                  ))}
-                  <PaginationItem>
-                    <PaginationNext
-                      onClick={() => movieTable.nextPage()}
-                      disabled={!movieTable.getCanNextPage()}
-                    />
-                  </PaginationItem>
-                  <PaginationItem>
-                    <PaginationLink
-                      size="default"
-                      onClick={() => movieTable.setPageIndex(Math.max(movieTable.getPageCount() - 1, 0))}
-                      disabled={!movieTable.getCanNextPage()}
-                    >
-                      Last
-                    </PaginationLink>
-                  </PaginationItem>
-                </PaginationContent>
-              </Pagination>
-            </div>
-          </div>
+          {renderMovieTableHeader("top")}
           <div className={styles.tableWrap}>
             <Table>
               <TableHeader>
@@ -1822,6 +2045,7 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
               </TableBody>
             </Table>
           </div>
+          {renderMovieTableHeader("bottom", true)}
             </>
           ) : (
             <p className={styles.hint}>This category does not exist. Go back to categories list.</p>
@@ -2389,13 +2613,64 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
               <div className={styles.sourcePreviewRow}>
                 <input
                   value={movieForm.source_url}
-                  onChange={(e) => setMovieForm((prev) => ({ ...prev, source_url: e.target.value }))}
+                  onChange={(e) => {
+                    const nextValue = e.target.value;
+                    setMovieForm((prev) => ({ ...prev, source_url: nextValue }));
+                    if (String(sourceCheckUrl || "").trim() !== String(nextValue || "").trim()) {
+                      setSourceCheckResult(null);
+                    }
+                  }}
                   placeholder="https://.../movie.m3u8"
                 />
                 <button type="button" className={styles.ghostBtn} onClick={openSourcePreview}>
                   Test Link
                 </button>
+                <button type="button" className={styles.ghostBtn} onClick={handleValidateSource} disabled={sourceCheckLoading}>
+                  {sourceCheckLoading ? "Checking..." : "Validate Live"}
+                </button>
               </div>
+              {sourceCheckResult ? (
+                <div className={styles.resultBox}>
+                  <p
+                    className={
+                      sourceCheckResult?.verdict === "ok"
+                        ? styles.success
+                        : sourceCheckResult?.verdict === "warning"
+                          ? styles.hint
+                          : styles.error
+                    }
+                    style={{ margin: 0 }}
+                  >
+                    {sourceCheckResult?.verdict === "ok"
+                      ? "Live Ready"
+                      : sourceCheckResult?.verdict === "warning"
+                        ? "Live Risk"
+                        : "Live Unsafe"}
+                    : {String(sourceCheckResult?.summary || "")}
+                  </p>
+                  {sourceCheckResult?.checks ? (
+                    <p className={styles.fieldHint}>
+                      HTTP {sourceCheckResult.checks.status_code || 0} | Type:{" "}
+                      {sourceCheckResult.checks.content_type || "unknown"} | Range:{" "}
+                      {sourceCheckResult.checks.supports_ranges ? "yes" : "no"} | Final protocol:{" "}
+                      {sourceCheckResult.checks.final_protocol || "unknown"}
+                    </p>
+                  ) : null}
+                  {Array.isArray(sourceCheckResult?.reasons) && sourceCheckResult.reasons.length ? (
+                    <div className={styles.fieldHint}>
+                      {sourceCheckResult.reasons.map((reason, idx) => (
+                        <p key={`${reason}-${idx}`} style={{ margin: 0 }}>
+                          - {reason}
+                        </p>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <p className={styles.fieldHint}>
+                  Save করার আগে live fetch check করুন। HTTPS, server fetch, আর range support দেখা হবে।
+                </p>
+              )}
             </label>
             <label className={styles.field}>
               <span>Visibility</span>
