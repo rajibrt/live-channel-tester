@@ -83,6 +83,40 @@ function toList(csv) {
     .filter(Boolean);
 }
 
+function clampPositiveInteger(value, fallback) {
+  const parsed = Math.floor(Number(value));
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+  return parsed;
+}
+
+function clampNonNegativeInteger(value, fallback = 0) {
+  const parsed = Math.floor(Number(value));
+  if (!Number.isFinite(parsed) || parsed < 0) return fallback;
+  return parsed;
+}
+
+const IMPORT_RESUME_STORAGE_KEY = "webtvbd:movies-import-resume:v1";
+
+function normalizeCsvTokens(value) {
+  return String(value || "")
+    .split(",")
+    .map((part) => part.trim().toLowerCase())
+    .filter(Boolean)
+    .join(",");
+}
+
+function buildImportResumeSignature(form) {
+  const normalized = {
+    base_url: String(form?.base_url || "").trim().replace(/\/+$/, "").toLowerCase(),
+    include: normalizeCsvTokens(form?.include),
+    exclude: normalizeCsvTokens(form?.exclude),
+    providers: normalizeCsvTokens(form?.providers),
+    max_depth: clampPositiveInteger(form?.max_depth, 6),
+    category_ids: normalizeIds(form?.category_ids).sort((a, b) => a - b),
+  };
+  return JSON.stringify(normalized);
+}
+
 function serializeMovieForm(form) {
   return JSON.stringify({
     ...form,
@@ -376,6 +410,22 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
     current_title: "",
     current_status: "",
   });
+  const [importBatchState, setImportBatchState] = useState({
+    source_ids: [],
+    queue: [],
+    queue_total: 0,
+    processed: 0,
+    remaining: 0,
+    batch_size: 0,
+    next_batch_number: 1,
+    paused: false,
+    saved: 0,
+    skipped: 0,
+    failed: 0,
+    range_start: 0,
+    range_end: 0,
+    category_ids: [],
+  });
   const selectAllCheckboxRef = useRef(null);
   const [importForm, setImportForm] = useState({
     base_url: "",
@@ -385,6 +435,10 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
     publish: true,
     limit: "0",
     max_depth: "6",
+    category_ids: [],
+    range_start: "1",
+    range_end: "0",
+    batch_size: "50",
   });
   const [movieFormInitialSnapshot, setMovieFormInitialSnapshot] = useState(
     serializeMovieForm(EMPTY_MOVIE_FORM)
@@ -400,6 +454,8 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
   const [movieForm, setMovieForm] = useState({ ...EMPTY_MOVIE_FORM });
   const [previewVideoEl, setPreviewVideoEl] = useState(null);
   const previewHlsRef = useRef(null);
+  const resumeAppliedSignatureRef = useRef("");
+  const [importResumeInfo, setImportResumeInfo] = useState(null);
   const isMovieFormDirty = useMemo(
     () => showMovieForm && serializeMovieForm(movieForm) !== movieFormInitialSnapshot,
     [movieForm, movieFormInitialSnapshot, showMovieForm]
@@ -444,11 +500,140 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
   }, [selectableIds, selectionMap]);
   const allSelectableSelected = selectableIds.length > 0 && selectedSelectableCount === selectableIds.length;
   const someSelectableSelected = selectedSelectableCount > 0 && selectedSelectableCount < selectableIds.length;
+  const selectedImportCategories = useMemo(() => {
+    const selectedIds = new Set(normalizeIds(importForm.category_ids));
+    return categories.filter((row) => selectedIds.has(Number(row?.id)));
+  }, [categories, importForm.category_ids]);
+  const selectedImportCategoryLabel = selectedImportCategories.map((row) => row?.name).filter(Boolean).join(", ");
+  const effectivePreparedItems = useMemo(() => {
+    const selectedIds = normalizeIds(importForm.category_ids);
+    if (!selectedIds.length) return preparedItems;
+    return preparedItems.map((row) => ({
+      ...row,
+      category_ids: selectedIds,
+      category_names: selectedImportCategories.map((item) => String(item?.name || "").trim()).filter(Boolean),
+      category_name: selectedImportCategories[0]?.name || row?.category_name || "",
+      category_slug: selectedImportCategories[0]?.slug || row?.category_slug || "",
+      category_source: "manual_override",
+    }));
+  }, [importForm.category_ids, preparedItems, selectedImportCategories]);
+
+  const queuedImportIds = useMemo(() => new Set(importBatchState.queue || []), [importBatchState.queue]);
+  const importResumeSignature = useMemo(() => buildImportResumeSignature(importForm), [
+    importForm.base_url,
+    importForm.include,
+    importForm.exclude,
+    importForm.providers,
+    importForm.max_depth,
+    importForm.category_ids,
+  ]);
+  const isImportableItemId = (id) => {
+    const status = String(importStatusMap[id] || "");
+    if (!id) return false;
+    if (status === "saved" || status === "skipped" || status === "duplicate") return false;
+    return Boolean(selectionMap[id]);
+  };
+  const rangePreviewSummary = useMemo(() => {
+    const orderedIds = effectivePreparedItems.map((item) => String(item?.item_id || "")).filter(Boolean);
+    const totalOrdered = orderedIds.length;
+    if (!totalOrdered) {
+      return { start: 0, end: 0, totalInRange: 0, importable: 0 };
+    }
+    const parsedRangeStart = clampPositiveInteger(importForm.range_start, 1);
+    const parsedRangeEndRaw = clampNonNegativeInteger(importForm.range_end, 0);
+    const safeRangeEnd = parsedRangeEndRaw > 0 ? Math.min(parsedRangeEndRaw, totalOrdered) : totalOrdered;
+    const safeRangeStart = Math.min(parsedRangeStart, safeRangeEnd);
+    const rangeIds = orderedIds.slice(Math.max(0, safeRangeStart - 1), safeRangeEnd);
+    return {
+      start: safeRangeStart,
+      end: safeRangeEnd,
+      totalInRange: rangeIds.length,
+      importable: rangeIds.filter((id) => isImportableItemId(id)).length,
+    };
+  }, [
+    effectivePreparedItems,
+    importForm.range_start,
+    importForm.range_end,
+    importStatusMap,
+    selectionMap,
+  ]);
+  const continueBatchSummary = useMemo(() => {
+    const currentEndRaw = clampNonNegativeInteger(importForm.range_end, 0);
+    const currentStart = clampPositiveInteger(importForm.range_start, 1);
+    const currentEnd = currentEndRaw > 0 ? currentEndRaw : currentStart - 1;
+    const batchSize = Math.max(1, clampNonNegativeInteger(importForm.batch_size, 0) || 50);
+    const nextStart = Math.max(1, currentEnd + 1);
+    const nextEnd = nextStart + batchSize - 1;
+    return {
+      canContinue: Boolean(String(importForm.base_url || "").trim()) && !importingMovies,
+      pendingCount: batchSize,
+      nextStart,
+      nextEnd,
+    };
+  }, [
+    importForm.base_url,
+    importForm.range_start,
+    importForm.range_end,
+    importForm.batch_size,
+    importingMovies,
+  ]);
+  const selectedCategory = useMemo(
+    () => categories.find((row) => String(row?.slug || "").trim().toLowerCase() === activeCategorySlug) || null,
+    [categories, activeCategorySlug]
+  );
 
   useEffect(() => {
     if (!selectAllCheckboxRef.current) return;
     selectAllCheckboxRef.current.indeterminate = someSelectableSelected;
   }, [someSelectableSelected]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const signature = String(importResumeSignature || "");
+    if (!signature) {
+      setImportResumeInfo(null);
+      return;
+    }
+    try {
+      const raw = window.localStorage.getItem(IMPORT_RESUME_STORAGE_KEY);
+      const store = raw ? JSON.parse(raw) || {} : {};
+      const nextInfo = store?.[signature] && typeof store[signature] === "object" ? store[signature] : null;
+      setImportResumeInfo(nextInfo);
+    } catch {
+      setImportResumeInfo(null);
+    }
+  }, [importResumeSignature]);
+
+  useEffect(() => {
+    if (!importResumeInfo) return;
+    const signature = String(importResumeSignature || "");
+    if (!signature || resumeAppliedSignatureRef.current === signature) return;
+    const processed = Math.max(0, Number(importResumeInfo?.processed_count || 0));
+    if (processed <= 0) return;
+    const preferredBatchSize = clampNonNegativeInteger(importForm.batch_size, 0) || Math.max(1, Number(importResumeInfo?.batch_size || 50));
+    const suggestedStart = processed + 1;
+    const suggestedEnd = processed + preferredBatchSize;
+    setImportForm((prev) => {
+      const currentStart = clampPositiveInteger(prev.range_start, 1);
+      const currentEndRaw = clampNonNegativeInteger(prev.range_end, 0);
+      if (!(currentStart === 1 && currentEndRaw === 0)) return prev;
+      return {
+        ...prev,
+        range_start: String(suggestedStart),
+        range_end: String(suggestedEnd),
+      };
+    });
+    resumeAppliedSignatureRef.current = signature;
+  }, [importForm.batch_size, importResumeInfo, importResumeSignature]);
+
+  useEffect(() => {
+    if (!selectedCategory?.id) return;
+    setImportForm((prev) => {
+      const normalized = normalizeIds(prev.category_ids);
+      if (normalized.length) return prev;
+      return { ...prev, category_ids: [Number(selectedCategory.id)] };
+    });
+  }, [selectedCategory]);
 
   useEffect(() => {
     setActiveCategorySlug(currentCategorySlug);
@@ -480,11 +665,6 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
     }
     setActiveCategorySlug(normalized);
   };
-
-  const selectedCategory = useMemo(
-    () => categories.find((row) => String(row?.slug || "").trim().toLowerCase() === activeCategorySlug) || null,
-    [categories, activeCategorySlug]
-  );
 
   const moviesInSelectedCategory = useMemo(() => {
     const selectedId = String(selectedCategory?.id || "");
@@ -822,8 +1002,8 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
     }
   };
 
-  const handleImportMovies = async (event) => {
-    event.preventDefault();
+  const runMovieScan = async (formOverrides = {}) => {
+    const scanForm = { ...importForm, ...formOverrides };
     setError("");
     setMessage("");
     setImportSummary(null);
@@ -843,16 +1023,36 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
       current_title: "",
       current_status: "",
     });
+    setImportBatchState({
+      source_ids: [],
+      queue: [],
+      queue_total: 0,
+      processed: 0,
+      remaining: 0,
+      batch_size: 0,
+      next_batch_number: 1,
+      paused: false,
+      saved: 0,
+      skipped: 0,
+      failed: 0,
+      range_start: 0,
+      range_end: 0,
+      category_ids: [],
+    });
     setImportingMovies(true);
     try {
+      const parsedRangeStart = clampPositiveInteger(scanForm.range_start, 1);
+      const parsedRangeEndRaw = clampNonNegativeInteger(scanForm.range_end, 0);
       const payload = {
-        base_url: String(importForm.base_url || "").trim(),
-        include: String(importForm.include || ""),
-        exclude: String(importForm.exclude || ""),
-        providers: String(importForm.providers || ""),
-        publish: Boolean(importForm.publish),
-        limit: Number(importForm.limit || 0),
-        max_depth: Number(importForm.max_depth || 6),
+        base_url: String(scanForm.base_url || "").trim(),
+        include: String(scanForm.include || ""),
+        exclude: String(scanForm.exclude || ""),
+        providers: String(scanForm.providers || ""),
+        publish: Boolean(scanForm.publish),
+        limit: Number(scanForm.limit || 0),
+        max_depth: Number(scanForm.max_depth || 6),
+        range_start: parsedRangeStart,
+        range_end: parsedRangeEndRaw,
       };
       const res = await fetch("/api/admin/movies/import/scan-stream", {
         method: "POST",
@@ -948,7 +1148,13 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
       setSelectionMap(nextSelection);
       setImportStatusMap(nextStatus);
       setImportSummary(finalSummary);
-      setMessage("Scan complete. Duplicate list review করে Import দিন।");
+      setImportForm((prev) => ({
+        ...prev,
+        ...formOverrides,
+        range_start: String(Number(finalSummary?.range_start || parsedRangeStart) || parsedRangeStart),
+        range_end: String(Number(finalSummary?.range_end || parsedRangeEndRaw) || parsedRangeEndRaw || 0),
+      }));
+      setMessage("Scan complete. এই range review করে Import দিন।");
     } catch (err) {
       setError(err?.message || "Movie import failed");
     } finally {
@@ -956,8 +1162,251 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
     }
   };
 
+  const handleImportMovies = async (event) => {
+    event.preventDefault();
+    await runMovieScan();
+  };
+
+  const persistImportResumeInfo = ({ processedCount = 0, batchSize = 0, lastRangeStart = 1, lastRangeEnd = 0 } = {}) => {
+    if (typeof window === "undefined") return;
+    const signature = String(importResumeSignature || "");
+    if (!signature) return;
+    const safeProcessed = Math.max(0, Number(processedCount || 0));
+    if (!safeProcessed) return;
+    const nextInfo = {
+      processed_count: safeProcessed,
+      batch_size: Math.max(0, Number(batchSize || 0)),
+      range_start: Math.max(1, Number(lastRangeStart || 1)),
+      range_end: Math.max(0, Number(lastRangeEnd || 0)),
+      updated_at: new Date().toISOString(),
+      base_url: String(importForm.base_url || "").trim(),
+    };
+    try {
+      const raw = window.localStorage.getItem(IMPORT_RESUME_STORAGE_KEY);
+      const store = raw ? JSON.parse(raw) || {} : {};
+      store[signature] = nextInfo;
+      window.localStorage.setItem(IMPORT_RESUME_STORAGE_KEY, JSON.stringify(store));
+      setImportResumeInfo(nextInfo);
+    } catch {
+      // ignore localStorage write issues
+    }
+  };
+
+  const handleApplyResumeRange = () => {
+    const processed = Math.max(0, Number(importResumeInfo?.processed_count || 0));
+    if (processed <= 0) return;
+    const preferredBatchSize = clampNonNegativeInteger(importForm.batch_size, 0) || Math.max(1, Number(importResumeInfo?.batch_size || 50));
+    setImportForm((prev) => ({
+      ...prev,
+      range_start: String(processed + 1),
+      range_end: String(processed + preferredBatchSize),
+    }));
+    setMessage(
+      `Resume range set to ${processed + 1}-${processed + preferredBatchSize}. একই link scan দিলে এই range থেকে next import শুরু করতে পারবেন।`
+    );
+  };
+
+  const runPreparedMovieImportBatch = async ({
+    queuedIds,
+    batchStartIndex,
+    batchSize,
+    rangeStart,
+    rangeEnd,
+    categoryIds = [],
+  }) => {
+    const safeQueue = Array.isArray(queuedIds) ? queuedIds.filter(Boolean) : [];
+    if (!safeQueue.length) {
+      throw new Error("Import queue empty.");
+    }
+
+    const startIndex = Math.max(0, Number(batchStartIndex || 0));
+    const safeBatchSize = Math.max(1, clampPositiveInteger(batchSize, safeQueue.length));
+    const batchIds = safeQueue.slice(startIndex, startIndex + safeBatchSize);
+    if (!batchIds.length) {
+      throw new Error("No queued items left for import.");
+    }
+
+    const queuedIdSet = new Set(batchIds);
+    const frozenCategoryIds = normalizeIds(categoryIds);
+    const frozenCategoryRows = categories.filter((row) => frozenCategoryIds.includes(Number(row?.id)));
+    const itemsSource = frozenCategoryIds.length
+      ? preparedItems.map((row) => ({
+          ...row,
+          category_ids: frozenCategoryIds,
+          category_names: frozenCategoryRows.map((item) => String(item?.name || "").trim()).filter(Boolean),
+          category_name: frozenCategoryRows[0]?.name || row?.category_name || "",
+          category_slug: frozenCategoryRows[0]?.slug || row?.category_slug || "",
+          category_source: "manual_override",
+        }))
+      : effectivePreparedItems;
+    const selectedItems = itemsSource.filter((item) => {
+      const id = String(item?.item_id || "");
+      return queuedIdSet.has(id) && isImportableItemId(id);
+    });
+
+    setImportProgress({
+      total: selectedItems.length,
+      processed: 0,
+      remaining: selectedItems.length,
+      saved: 0,
+      skipped: 0,
+      failed: 0,
+      current_title: "",
+      current_status: "",
+    });
+
+    const nextProcessed = startIndex + batchIds.length;
+    const remaining = Math.max(0, safeQueue.length - nextProcessed);
+    const nextBatchNumber = Math.floor(nextProcessed / safeBatchSize) + 1;
+    const absoluteProcessedCount = Math.max(0, Number(rangeStart || 1) - 1 + nextProcessed);
+
+    if (!selectedItems.length) {
+      setImportBatchState((prev) => ({
+        ...prev,
+        source_ids:
+          Array.isArray(prev?.source_ids) && prev.source_ids.length
+            ? prev.source_ids
+            : safeQueue,
+        queue: safeQueue,
+        queue_total: safeQueue.length,
+        processed: nextProcessed,
+        remaining,
+        batch_size: safeBatchSize,
+        next_batch_number: nextBatchNumber,
+        paused: remaining > 0,
+        range_start: rangeStart,
+        range_end: rangeEnd,
+        category_ids: frozenCategoryIds,
+      }));
+      persistImportResumeInfo({
+        processedCount: absoluteProcessedCount,
+        batchSize: safeBatchSize,
+        lastRangeStart: rangeStart,
+        lastRangeEnd: rangeEnd,
+      });
+      setMessage(
+        remaining > 0
+          ? `Current batch-এ নতুন importable item ছিল না. Continue Next Batch চাপলে পরের ${Math.min(safeBatchSize, remaining)}টি position check হবে।`
+          : "Selected range-এর সব item already imported, duplicate, বা unselected."
+      );
+      return;
+    }
+
+    const res = await fetch("/api/admin/movies/import/import-stream", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        action: "import",
+        publish: Boolean(importForm.publish),
+        skip_duplicates: false,
+        prepared_items: selectedItems,
+      }),
+    });
+    if (!res.ok || !res.body) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data?.error || "Import failed");
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let finalSummary = null;
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+      for (const line of lines) {
+        const raw = line.trim();
+        if (!raw) continue;
+        let evt = null;
+        try {
+          evt = JSON.parse(raw);
+        } catch {
+          continue;
+        }
+        if (evt?.type === "error") {
+          throw new Error(evt.error || "Import failed");
+        }
+        if (evt?.type === "progress") {
+          const itemId = String(evt?.item_id || "");
+          const status = String(evt?.status || "");
+          if (itemId && status) {
+            setImportStatusMap((prev) => ({ ...(prev || {}), [itemId]: status }));
+            if (status === "saved" || status === "skipped") {
+              setSelectionMap((prev) => ({ ...(prev || {}), [itemId]: false }));
+            }
+          }
+          const c = evt?.counters || {};
+          setImportProgress({
+            total: Number(c?.total || selectedItems.length),
+            processed: Number(c?.processed || 0),
+            remaining: Number(c?.remaining || 0),
+            saved: Number(c?.saved || 0),
+            skipped: Number(c?.skipped || 0),
+            failed: Number(c?.failed || 0),
+            current_title: String(evt?.title || ""),
+            current_status: status,
+          });
+        }
+        if (evt?.type === "complete") {
+          finalSummary = evt.summary || null;
+        }
+      }
+    }
+
+    if (!finalSummary) {
+      throw new Error("Import finished without summary.");
+    }
+
+    setImportBatchState((prev) => ({
+      ...prev,
+      source_ids:
+        Array.isArray(prev?.source_ids) && prev.source_ids.length
+          ? prev.source_ids
+          : safeQueue,
+      queue: safeQueue,
+      queue_total: safeQueue.length,
+      processed: nextProcessed,
+      remaining,
+      batch_size: safeBatchSize,
+      next_batch_number: nextBatchNumber,
+      paused: remaining > 0,
+      saved: Number(prev?.saved || 0) + Number(finalSummary?.saved_count || 0),
+      skipped: Number(prev?.skipped || 0) + Number(finalSummary?.skipped_count || 0),
+      failed: Number(prev?.failed || 0) + Number(finalSummary?.failed_count || 0),
+      range_start: rangeStart,
+      range_end: rangeEnd,
+      category_ids: frozenCategoryIds,
+    }));
+    persistImportResumeInfo({
+      processedCount: absoluteProcessedCount,
+      batchSize: safeBatchSize,
+      lastRangeStart: rangeStart,
+      lastRangeEnd: rangeEnd,
+    });
+
+    setImportSummary((prev) => ({
+      ...(prev || {}),
+      import_result: finalSummary,
+    }));
+    await Promise.all([refreshMovies(), refreshCategories()]);
+
+    if (remaining > 0) {
+      setMessage(
+        `Batch ${Math.floor(startIndex / safeBatchSize) + 1} done. Saved ${Number(finalSummary?.saved_count || 0)}, skipped ${Number(finalSummary?.skipped_count || 0)}, failed ${Number(finalSummary?.failed_count || 0)}. Continue Next Batch চাপলে পরের ${Math.min(safeBatchSize, remaining)}টি import হবে।`
+      );
+    } else {
+      setMessage(
+        `Import done. Saved ${Number(finalSummary?.saved_count || 0)}, skipped ${Number(finalSummary?.skipped_count || 0)}, failed ${Number(finalSummary?.failed_count || 0)}. Failed rows are marked as "failed".`
+      );
+    }
+  };
+
   const handleImportPreparedMovies = async () => {
-    if (!preparedItems.length) {
+    if (!effectivePreparedItems.length) {
       setError("আগে scan চালান, তারপর import দিন।");
       return;
     }
@@ -965,108 +1414,75 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
     setMessage("");
     setImportingPrepared(true);
     try {
-      const selectedItems = preparedItems.filter((item) => {
-        const id = String(item?.item_id || "");
-        if (!id) return false;
-        if (!selectionMap[id]) return false;
-        return importStatusMap[id] !== "saved";
-      });
-      if (!selectedItems.length) {
-        throw new Error("Import করার জন্য অন্তত ১টা item select করুন।");
+      const orderedIds = effectivePreparedItems.map((item) => String(item?.item_id || "")).filter(Boolean);
+      if (!orderedIds.length) {
+        throw new Error("Prepared list-এ valid item নেই।");
       }
-      setImportProgress({
-        total: selectedItems.length,
+      const totalOrdered = orderedIds.length;
+      const parsedRangeStart = clampPositiveInteger(importForm.range_start, 1);
+      const parsedRangeEndRaw = clampNonNegativeInteger(importForm.range_end, 0);
+      const safeRangeEnd = parsedRangeEndRaw > 0 ? Math.min(parsedRangeEndRaw, totalOrdered) : totalOrdered;
+      const safeRangeStart = Math.min(parsedRangeStart, safeRangeEnd);
+      const rangeOrderedIds = orderedIds.slice(Math.max(0, safeRangeStart - 1), safeRangeEnd);
+      if (!rangeOrderedIds.length) {
+        throw new Error("Selected range-এ কোনো item নেই।");
+      }
+      const importableCountInRange = rangeOrderedIds.filter((id) => isImportableItemId(id)).length;
+      if (!importableCountInRange) {
+        throw new Error("Selected range-এর সব item duplicate, already imported, অথবা unselected.");
+      }
+
+      const batchSize = clampNonNegativeInteger(importForm.batch_size, 0);
+      const effectiveBatchSize = batchSize > 0 ? batchSize : rangeOrderedIds.length;
+
+      setImportBatchState({
+        source_ids: orderedIds,
+        queue: rangeOrderedIds,
+        queue_total: rangeOrderedIds.length,
         processed: 0,
-        remaining: selectedItems.length,
+        remaining: rangeOrderedIds.length,
+        batch_size: effectiveBatchSize,
+        next_batch_number: 1,
+        paused: false,
         saved: 0,
         skipped: 0,
         failed: 0,
-        current_title: "",
-        current_status: "",
+        range_start: safeRangeStart,
+        range_end: safeRangeEnd,
+        category_ids: normalizeIds(importForm.category_ids),
       });
 
-      const res = await fetch("/api/admin/movies/import/import-stream", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          action: "import",
-          publish: Boolean(importForm.publish),
-          skip_duplicates: false,
-          prepared_items: selectedItems,
-        }),
+      await runPreparedMovieImportBatch({
+        queuedIds: rangeOrderedIds,
+        batchStartIndex: 0,
+        batchSize: effectiveBatchSize,
+        rangeStart: safeRangeStart,
+        rangeEnd: safeRangeEnd,
+        categoryIds: normalizeIds(importForm.category_ids),
       });
-      if (!res.ok || !res.body) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data?.error || "Import failed");
-      }
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let finalSummary = null;
-
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-        for (const line of lines) {
-          const raw = line.trim();
-          if (!raw) continue;
-          let evt = null;
-          try {
-            evt = JSON.parse(raw);
-          } catch {
-            continue;
-          }
-          if (evt?.type === "error") {
-            throw new Error(evt.error || "Import failed");
-          }
-          if (evt?.type === "progress") {
-            const itemId = String(evt?.item_id || "");
-            const status = String(evt?.status || "");
-            if (itemId && status) {
-              setImportStatusMap((prev) => ({ ...(prev || {}), [itemId]: status }));
-              if (status === "saved" || status === "skipped") {
-                setSelectionMap((prev) => ({ ...(prev || {}), [itemId]: false }));
-              }
-            }
-            const c = evt?.counters || {};
-            setImportProgress({
-              total: Number(c?.total || selectedItems.length),
-              processed: Number(c?.processed || 0),
-              remaining: Number(c?.remaining || 0),
-              saved: Number(c?.saved || 0),
-              skipped: Number(c?.skipped || 0),
-              failed: Number(c?.failed || 0),
-              current_title: String(evt?.title || ""),
-              current_status: status,
-            });
-          }
-          if (evt?.type === "complete") {
-            finalSummary = evt.summary || null;
-          }
-        }
-      }
-
-      if (!finalSummary) {
-        throw new Error("Import finished without summary.");
-      }
-
-      setImportSummary((prev) => ({
-        ...(prev || {}),
-        import_result: finalSummary,
-      }));
-      await Promise.all([refreshMovies(), refreshCategories()]);
-      setMessage(
-        `Import done. Saved ${Number(finalSummary?.saved_count || 0)}, skipped ${Number(finalSummary?.skipped_count || 0)}, failed ${Number(finalSummary?.failed_count || 0)}. Failed rows are marked as "failed".`
-      );
     } catch (err) {
       setError(err?.message || "Import failed");
     } finally {
       setImportingPrepared(false);
     }
+  };
+
+  const handleContinueImportBatch = async () => {
+    const currentEndRaw = clampNonNegativeInteger(importForm.range_end, 0);
+    const currentStart = clampPositiveInteger(importForm.range_start, 1);
+    const currentEnd = currentEndRaw > 0 ? currentEndRaw : currentStart - 1;
+    const batchSize = Math.max(1, clampNonNegativeInteger(importForm.batch_size, 0) || 50);
+    const nextStart = Math.max(1, currentEnd + 1);
+    const nextEnd = nextStart + batchSize - 1;
+
+    if (!String(importForm.base_url || "").trim()) {
+      setError("আগে Base URL দিন।");
+      return;
+    }
+    await runMovieScan({
+      range_start: String(nextStart),
+      range_end: String(nextEnd),
+    });
   };
 
   const handleCategorySubmit = async (event) => {
@@ -1347,7 +1763,7 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
     }
 
     const ok = window.confirm(
-      `এই category-এর ${rows.length}টা movie check করা হবে। যেগুলোর source clearly broken/live-unsafe, সেগুলো database থেকে delete হবে। Continue করবেন?`
+      `এই category-এর ${rows.length}টা movie check করা হবে। শুধুমাত্র যেগুলো explicit hard-broken ধরা পড়বে সেগুলোই delete হবে; warning/fetch-uncertain source delete হবে না। Continue করবেন?`
     );
     if (!ok) return;
 
@@ -1403,7 +1819,8 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
         }
 
         const verdict = String(validation?.verdict || "").toLowerCase();
-        if (verdict === "fail") {
+        const cleanupSafe = Boolean(validation?.cleanup_safe);
+        if (verdict === "fail" && cleanupSafe) {
           try {
             const deleteRes = await fetch(`/api/admin/movies/${encodeURIComponent(row.id)}`, {
               method: "DELETE",
@@ -1428,7 +1845,7 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
           continue;
         }
 
-        if (verdict === "warning") {
+        if (verdict === "warning" || (verdict === "fail" && !cleanupSafe)) {
           summary.warnings += 1;
         } else {
           summary.safe += 1;
@@ -2147,6 +2564,14 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
                 placeholder="http://10.1.1.1/data/"
                 required
               />
+              {importResumeInfo?.processed_count ? (
+                <p className={styles.fieldHint}>
+                  Last remembered import for this link: {Number(importResumeInfo.processed_count)} items
+                  {importResumeInfo?.updated_at
+                    ? ` | ${new Date(importResumeInfo.updated_at).toLocaleString()}`
+                    : ""}
+                </p>
+              ) : null}
             </label>
             <label className={styles.field}>
               <span>Metadata Providers</span>
@@ -2157,6 +2582,17 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
               />
             </label>
           </div>
+
+          {importResumeInfo?.processed_count ? (
+            <div className={styles.actions}>
+              <button type="button" className={styles.ghostBtn} onClick={handleApplyResumeRange}>
+                Resume From #{Number(importResumeInfo.processed_count) + 1}
+              </button>
+              <p className={styles.fieldHint} style={{ margin: 0 }}>
+                Example: last imported {Number(importResumeInfo.processed_count)} থাকলে current batch size অনুযায়ী next range auto-fill হবে.
+              </p>
+            </div>
+          ) : null}
 
           <div className={styles.formGrid}>
             <label className={styles.field}>
@@ -2178,6 +2614,41 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
           </div>
 
           <div className={styles.formGrid}>
+            <CategoryCombobox
+              categories={categories}
+              value={importForm.category_ids}
+              onChange={(nextIds) => setImportForm((prev) => ({ ...prev, category_ids: nextIds }))}
+            />
+            <label className={styles.field}>
+              <span>Import Range</span>
+              <div className={styles.sourcePreviewRow}>
+                <input
+                  type="number"
+                  min="1"
+                  value={importForm.range_start}
+                  onChange={(e) => setImportForm((prev) => ({ ...prev, range_start: e.target.value }))}
+                  placeholder="1"
+                />
+                <input
+                  type="number"
+                  min="0"
+                  value={importForm.range_end}
+                  onChange={(e) => setImportForm((prev) => ({ ...prev, range_end: e.target.value }))}
+                  placeholder="0 = last"
+                />
+              </div>
+              <p className={styles.fieldHint}>
+                প্রথম item থেকে শুরু করতে `1` দিন। End `0` হলে selected list-এর শেষ item পর্যন্ত যাবে।
+              </p>
+              {rangePreviewSummary.totalInRange ? (
+                <p className={styles.fieldHint}>
+                  Current range: #{rangePreviewSummary.start}-#{rangePreviewSummary.end} | Rows: {rangePreviewSummary.totalInRange} | Importable: {rangePreviewSummary.importable}
+                </p>
+              ) : null}
+            </label>
+          </div>
+
+          <div className={styles.formGrid}>
             <label className={styles.field}>
               <span>Limit (0 = all)</span>
               <input
@@ -2188,12 +2659,31 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
               />
             </label>
             <label className={styles.field}>
+              <span>Batch Size (0 = all selected range)</span>
+              <input
+                type="number"
+                min="0"
+                value={importForm.batch_size}
+                onChange={(e) => setImportForm((prev) => ({ ...prev, batch_size: e.target.value }))}
+              />
+            </label>
+          </div>
+
+          <div className={styles.formGrid}>
+            <label className={styles.field}>
               <span>Max Depth</span>
               <input
                 type="number"
                 min="1"
                 value={importForm.max_depth}
                 onChange={(e) => setImportForm((prev) => ({ ...prev, max_depth: e.target.value }))}
+              />
+            </label>
+            <label className={styles.field}>
+              <span>Selected Import Category</span>
+              <input
+                value={selectedImportCategoryLabel || "Auto-detect from metadata/folder"}
+                readOnly
               />
             </label>
           </div>
@@ -2219,6 +2709,16 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
               {importingPrepared
                 ? "Importing..."
                 : `Import Selected${importSelectionStats.selected ? ` (${importSelectionStats.selected})` : ""}`}
+            </button>
+            <button
+              type="button"
+              className={styles.ghostBtn}
+              disabled={importingMovies || !continueBatchSummary.canContinue}
+              onClick={handleContinueImportBatch}
+            >
+              {importingMovies
+                ? "Scanning Next..."
+                : `Continue Next Batch (#${continueBatchSummary.nextStart}-#${continueBatchSummary.nextEnd})`}
             </button>
           </div>
         </form>
@@ -2254,6 +2754,20 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
               {importSelectionStats.ready} | Duplicate: {importSelectionStats.duplicate} | Saved:{" "}
               {importSelectionStats.saved} | Failed: {importSelectionStats.failed}
             </p>
+            <p className={styles.hint} style={{ marginBottom: 8 }}>
+              Import Target: {selectedImportCategoryLabel || "Auto category"} | Range: {importForm.range_start || "1"} to{" "}
+              {importForm.range_end || "0"} | Batch Size: {importForm.batch_size || "0"}
+            </p>
+            {importBatchState.queue_total > 0 ? (
+              <p className={styles.hint} style={{ marginBottom: 8 }}>
+                Batch Queue: {importBatchState.processed}/{importBatchState.queue_total} processed | Remaining:{" "}
+                {importBatchState.remaining} | Saved: {importBatchState.saved} | Skipped: {importBatchState.skipped} | Failed:{" "}
+                {importBatchState.failed}
+                {importBatchState.paused && importBatchState.remaining > 0
+                  ? ` | Paused before batch ${importBatchState.next_batch_number}`
+                  : ""}
+              </p>
+            ) : null}
             <div className={styles.actions} style={{ marginBottom: 8 }}>
               <button
                 type="button"
@@ -2374,7 +2888,7 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
                   </tr>
                 </thead>
                 <tbody>
-                  {preparedItems.map((row, idx) => {
+                  {effectivePreparedItems.map((row, idx) => {
                     const id = String(row?.item_id || "");
                     const status = String(importStatusMap[id] || (row?.duplicate?.is_duplicate ? "duplicate" : "ready"));
                     const locked = status === "saved" || status === "skipped";
@@ -2396,6 +2910,7 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
                           : status === "duplicate"
                             ? styles.importRowDuplicate
                             : "";
+                    const isQueued = queuedImportIds.has(id);
                     return (
                     <tr key={`${row.item_id || row.title || "dup"}-${idx}`} className={rowClass}>
                       <td>
@@ -2438,7 +2953,10 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
                           .join(" | ") || "-"}
                       </td>
                       <td>
-                        <span className={statusClass}>{status}</span>
+                        <span className={statusClass}>
+                          {status}
+                          {isQueued && status !== "saved" && status !== "skipped" ? " queued" : ""}
+                        </span>
                       </td>
                       <td>
                         <button
@@ -2453,7 +2971,7 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
                     </tr>
                     );
                   })}
-                  {!preparedItems.length ? (
+                  {!effectivePreparedItems.length ? (
                     <tr>
                       <td colSpan={8}>No scan result yet.</td>
                     </tr>

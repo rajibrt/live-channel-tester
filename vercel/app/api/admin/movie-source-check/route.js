@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentAdmin } from "../../../../lib/auth";
-import { normalizeStreamUrl } from "../../../../lib/streamUrl";
+import { isPrivateNetworkUrl, normalizeStreamUrl } from "../../../../lib/streamUrl";
 
 export const dynamic = "force-dynamic";
 
@@ -23,24 +23,39 @@ function looksLikeHtml(contentType) {
   return /text\/html|application\/xhtml\+xml/i.test(String(contentType || ""));
 }
 
-function buildVerdict({ normalizedUrl, finalUrl, status, contentType, supportsRanges }) {
+function buildVerdict({ normalizedUrl, finalUrl, status, contentType, supportsRanges, fetchError = "" }) {
   const reasons = [];
   let verdict = "ok";
+  let cleanupSafe = false;
+  const privateSource = isPrivateNetworkUrl(normalizedUrl);
 
   const isHttps = /^https:\/\//i.test(normalizedUrl);
   if (!isHttps) {
-    verdict = "fail";
-    reasons.push("Source is not HTTPS. Live HTTPS site will require proxy/transcode.");
+    if (verdict !== "fail") verdict = "warning";
+    reasons.push(
+      privateSource
+        ? "Source uses HTTP on a private/LAN address. Server validation may fail even when browser preview works."
+        : "Source is not HTTPS. Playback may rely on proxy/transcode/direct browser access."
+    );
   }
 
-  if (!status || status < 200 || status >= 300) {
+  if (fetchError) {
+    if (verdict !== "fail") verdict = "warning";
+    reasons.push(
+      privateSource
+        ? "Server could not reach this private/LAN source. Do not auto-delete based on this check alone."
+        : `Server fetch failed: ${fetchError}`
+    );
+  } else if (!status || status < 200 || status >= 300) {
     verdict = "fail";
     reasons.push(`Source fetch failed with HTTP ${status || "unknown"}.`);
+    cleanupSafe = true;
   }
 
   if (looksLikeHtml(contentType)) {
     verdict = "fail";
     reasons.push("Source returned HTML instead of media.");
+    cleanupSafe = true;
   }
 
   if (!supportsRanges && !isLikelyPlaylist(finalUrl || normalizedUrl, contentType)) {
@@ -57,10 +72,10 @@ function buildVerdict({ normalizedUrl, finalUrl, status, contentType, supportsRa
     verdict === "ok"
       ? "Looks suitable for live site playback."
       : verdict === "warning"
-        ? "Playable risk detected. Save is possible, but live playback may be unreliable."
-        : "Not suitable for reliable live playback.";
+        ? "Playable risk detected. Keep this source unless a direct playback test also fails."
+        : "Source looks explicitly broken and is unsafe to keep for live playback.";
 
-  return { verdict, reasons, summary };
+  return { verdict, reasons, summary, cleanup_safe: cleanupSafe };
 }
 
 export async function POST(request) {
@@ -92,6 +107,7 @@ export async function POST(request) {
   headers.set("range", "bytes=0-1");
 
   let upstream;
+  let fetchError = "";
   try {
     upstream = await fetch(normalizedUrl, {
       method: "GET",
@@ -100,37 +116,26 @@ export async function POST(request) {
       cache: "no-store",
     });
   } catch (error) {
-    return NextResponse.json({
-      normalized_url: normalizedUrl,
-      final_url: "",
-      verdict: "fail",
-      summary: "Server could not fetch this source.",
-      reasons: [String(error?.message || "Unknown fetch failure")],
-      checks: {
-        status_code: 0,
-        content_type: "",
-        supports_ranges: false,
-        final_protocol: parsed.protocol.replace(":", ""),
-      },
-    });
+    fetchError = String(error?.message || "Unknown fetch failure");
   }
 
-  const finalUrl = String(upstream.url || normalizedUrl);
-  const status = Number(upstream.status || 0);
-  const contentType = String(upstream.headers.get("content-type") || "");
-  const acceptRanges = String(upstream.headers.get("accept-ranges") || "");
-  const contentRange = String(upstream.headers.get("content-range") || "");
+  const finalUrl = String(upstream?.url || normalizedUrl);
+  const status = Number(upstream?.status || 0);
+  const contentType = String(upstream?.headers.get("content-type") || "");
+  const acceptRanges = String(upstream?.headers.get("accept-ranges") || "");
+  const contentRange = String(upstream?.headers.get("content-range") || "");
   const supportsRanges =
     status === 206 ||
     /\bbytes\b/i.test(acceptRanges) ||
     /^bytes\s+\d+-\d+\/\d+$/i.test(contentRange);
 
-  const { verdict, reasons, summary } = buildVerdict({
+  const { verdict, reasons, summary, cleanup_safe } = buildVerdict({
     normalizedUrl,
     finalUrl,
     status,
     contentType,
     supportsRanges,
+    fetchError,
   });
 
   return NextResponse.json({
@@ -139,6 +144,7 @@ export async function POST(request) {
     verdict,
     summary,
     reasons,
+    cleanup_safe,
     checks: {
       status_code: status,
       content_type: contentType,

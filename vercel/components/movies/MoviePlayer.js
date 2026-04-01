@@ -790,6 +790,11 @@ export default function MoviePlayer({
   )
   const rawSourceUrl = getPreferredRawMovieUrl(movie)
   const privateHostedMode = shouldAvoidServerTranscode(rawSourceUrl)
+  const likelyUnsupportedAudio =
+    hasLikelyUnsupportedAudioInUrl(rawSourceUrl) ||
+    hasLikelyUnsupportedAudioInUrl(
+      fallbackPlaybackUrl || browserResolvedPlaybackUrl || movie?.playbackUrl,
+    )
   const showPlayAction = isPaused || !hasPlayableMovie
   const videoElementKey = `${movie?.id || 'movie'}:${fallbackPlaybackUrl || rawSourceUrl || movie?.playbackUrl || ''}`
   const watchedSeconds = Number(

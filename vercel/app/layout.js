@@ -108,7 +108,7 @@ export default async function RootLayout({ children }) {
         <LanguageProvider initialLocale={initialLocale}>
           <PublicSmoothScroll />
           <PublicAdSenseScript />
-          <SiteChrome hasClientSession={!!currentClient} viewerEntryHref={viewerEntryHref}>
+          <SiteChrome hasClientSession={hasApprovedClientSession} viewerEntryHref={viewerEntryHref}>
             {children}
           </SiteChrome>
         </LanguageProvider>

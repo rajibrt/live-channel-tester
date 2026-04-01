@@ -234,6 +234,18 @@ function shouldExcludePath(pathParts, excludeRegexes) {
   return excludeRegexes.some((re) => re.test(joined));
 }
 
+function toPositiveInt(value, fallback = 1) {
+  const parsed = Math.floor(Number(value));
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+  return parsed;
+}
+
+function toNonNegativeInt(value, fallback = 0) {
+  const parsed = Math.floor(Number(value));
+  if (!Number.isFinite(parsed) || parsed < 0) return fallback;
+  return parsed;
+}
+
 async function fetchListing(url, fetchImpl) {
   const res = await fetchImpl(url, {
     method: "GET",
@@ -512,12 +524,15 @@ export async function crawlMoviesFromApache(baseUrl, options = {}) {
   const excludeRegexes = Array.isArray(options.excludeRegexes) ? options.excludeRegexes : DEFAULT_EXCLUDE_RE;
   const logger = options.logger || console;
   const onFoundRaw = typeof options.onFoundRaw === "function" ? options.onFoundRaw : null;
+  const stopAfter = Math.max(0, Number(options.stopAfter || 0));
 
   const visited = new Set();
   const movies = [];
+  const unique = new Map();
   const queue = [{ url: baseUrl, depth: 0 }];
 
   while (queue.length) {
+    if (stopAfter > 0 && unique.size >= stopAfter) break;
     const current = queue.shift();
     if (!current) continue;
     if (visited.has(current.url)) continue;
@@ -564,7 +579,7 @@ export async function crawlMoviesFromApache(baseUrl, options = {}) {
       if (shouldExcludePath(pathParts, excludeRegexes)) continue;
       if (includeRegexes.length && !includeRegexes.some((re) => re.test(pathParts.join(" / ")))) continue;
 
-      movies.push({
+      const candidate = {
         folderUrl: current.url,
         title,
         titleRaw,
@@ -572,10 +587,13 @@ export async function crawlMoviesFromApache(baseUrl, options = {}) {
         imageUrl: images[0] || "",
         inferredYear: extractYear(titleRaw) || extractYear(parentFolder),
         categoryName: cleanMovieTitle(topFolder || "Movies") || "Movies",
-      });
+      };
+      const key = `${toSlug(candidate.title)}|${normalizeStreamUrl(candidate.sourceUrl)}`;
+      if (!candidate.sourceUrl || unique.has(key)) continue;
+      unique.set(key, candidate);
+      movies.push(candidate);
       if (onFoundRaw) {
-        const last = movies[movies.length - 1];
-        await onFoundRaw(last);
+        await onFoundRaw(candidate);
       }
       continue;
     }
@@ -586,12 +604,6 @@ export async function crawlMoviesFromApache(baseUrl, options = {}) {
     }
   }
 
-  const unique = new Map();
-  for (const item of movies) {
-    const key = `${toSlug(item.title)}|${normalizeStreamUrl(item.sourceUrl)}`;
-    if (!item.sourceUrl || unique.has(key)) continue;
-    unique.set(key, item);
-  }
   return [...unique.values()];
 }
 
@@ -612,10 +624,14 @@ export async function prepareMoviesFromApache(admin, input = {}) {
     providers: Array.isArray(input.providers) && input.providers.length ? input.providers : ["imdb", "omdb", "tmdb"],
     publish: input.publish !== false,
     limit: Math.max(0, Number(input.limit || 0)),
+    rangeStart: toPositiveInt(input.rangeStart, 1),
+    rangeEnd: toNonNegativeInt(input.rangeEnd, 0),
     logger: input.logger || console,
     onFoundRaw: typeof input.onFoundRaw === "function" ? input.onFoundRaw : null,
     onPrepared: typeof input.onPrepared === "function" ? input.onPrepared : null,
   };
+
+  const stopAfter = options.rangeEnd > 0 ? options.rangeEnd : options.limit;
 
   const scanned = await crawlMoviesFromApache(baseUrl, {
     maxDepth: options.maxDepth,
@@ -623,8 +639,12 @@ export async function prepareMoviesFromApache(admin, input = {}) {
     excludeRegexes,
     logger: options.logger,
     onFoundRaw: options.onFoundRaw,
+    stopAfter,
   });
-  const candidates = options.limit > 0 ? scanned.slice(0, options.limit) : scanned;
+  const limited = options.limit > 0 ? scanned.slice(0, options.limit) : scanned;
+  const effectiveRangeEnd = options.rangeEnd > 0 ? Math.min(options.rangeEnd, limited.length) : limited.length;
+  const effectiveRangeStart = Math.min(options.rangeStart, Math.max(1, effectiveRangeEnd || 1));
+  const candidates = limited.slice(Math.max(0, effectiveRangeStart - 1), effectiveRangeEnd);
   const existingIndex = await loadExistingIndex(admin);
   const { data: categoriesData } = await admin.from("movie_categories").select("id,slug,name,position");
   const existingCategories = Array.isArray(categoriesData) ? categoriesData : [];
@@ -688,10 +708,12 @@ export async function prepareMoviesFromApache(admin, input = {}) {
   }
 
   return {
-    scanned_count: scanned.length,
+    scanned_count: limited.length,
     candidate_count: candidates.length,
     duplicates_count: preparedItems.filter((x) => x.duplicate?.is_duplicate).length,
     unique_count: preparedItems.filter((x) => !x.duplicate?.is_duplicate).length,
+    range_start: effectiveRangeStart,
+    range_end: effectiveRangeEnd,
     items: preparedItems,
   };
 }
@@ -708,6 +730,29 @@ async function ensureCategory(admin, categoryName, cache) {
   if (error || !data?.id) throw new Error(`category upsert failed (${slug}): ${error?.message || "unknown"}`);
   cache.set(slug, Number(data.id));
   return Number(data.id);
+}
+
+function normalizeCategoryIds(values) {
+  return Array.isArray(values)
+    ? values.map((value) => Number(value)).filter((value) => Number.isInteger(value) && value > 0)
+    : [];
+}
+
+async function resolveCategoryIdsForImport(admin, item, cache) {
+  const explicitIds = normalizeCategoryIds(item?.category_ids);
+  if (explicitIds.length) return explicitIds;
+
+  const explicitNames = Array.isArray(item?.category_names)
+    ? item.category_names.map((value) => text(value)).filter(Boolean)
+    : [];
+  const fallbackName = text(item?.category_name || "Movies");
+  const names = explicitNames.length ? explicitNames : [fallbackName];
+
+  const ids = [];
+  for (const name of names) {
+    ids.push(await ensureCategory(admin, name, cache));
+  }
+  return ids;
 }
 
 export async function importPreparedMovies(admin, input = {}) {
@@ -782,7 +827,7 @@ export async function importPreparedMovies(admin, input = {}) {
       const probedQuality = await probeVideoQualityByFfprobe(sourceUrl, logger);
       const releaseYear = Number(item?.release_year || 0) || null;
       const slug = ensureUniqueSlug(item?.slug_base || `${item?.title || "movie"}-${releaseYear || ""}`, slugSet);
-      const categoryId = await ensureCategory(admin, item?.category_name || "Movies", categoryCache);
+      const categoryIds = await resolveCategoryIdsForImport(admin, item, categoryCache);
 
       const payload = {
         slug,
@@ -817,10 +862,12 @@ export async function importPreparedMovies(admin, input = {}) {
       if (movieErr || !movie?.id) throw new Error(`movie upsert failed: ${movieErr?.message || "unknown"}`);
       const movieId = Number(movie.id);
 
-      const { error: mapErr } = await admin
-        .from("movie_category_map")
-        .upsert({ movie_id: movieId, category_id: categoryId }, { onConflict: "movie_id,category_id" });
-      if (mapErr) throw new Error(`movie category upsert failed: ${mapErr?.message || "unknown"}`);
+      for (const categoryId of categoryIds) {
+        const { error: mapErr } = await admin
+          .from("movie_category_map")
+          .upsert({ movie_id: movieId, category_id: categoryId }, { onConflict: "movie_id,category_id" });
+        if (mapErr) throw new Error(`movie category upsert failed: ${mapErr?.message || "unknown"}`);
+      }
 
       const { data: existingSource, error: sourceFindErr } = await admin
         .from("movie_sources")

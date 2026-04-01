@@ -35,18 +35,18 @@ async function tryStartPlayback(video, { allowMutedFallback = false } = {}) {
   if (!video) return false;
   try {
     await video.play();
-    return true;
+    return { started: true, usedMutedFallback: false };
   } catch {
-    if (!allowMutedFallback || video.muted) return false;
+    if (!allowMutedFallback || video.muted) return { started: false, usedMutedFallback: false };
   }
 
   try {
     video.muted = true;
     video.volume = 0;
     await video.play();
-    return true;
+    return { started: true, usedMutedFallback: true };
   } catch {
-    return false;
+    return { started: false, usedMutedFallback: false };
   }
 }
 
@@ -86,6 +86,9 @@ export default function VideoPlayer({
   const categoryBtnRefs = useRef({});
   const channelBtnRefs = useRef({});
   const lastVolumeBeforeMuteRef = useRef(100);
+  const preferredVolumeRef = useRef(100);
+  const userMutedRef = useRef(false);
+  const autoplayMutedRef = useRef(false);
   const [status, setStatus] = useState("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const [volumePercent, setVolumePercent] = useState(100);
@@ -204,6 +207,20 @@ export default function VideoPlayer({
     hudTimerRef.current = setTimeout(() => setShowVolumeHud(false), 1000);
   };
 
+  const getPreferredVolumePercent = () => {
+    const preferred = Math.round(Number(preferredVolumeRef.current) || 100);
+    return Math.max(1, Math.min(100, preferred));
+  };
+
+  const applyPreferredAudio = (video, { forceAudible = false } = {}) => {
+    if (!video) return;
+    const preferred = getPreferredVolumePercent();
+    const shouldMute = forceAudible ? false : userMutedRef.current;
+    video.muted = shouldMute;
+    video.volume = shouldMute ? 0 : preferred / 100;
+    setVolumePercent(shouldMute ? 0 : preferred);
+  };
+
   const handleToggleMute = () => {
     const video = videoRef.current;
     if (!video) return;
@@ -211,6 +228,9 @@ export default function VideoPlayer({
     const currentPercent = Math.round((video.volume || 0) * 100);
     if (!video.muted && currentPercent > 0) {
       lastVolumeBeforeMuteRef.current = currentPercent;
+      preferredVolumeRef.current = currentPercent;
+      userMutedRef.current = true;
+      autoplayMutedRef.current = false;
       video.volume = 0;
       video.muted = true;
       setVolumePercent(0);
@@ -219,6 +239,9 @@ export default function VideoPlayer({
     }
 
     const restorePercent = Math.max(1, Math.min(100, Number(lastVolumeBeforeMuteRef.current) || 100));
+    preferredVolumeRef.current = restorePercent;
+    userMutedRef.current = false;
+    autoplayMutedRef.current = false;
     video.muted = false;
     video.volume = restorePercent / 100;
     setVolumePercent(restorePercent);
@@ -249,6 +272,8 @@ export default function VideoPlayer({
     let failureReported = false;
     setStatus("loading");
     setErrorMessage("");
+    autoplayMutedRef.current = false;
+    applyPreferredAudio(video);
 
     const reportAttempt = () => {
       onPlaybackAttemptRef.current?.({
@@ -304,10 +329,19 @@ export default function VideoPlayer({
     const sourceForPlayback = forceProxy ? resolveBrowserPlaybackUrl(source, "https:") : source;
 
     const startNativePlayback = async () => {
+      applyPreferredAudio(video);
       video.src = sourceForPlayback;
       video.load();
-      const started = await tryStartPlayback(video, { allowMutedFallback: true });
-      if (!started && !cancelled && !playbackStarted) {
+      const result = await tryStartPlayback(video, { allowMutedFallback: true });
+      autoplayMutedRef.current = Boolean(result?.usedMutedFallback) && !userMutedRef.current;
+      if (autoplayMutedRef.current) {
+        setTimeout(() => {
+          if (cancelled || !videoRef.current || userMutedRef.current) return;
+          applyPreferredAudio(videoRef.current, { forceAudible: true });
+          autoplayMutedRef.current = false;
+        }, 120);
+      }
+      if (!result?.started && !cancelled && !playbackStarted) {
         setStatus("idle");
       }
     };
@@ -332,9 +366,17 @@ export default function VideoPlayer({
             hlsRef.current = hls;
             hls.loadSource(sourceForPlayback);
             hls.attachMedia(video);
-            hls.on(Hls.Events.MANIFEST_PARSED, () => {
+            hls.on(Hls.Events.MANIFEST_PARSED, async () => {
               if (!cancelled) setStatus("playing");
-              tryStartPlayback(video, { allowMutedFallback: true }).catch(() => {});
+              const result = await tryStartPlayback(video, { allowMutedFallback: true });
+              autoplayMutedRef.current = Boolean(result?.usedMutedFallback) && !userMutedRef.current;
+              if (autoplayMutedRef.current) {
+                setTimeout(() => {
+                  if (cancelled || !videoRef.current || userMutedRef.current) return;
+                  applyPreferredAudio(videoRef.current, { forceAudible: true });
+                  autoplayMutedRef.current = false;
+                }, 120);
+              }
             });
             hls.on(Hls.Events.ERROR, (_event, data) => {
               if (!data?.fatal || cancelled) return;
@@ -392,9 +434,13 @@ export default function VideoPlayer({
       if (!video) return;
       video.volume = Math.min(1, Math.max(0, (video.volume || 0) + delta));
       if (video.volume > 0 && video.muted) video.muted = false;
-      setVolumePercent(Math.round(video.volume * 100));
+      const nextPercent = Math.round(video.volume * 100);
+      setVolumePercent(nextPercent);
       if (video.volume > 0) {
-        lastVolumeBeforeMuteRef.current = Math.round(video.volume * 100);
+        lastVolumeBeforeMuteRef.current = nextPercent;
+        preferredVolumeRef.current = nextPercent;
+        userMutedRef.current = false;
+        autoplayMutedRef.current = false;
       }
       showHud();
     };
@@ -647,6 +693,9 @@ export default function VideoPlayer({
       setVolumePercent(next);
       if (!video.muted && next > 0) {
         lastVolumeBeforeMuteRef.current = next;
+        preferredVolumeRef.current = next;
+        userMutedRef.current = false;
+        autoplayMutedRef.current = false;
       }
     };
     const onPlay = () => setIsPaused(false);
@@ -710,10 +759,13 @@ export default function VideoPlayer({
     if (!video) return;
     const next = Number(event.target.value);
     const safe = Number.isFinite(next) ? Math.max(0, Math.min(100, next)) : 100;
+    autoplayMutedRef.current = false;
+    userMutedRef.current = safe === 0;
     video.volume = safe / 100;
     video.muted = safe === 0;
     if (safe > 0) {
       lastVolumeBeforeMuteRef.current = safe;
+      preferredVolumeRef.current = safe;
     }
     setVolumePercent(safe);
   };
@@ -846,6 +898,22 @@ export default function VideoPlayer({
         />
 
         {showVolumeHud ? <div className={styles.volumeHud}>Volume {volumePercent}%</div> : null}
+        {hasStream && isMuted ? (
+          <button
+            type="button"
+            className={styles.videoMuteOverlayBtn}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              handleToggleMute();
+            }}
+            aria-label="Unmute player"
+            title="Unmute"
+          >
+            <Icon name="VolumeX" size={16} />
+            <span>Muted</span>
+          </button>
+        ) : null}
         {isFullscreen && showFsPanels ? (
           <button
             type="button"

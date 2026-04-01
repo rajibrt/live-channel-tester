@@ -33,6 +33,8 @@ export async function POST(request) {
   const publish = body?.publish !== false;
   const limit = Math.max(0, Number(body?.limit || 0));
   const maxDepth = Math.max(1, Number(body?.max_depth || 6));
+  const rangeStart = Math.max(1, Number(body?.range_start || 1));
+  const rangeEnd = Math.max(0, Number(body?.range_end || 0));
 
   const encoder = new TextEncoder();
 
@@ -53,6 +55,8 @@ export async function POST(request) {
           publish,
           limit,
           maxDepth,
+          rangeStart,
+          rangeEnd,
           providers: providers.length ? providers : ["imdb", "omdb", "tmdb"],
           logger: console,
           onFoundRaw: async (raw) => {
@@ -91,4 +95,3 @@ export async function POST(request) {
     },
   });
 }
-
