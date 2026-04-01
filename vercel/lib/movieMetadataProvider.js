@@ -1,5 +1,6 @@
 import { fetchImdbMovieById, normalizeImdbId } from "./imdbData";
 import { fetchOmdbJsonWithRotation } from "./movieMetadataSettings";
+import { fetchMovieMetadataByImdbIdWithFallback } from "./movieMetadataByImdb";
 
 function text(value) {
   return String(value || "").trim();
@@ -37,6 +38,46 @@ function normalizeTitleForMatch(raw) {
     .replace(/\b(the|a|an|movie|film)\b/g, " ")
     .replace(/\s{2,}/g, " ")
     .trim();
+}
+
+function uniqueLowerText(values) {
+  const out = [];
+  const seen = new Set();
+  for (const raw of Array.isArray(values) ? values : []) {
+    const value = text(raw);
+    const key = value.toLowerCase();
+    if (!value || seen.has(key)) continue;
+    seen.add(key);
+    out.push(value);
+  }
+  return out;
+}
+
+function buildLookupTitleVariants(rawTitle) {
+  const base = normalizeLookupTitle(rawTitle) || text(rawTitle);
+  if (!base) return [];
+
+  const variants = [base];
+  const punctuationLight = base.replace(/[^a-z0-9\s]/gi, " ").replace(/\s{2,}/g, " ").trim();
+  if (punctuationLight && punctuationLight !== base) variants.push(punctuationLight);
+
+  const replacements = [
+    [/bangali/gi, "bengali"],
+    [/bengali/gi, "bangali"],
+    [/bangla/gi, "bengali"],
+    [/bangla/gi, "bangali"],
+    [/scha/gi, "shcha"],
+    [/shcha/gi, "scha"],
+    [/scha/gi, "sha"],
+  ];
+
+  for (const [pattern, replacement] of replacements) {
+    if (!pattern.test(base)) continue;
+    const next = base.replace(pattern, replacement).replace(/\s{2,}/g, " ").trim();
+    if (next) variants.push(next);
+  }
+
+  return uniqueLowerText(variants);
 }
 
 function toNumber(value, fallback = null) {
@@ -211,6 +252,29 @@ function pickBestImdbSuggestion(items, queryTitle, queryYear = null) {
   return best;
 }
 
+function buildImdbSearchCandidates(items, queryTitle, queryYear = null) {
+  const out = [];
+  for (const item of Array.isArray(items) ? items : []) {
+    const id = normalizeImdbId(item?.id);
+    if (!id) continue;
+    const kind = text(item?.qid || item?.q).toLowerCase();
+    if (kind && !kind.includes("movie") && !kind.includes("feature")) continue;
+    const title = text(item?.l || item?.title || "");
+    const year = normalizeYear(item?.y);
+    const score = scoreTitleMatch(queryTitle, title) + yearPenalty(queryYear, year);
+    out.push({
+      imdb_id: id,
+      title,
+      year,
+      score,
+      source: "imdb",
+      kind: kind || "movie",
+    });
+  }
+  out.sort((a, b) => b.score - a.score);
+  return out;
+}
+
 async function searchImdbIdByTitle(queryTitle, queryYear = null) {
   const title = text(queryTitle);
   if (!title) return null;
@@ -243,6 +307,101 @@ async function searchImdbIdByTitle(queryTitle, queryYear = null) {
   } catch {
     return null;
   }
+}
+
+export async function searchMovieMetadataCandidatesByTitle({ title, year = null, limit = 6 }) {
+  const queryTitle = text(title);
+  const queryYear = normalizeYear(year);
+  const maxResults = Math.max(1, Math.min(12, Number(limit) || 6));
+  if (!queryTitle) return [];
+
+  const candidates = [];
+  const seen = new Set();
+
+  const pushCandidate = (row) => {
+    const imdbId = normalizeImdbId(row?.imdb_id);
+    if (!imdbId || seen.has(imdbId)) return;
+    seen.add(imdbId);
+    candidates.push({
+      imdb_id: imdbId,
+      title: text(row?.title),
+      year: normalizeYear(row?.year),
+      score: Number(row?.score || 0),
+      source: text(row?.source || "imdb"),
+      kind: text(row?.kind || "movie"),
+    });
+  };
+
+  const first = queryTitle[0]?.toLowerCase() || "x";
+  const suggestUrl = `https://v3.sg.media-imdb.com/suggestion/${encodeURIComponent(first)}/${encodeURIComponent(queryTitle)}.json`;
+  try {
+    const suggest = await fetchJson(suggestUrl);
+    for (const row of buildImdbSearchCandidates(suggest?.d || [], queryTitle, queryYear)) {
+      pushCandidate(row);
+    }
+  } catch {
+    // ignore
+  }
+
+  if (candidates.length < maxResults) {
+    const findUrl = `https://www.imdb.com/find/?q=${encodeURIComponent(queryTitle)}&s=tt&ttype=ft&ref_=fn_ft`;
+    try {
+      const html = await fetchText(findUrl);
+      const rows = [...html.matchAll(/\/title\/(tt\d{6,12})\/[^>]*>([^<]+)</gi)];
+      for (const match of rows.slice(0, 20)) {
+        const candidateTitle = text(match[2]);
+        const yearMatch = candidateTitle.match(/\b(19\d{2}|20\d{2})\b/);
+        const candidateYear = yearMatch ? Number(yearMatch[1]) : null;
+        pushCandidate({
+          imdb_id: match[1],
+          title: candidateTitle,
+          year: candidateYear,
+          score: scoreTitleMatch(queryTitle, candidateTitle) + yearPenalty(queryYear, candidateYear),
+          source: "imdb_html",
+          kind: "movie",
+        });
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  const sorted = candidates
+    .sort((a, b) => b.score - a.score)
+    .slice(0, maxResults);
+
+  const hydrated = await Promise.all(
+    sorted.map(async (candidate) => {
+      try {
+        const fetched = await fetchMovieMetadataByImdbIdWithFallback(candidate.imdb_id);
+        const movie = fetched?.item || {};
+        return {
+          ...candidate,
+          item: normalizeMovieMeta({
+            ...movie,
+            provider: text(fetched?.provider || movie?.provider || "imdb"),
+            confidence: Math.max(0.4, Math.min(1, Number(candidate.score || 0))),
+          }),
+        };
+      } catch {
+        return {
+          ...candidate,
+          item: normalizeMovieMeta({
+            provider: "imdb",
+            confidence: Math.max(0.3, Math.min(1, Number(candidate.score || 0))),
+            imdb_id: candidate.imdb_id,
+            imdb_url: candidate.imdb_id ? `https://www.imdb.com/title/${candidate.imdb_id}/` : "",
+            title: candidate.title,
+            release_year: candidate.year,
+            poster_url: "",
+            backdrop_url: "",
+          }),
+        };
+      }
+    })
+  );
+
+  return hydrated;
 }
 
 async function lookupViaImdb({ title, year }) {
@@ -460,16 +619,20 @@ export async function fetchMovieMetadataByTitle({ title, year = null, providers 
   if (!q) throw new Error("title is required");
   const normalizedYear = normalizeYear(year);
   const failures = [];
+  const titleVariants = buildLookupTitleVariants(q);
 
   for (const rawProvider of Array.isArray(providers) ? providers : []) {
     const provider = text(rawProvider).toLowerCase();
     if (!provider) continue;
-    try {
-      if (provider === "imdb") return await lookupViaImdb({ title: q, year: normalizedYear });
-      if (provider === "omdb") return await lookupViaOmdb({ title: q, year: normalizedYear });
-      if (provider === "tmdb") return await lookupViaTmdb({ title: q, year: normalizedYear });
-    } catch (error) {
-      failures.push(`${provider}: ${error?.message || "failed"}`);
+    for (const variant of titleVariants) {
+      try {
+        if (provider === "imdb") return await lookupViaImdb({ title: variant, year: normalizedYear });
+        if (provider === "omdb") return await lookupViaOmdb({ title: variant, year: normalizedYear });
+        if (provider === "tmdb") return await lookupViaTmdb({ title: variant, year: normalizedYear });
+      } catch (error) {
+        const suffix = variant === q ? "" : ` [variant: ${variant}]`;
+        failures.push(`${provider}${suffix}: ${error?.message || "failed"}`);
+      }
     }
   }
 

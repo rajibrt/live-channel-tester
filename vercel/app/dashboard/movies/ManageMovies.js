@@ -376,6 +376,7 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
   const [moviePagination, setMoviePagination] = useState({ pageIndex: 0, pageSize: 25 });
   const [refreshingMovieMetadata, setRefreshingMovieMetadata] = useState(false);
   const [metadataRefreshSummary, setMetadataRefreshSummary] = useState(null);
+  const [metadataRefreshCurrentTitle, setMetadataRefreshCurrentTitle] = useState("");
   const [checkingBrokenMovies, setCheckingBrokenMovies] = useState(false);
   const [brokenMovieCleanupSummary, setBrokenMovieCleanupSummary] = useState(null);
   const [brokenMovieCleanupCurrentTitle, setBrokenMovieCleanupCurrentTitle] = useState("");
@@ -391,6 +392,9 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
   const [sourceCheckResult, setSourceCheckResult] = useState(null);
   const [sourceCheckUrl, setSourceCheckUrl] = useState("");
   const [imdbImagePreviewUrls, setImdbImagePreviewUrls] = useState([]);
+  const [searchingMetadataByTitle, setSearchingMetadataByTitle] = useState(false);
+  const [metadataSearchCandidates, setMetadataSearchCandidates] = useState([]);
+  const [selectedMetadataCandidateId, setSelectedMetadataCandidateId] = useState("");
   const [importingMovies, setImportingMovies] = useState(false);
   const [importingPrepared, setImportingPrepared] = useState(false);
   const [importSummary, setImportSummary] = useState(null);
@@ -719,6 +723,9 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
     setMovieFormInitialSnapshot(serializeMovieForm(next));
     setImdbQuery("");
     setImdbImagePreviewUrls([]);
+    setMetadataSearchCandidates([]);
+    setSelectedMetadataCandidateId("");
+    setSearchingMetadataByTitle(false);
     setSourceCheckLoading(false);
     setSourceCheckResult(null);
     setSourceCheckUrl("");
@@ -740,6 +747,8 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
     setShowMovieForm(true);
     setImdbQuery("");
     setImdbImagePreviewUrls([]);
+    setMetadataSearchCandidates([]);
+    setSelectedMetadataCandidateId("");
     setMovieForm(next);
     setMovieFormInitialSnapshot(serializeMovieForm(next));
   };
@@ -1535,8 +1544,7 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
     }
   };
 
-  const handleMovieSubmit = async (event) => {
-    event.preventDefault();
+  const saveMovieForm = async ({ closeAfterSave = false } = {}) => {
     setError("");
     setMessage("");
     setSavingMovie(true);
@@ -1579,9 +1587,21 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
       if (!res.ok) throw new Error(payload?.error || "Movie save failed");
 
       await refreshMovies();
-      resetMovieForm();
-      setShowMovieForm(false);
-      setMessage("Movie saved.");
+      if (!isEdit || closeAfterSave) {
+        resetMovieForm();
+        setShowMovieForm(false);
+        setMessage(isEdit ? "Movie updated and closed." : "Movie saved.");
+      } else {
+        setMovieForm((prev) => {
+          const next = {
+            ...prev,
+            slug: body.slug,
+          };
+          setMovieFormInitialSnapshot(serializeMovieForm(next));
+          return next;
+        });
+        setMessage("Movie updated.");
+      }
     } catch (err) {
       setError(err?.message || "Movie save failed");
     } finally {
@@ -1589,63 +1609,136 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
     }
   };
 
+  const handleMovieSubmit = async (event) => {
+    event.preventDefault();
+    await saveMovieForm({ closeAfterSave: false });
+  };
+
+  const applyFetchedMovieMetadata = (item = {}, payload = {}) => {
+    const imageUrls = Array.isArray(item.image_urls)
+      ? item.image_urls.map((v) => String(v || "").trim()).filter(Boolean)
+      : [];
+    const previewUrls = [
+      ...new Set([item.poster_url, item.backdrop_url, ...imageUrls].map((v) => String(v || "").trim()).filter(Boolean)),
+    ];
+    setMovieForm((prev) => ({
+      ...prev,
+      title: item.title || prev.title,
+      slug: toSlug(item.title || prev.title || prev.slug),
+      synopsis: item.synopsis || prev.synopsis,
+      poster_url: item.poster_url || prev.poster_url,
+      backdrop_url: item.backdrop_url || item.poster_url || prev.backdrop_url,
+      release_year: item.release_year ? String(item.release_year) : prev.release_year,
+      runtime_seconds: item.runtime_seconds ? String(item.runtime_seconds) : prev.runtime_seconds,
+      imdb_id: item.imdb_id || prev.imdb_id,
+      imdb_url: item.imdb_url || prev.imdb_url,
+      imdb_rating: Number.isFinite(item.imdb_rating) ? String(item.imdb_rating) : prev.imdb_rating,
+      imdb_votes: Number.isInteger(item.imdb_votes) ? String(item.imdb_votes) : prev.imdb_votes,
+      content_rating: item.content_rating || prev.content_rating,
+      imdb_genres: toCsv(item.imdb_genres) || prev.imdb_genres,
+      imdb_directors: toCsv(item.imdb_directors) || prev.imdb_directors,
+      imdb_writers: toCsv(item.imdb_writers) || prev.imdb_writers,
+      imdb_stars: toCsv(item.imdb_stars) || prev.imdb_stars,
+      imdb_release_date: item.imdb_release_date || prev.imdb_release_date,
+      imdb_countries: toCsv(item.imdb_countries) || prev.imdb_countries,
+      imdb_languages: toCsv(item.imdb_languages) || prev.imdb_languages,
+    }));
+    setImdbImagePreviewUrls(previewUrls);
+    if (payload?.omdb_usage) setOmdbUsageInfo(payload.omdb_usage);
+    if (item.imdb_id) setImdbQuery(item.imdb_id);
+    setMetadataSearchCandidates([]);
+    setSelectedMetadataCandidateId("");
+    const provider = String(payload?.provider || item?.provider || "imdb");
+    setMessage(`Metadata auto-fill হয়েছে (${provider}). এখন চাইলে edit করে save করুন।`);
+  };
+
   const handleFetchImdb = async () => {
     setError("");
     setMessage("");
-    if (!imdbQuery.trim()) {
-      setError("Enter IMDb ID or URL first (example: tt39961926)");
+    const query = String(imdbQuery || "").trim();
+    if (!query) {
+      setError("IMDb ID / URL বা title দিন (example: tt39961926 বা Punascha)");
       return;
     }
     setFetchingImdb(true);
     try {
+      const isImdbLookup = /tt\d{6,12}/i.test(query) || /imdb\.com\/title\//i.test(query);
       const res = await fetch("/api/admin/movies/imdb", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ query: imdbQuery }),
+        body: JSON.stringify(
+          isImdbLookup
+            ? { query }
+            : {
+                mode: "fetch_title",
+                query,
+                year: Number(movieForm.release_year || 0) || undefined,
+              }
+        ),
       });
       const payload = await res.json().catch(() => ({}));
       if (!res.ok) {
         throw new Error(String(payload?.error || "Failed to fetch IMDb data").trim());
       }
-      const item = payload?.item || {};
-      const imageUrls = Array.isArray(item.image_urls)
-        ? item.image_urls.map((v) => String(v || "").trim()).filter(Boolean)
-        : [];
-      const previewUrls = [
-        ...new Set([item.poster_url, item.backdrop_url, ...imageUrls].map((v) => String(v || "").trim()).filter(Boolean)),
-      ];
-      setMovieForm((prev) => ({
-        ...prev,
-        title: item.title || prev.title,
-        slug: toSlug(item.title || prev.title || prev.slug),
-        synopsis: item.synopsis || prev.synopsis,
-        poster_url: item.poster_url || prev.poster_url,
-        backdrop_url: item.backdrop_url || item.poster_url || prev.backdrop_url,
-        release_year: item.release_year ? String(item.release_year) : prev.release_year,
-        runtime_seconds: item.runtime_seconds ? String(item.runtime_seconds) : prev.runtime_seconds,
-        imdb_id: item.imdb_id || prev.imdb_id,
-        imdb_url: item.imdb_url || prev.imdb_url,
-        imdb_rating: Number.isFinite(item.imdb_rating) ? String(item.imdb_rating) : prev.imdb_rating,
-        imdb_votes: Number.isInteger(item.imdb_votes) ? String(item.imdb_votes) : prev.imdb_votes,
-        content_rating: item.content_rating || prev.content_rating,
-        imdb_genres: toCsv(item.imdb_genres) || prev.imdb_genres,
-        imdb_directors: toCsv(item.imdb_directors) || prev.imdb_directors,
-        imdb_writers: toCsv(item.imdb_writers) || prev.imdb_writers,
-        imdb_stars: toCsv(item.imdb_stars) || prev.imdb_stars,
-        imdb_release_date: item.imdb_release_date || prev.imdb_release_date,
-        imdb_countries: toCsv(item.imdb_countries) || prev.imdb_countries,
-        imdb_languages: toCsv(item.imdb_languages) || prev.imdb_languages,
-      }));
-      setImdbImagePreviewUrls(previewUrls);
-      if (payload?.omdb_usage) setOmdbUsageInfo(payload.omdb_usage);
-      if (item.imdb_id) setImdbQuery(item.imdb_id);
-      const provider = String(payload?.provider || "imdb");
-      setMessage(`Metadata auto-fill হয়েছে (${provider}). এখন চাইলে edit করে save করুন।`);
+      applyFetchedMovieMetadata(payload?.item || {}, payload);
     } catch (err) {
       setError(err?.message || "Failed to fetch IMDb data");
     } finally {
       setFetchingImdb(false);
     }
+  };
+
+  const handleSearchMetadataByTitle = async () => {
+    setError("");
+    setMessage("");
+    const titleQuery = String(imdbQuery || movieForm.title || "").trim();
+    if (!titleQuery) {
+      setError("Title দিন, তারপর Search by Title চাপুন।");
+      return;
+    }
+    setSearchingMetadataByTitle(true);
+    setMetadataSearchCandidates([]);
+    setSelectedMetadataCandidateId("");
+    try {
+      const res = await fetch("/api/admin/movies/imdb", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          mode: "search_title",
+          query: titleQuery,
+          year: Number(movieForm.release_year || 0) || undefined,
+          limit: 6,
+        }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(String(payload?.error || "Failed to search metadata candidates").trim());
+      }
+      const candidates = Array.isArray(payload?.candidates) ? payload.candidates : [];
+      setMetadataSearchCandidates(candidates);
+      setSelectedMetadataCandidateId(String(candidates[0]?.imdb_id || ""));
+      if (!candidates.length) {
+        setError("এই title-এর জন্য কোনো metadata candidate পাওয়া যায়নি।");
+        return;
+      }
+      setMessage(`${candidates.length}টি metadata candidate পাওয়া গেছে। পোস্টার দেখে সঠিকটা select করুন।`);
+    } catch (err) {
+      setError(err?.message || "Failed to search metadata candidates");
+    } finally {
+      setSearchingMetadataByTitle(false);
+    }
+  };
+
+  const handleApplyMetadataCandidate = () => {
+    const picked = metadataSearchCandidates.find((row) => String(row?.imdb_id || "") === String(selectedMetadataCandidateId || ""));
+    if (!picked?.item) {
+      setError("আগে একটি candidate select করুন।");
+      return;
+    }
+    setError("");
+    applyFetchedMovieMetadata(picked.item, {
+      provider: picked?.item?.provider || picked?.source || "imdb",
+    });
   };
 
   const handleDeleteMovie = async (id) => {
@@ -1703,6 +1796,8 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
       [...new Set([row.poster_url, row.backdrop_url].map((v) => String(v || "").trim()).filter(Boolean))]
     );
     setImdbQuery(String(row.imdb_id || ""));
+    setMetadataSearchCandidates([]);
+    setSelectedMetadataCandidateId("");
     setSourceCheckLoading(false);
     setSourceCheckResult(null);
     setSourceCheckUrl("");
@@ -1894,31 +1989,55 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
     setError("");
     setMessage("");
     setMetadataRefreshSummary(null);
+    setMetadataRefreshCurrentTitle("");
     try {
-      const res = await fetch("/api/admin/movies/metadata-refresh", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          movie_ids: targetIds,
-          providers: String(importForm.providers || "imdb,omdb,tmdb")
-            .split(",")
-            .map((v) => String(v || "").trim().toLowerCase())
-            .filter(Boolean),
-        }),
-      });
-      const payload = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(payload?.error || "Metadata refresh failed");
-      setMetadataRefreshSummary({
-        processed: Number(payload?.processed || 0),
-        succeeded: Number(payload?.succeeded || 0),
-        failed: Number(payload?.failed || 0),
-      });
-      const failedItems = Array.isArray(payload?.results)
-        ? payload.results.filter((row) => !row?.ok).slice(0, 5)
-        : [];
-      if (payload?.omdb_usage) setOmdbUsageInfo(payload.omdb_usage);
+      const providers = String(importForm.providers || "imdb,omdb,tmdb")
+        .split(",")
+        .map((v) => String(v || "").trim().toLowerCase())
+        .filter(Boolean);
+      const rowsById = new Map(selectedRows.map((row) => [Number(row?.id), row]));
+      const summary = {
+        total: targetIds.length,
+        processed: 0,
+        remaining: targetIds.length,
+        succeeded: 0,
+        failed: 0,
+      };
+      const failedItems = [];
+
+      for (const movieId of targetIds) {
+        const row = rowsById.get(Number(movieId));
+        setMetadataRefreshCurrentTitle(String(row?.title || `#${movieId}`));
+        setMetadataRefreshSummary({ ...summary });
+
+        const res = await fetch("/api/admin/movies/metadata-refresh", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            movie_ids: [movieId],
+            providers,
+          }),
+        });
+        const payload = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(payload?.error || "Metadata refresh failed");
+
+        summary.processed += 1;
+        summary.remaining = Math.max(0, summary.total - summary.processed);
+        summary.succeeded += Number(payload?.succeeded || 0);
+        summary.failed += Number(payload?.failed || 0);
+        setMetadataRefreshSummary({ ...summary });
+
+        const currentFailedItems = Array.isArray(payload?.results)
+          ? payload.results.filter((item) => !item?.ok)
+          : [];
+        if (currentFailedItems.length) {
+          failedItems.push(...currentFailedItems);
+        }
+        if (payload?.omdb_usage) setOmdbUsageInfo(payload.omdb_usage);
+      }
+
       await refreshMovies();
-      setMessage(`Metadata refresh done. Success: ${payload?.succeeded || 0}, Failed: ${payload?.failed || 0}`);
+      setMessage(`Metadata refresh done. Success: ${summary.succeeded || 0}, Failed: ${summary.failed || 0}`);
       if (failedItems.length) {
         const reasonText = failedItems
           .map((row) => `${row?.movie_id || "?"}: ${String(row?.error || "failed")}`)
@@ -1929,6 +2048,7 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
       setError(err?.message || "Metadata refresh failed");
     } finally {
       setRefreshingMovieMetadata(false);
+      setMetadataRefreshCurrentTitle("");
     }
   };
 
@@ -2159,7 +2279,7 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
           disabled={refreshingMovieMetadata || movieTable.getSelectedRowModel().rows.length === 0}
         >
           {refreshingMovieMetadata
-            ? "Refreshing Metadata..."
+            ? `Refreshing Metadata... ${metadataRefreshSummary?.processed || 0}/${metadataRefreshSummary?.total || 0}`
             : `Refetch Selected Metadata (${movieTable.getSelectedRowModel().rows.length})`}
         </button>
         {isCategoryDetailsPage ? (
@@ -2175,10 +2295,25 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
           </button>
         ) : null}
       </div> : null}
+      {!compact && refreshingMovieMetadata && metadataRefreshSummary ? (
+        <div className={styles.resultBox} style={{ marginBottom: 8 }}>
+          <p className={styles.hint} style={{ margin: 0 }}>
+            Metadata Refresh Live: Total {metadataRefreshSummary.total} | Processed {metadataRefreshSummary.processed} |
+            {" "}Success {metadataRefreshSummary.succeeded} | Failed {metadataRefreshSummary.failed} | Remaining{" "}
+            {metadataRefreshSummary.remaining}
+          </p>
+          {metadataRefreshCurrentTitle ? (
+            <p className={styles.hint} style={{ margin: "6px 0 0" }}>
+              Running now: {metadataRefreshCurrentTitle}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
       {!compact && metadataRefreshSummary ? (
         <p className={styles.hint} style={{ marginBottom: 8 }}>
-          Metadata Refresh: Processed {metadataRefreshSummary.processed} | Success {metadataRefreshSummary.succeeded} | Failed{" "}
-          {metadataRefreshSummary.failed}
+          Metadata Refresh: Total {metadataRefreshSummary.total} | Processed {metadataRefreshSummary.processed} | Success{" "}
+          {metadataRefreshSummary.succeeded} | Failed {metadataRefreshSummary.failed} | Remaining{" "}
+          {metadataRefreshSummary.remaining}
         </p>
       ) : null}
       {!compact && brokenMovieCleanupSummary ? (
@@ -3100,21 +3235,99 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
             onChange={(next) => setMovieForm((prev) => ({ ...prev, category_ids: normalizeIds(next) }))}
           />
 
-          <div className={styles.formGrid}>
+          <div className={styles.searchActionRow}>
             <label className={styles.field}>
-              <span>IMDb ID / URL</span>
+              <span>IMDb ID / URL / Search Title</span>
               <input
                 value={imdbQuery}
                 onChange={(e) => setImdbQuery(e.target.value)}
-                placeholder="tt39961926 or https://m.imdb.com/title/tt39961926/"
+                placeholder="tt39961926, https://m.imdb.com/title/tt39961926/ বা movie title"
               />
             </label>
-            <div className={styles.actions}>
-              <button type="button" className={styles.primaryBtn} disabled={fetchingImdb} onClick={handleFetchImdb}>
+            <div className={styles.searchActionButtons}>
+              <button type="button" className={styles.primaryBtnCompact} disabled={fetchingImdb} onClick={handleFetchImdb}>
                 {fetchingImdb ? "Fetching IMDb..." : "Fetch IMDb Data"}
+              </button>
+              <button
+                type="button"
+                className={styles.secondaryBtnCompact}
+                disabled={searchingMetadataByTitle}
+                onClick={handleSearchMetadataByTitle}
+              >
+                {searchingMetadataByTitle ? "Searching..." : "Search by Title"}
               </button>
             </div>
           </div>
+          <p className={styles.fieldHint} style={{ marginTop: -4 }}>
+            IMDb ID দিয়ে direct fetch করুন, আর title দিয়ে multiple result খুঁজে poster preview দেখে select করুন।
+          </p>
+
+          {metadataSearchCandidates.length ? (
+            <div className={styles.resultBox}>
+              <div className={styles.controlRowEnd} style={{ marginBottom: 10 }}>
+                <div>
+                  <strong>Metadata Candidates</strong>
+                  <p className={styles.fieldHint} style={{ margin: "4px 0 0" }}>
+                    {metadataSearchCandidates.length}টি result এসেছে। poster দেখে সঠিক movie select করে তারপর apply করুন।
+                  </p>
+                </div>
+                <div className={styles.actions}>
+                  <button type="button" className={styles.primaryBtn} onClick={handleApplyMetadataCandidate}>
+                    Apply Selected Metadata
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.ghostBtn}
+                    onClick={() => {
+                      setMetadataSearchCandidates([]);
+                      setSelectedMetadataCandidateId("");
+                    }}
+                  >
+                    Clear Results
+                  </button>
+                </div>
+              </div>
+              <div className={styles.metadataCandidateGrid}>
+                {metadataSearchCandidates.map((candidate, idx) => {
+                  const item = candidate?.item || {};
+                  const candidateId = String(candidate?.imdb_id || `candidate-${idx}`);
+                  const previewUrl = String(item?.poster_url || item?.backdrop_url || "").trim();
+                  const isSelected = candidateId === String(selectedMetadataCandidateId || "");
+                  return (
+                    <button
+                      key={candidateId}
+                      type="button"
+                      className={`${styles.metadataCandidateCard} ${isSelected ? styles.metadataCandidateCardActive : ""}`}
+                      onClick={() => setSelectedMetadataCandidateId(candidateId)}
+                    >
+                      <div className={styles.metadataCandidatePosterWrap}>
+                        {previewUrl ? (
+                          <img
+                            src={previewUrl}
+                            alt={`${item?.title || candidate?.title || "Movie"} poster`}
+                            className={styles.metadataCandidatePoster}
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className={styles.metadataCandidatePosterFallback}>No Poster</div>
+                        )}
+                      </div>
+                      <div className={styles.metadataCandidateBody}>
+                        <strong>{item?.title || candidate?.title || "Untitled"}</strong>
+                        <p className={styles.fieldHint} style={{ margin: "4px 0 0" }}>
+                          Year: {item?.release_year || candidate?.year || "-"} | IMDb: {candidate?.imdb_id || "-"}
+                        </p>
+                        <p className={styles.fieldHint} style={{ margin: "4px 0 0" }}>
+                          Source: {candidate?.source || item?.provider || "imdb"} | Confidence:{" "}
+                          {Number(candidate?.score || item?.confidence || 0).toFixed(2)}
+                        </p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
 
           <div className={styles.formGrid}>
             <label className={styles.field}>
@@ -3315,6 +3528,16 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
               <button type="submit" className={styles.primaryBtn} disabled={savingMovie}>
                 {savingMovie ? "Saving..." : movieForm.id ? "Update Movie" : "Add Movie"}
               </button>
+              {movieForm.id ? (
+                <button
+                  type="button"
+                  className={styles.secondaryBtn}
+                  disabled={savingMovie}
+                  onClick={() => saveMovieForm({ closeAfterSave: true })}
+                >
+                  {savingMovie ? "Saving..." : "Update & Close"}
+                </button>
+              ) : null}
               <button
                 type="button"
                 className={styles.ghostBtn}

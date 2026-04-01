@@ -178,6 +178,13 @@ function extractCanonicalHref(html) {
   return "";
 }
 
+function extractTitleTag(html) {
+  const input = text(html);
+  if (!input) return "";
+  const match = input.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  return text(String(match?.[1] || "").replace(/<[^>]+>/g, " "));
+}
+
 function normalizeReleaseDateLabel(raw) {
   const v = text(raw);
   if (!v) return "";
@@ -276,18 +283,21 @@ function extractMovieFromNextData(html, imdbId) {
 
 function extractMovieFromMetaTags(html, imdbId) {
   const id = normalizeImdbId(imdbId);
-  const ogTitle = extractMetaTagContent(html, "og:title");
+  const ogTitle = extractMetaTagContent(html, "og:title") || extractMetaTagContent(html, "twitter:title") || extractTitleTag(html);
   const canonical = extractCanonicalHref(html);
   if (id && canonical && !canonical.includes(`/title/${id}/`)) return null;
   const title = text(ogTitle.replace(/\s*-\s*IMDb\s*$/i, "")).replace(/\s*\(\d{4}\)\s*$/, "");
-  const desc = extractMetaTagContent(html, "og:description");
-  const image = extractMetaTagContent(html, "og:image");
+  const desc =
+    extractMetaTagContent(html, "og:description") ||
+    extractMetaTagContent(html, "twitter:description") ||
+    extractMetaTagContent(html, "description", "name");
+  const image = extractMetaTagContent(html, "og:image") || extractMetaTagContent(html, "twitter:image");
   const releaseYearMatch = ogTitle.match(/\((19\d{2}|20\d{2})\)/);
   const releaseYear = releaseYearMatch ? Number(releaseYearMatch[1]) : null;
   const suspiciousTitle = /\b(404|not\s+found|error)\b/i.test(title);
   const suspiciousDesc = /\b(404|not\s+found|page you requested|an error occurred)\b/i.test(desc);
   if (suspiciousTitle || suspiciousDesc) return null;
-  if (!title || (!desc && !image)) return null;
+  if (!title) return null;
   return {
     imdb_id: id,
     imdb_url: id ? `https://www.imdb.com/title/${id}/` : "",

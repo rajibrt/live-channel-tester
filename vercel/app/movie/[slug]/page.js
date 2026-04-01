@@ -3,9 +3,61 @@ import PendingApprovalCard from "../../../components/client/PendingApprovalCard"
 import { requireClient } from "../../../lib/clientAuth";
 import { loadClientAccessSettingsCached } from "../../../lib/clientAccessSettings";
 import { getClientHomeData } from "../../../lib/clientHomeData";
-import { getMovieBySlugForUser, getMovieCatalogBootstrapForUser } from "../../../lib/moviesData";
+import { getMovieBySlugForUser, getMovieCatalogBootstrapForUser, getPublishedMovieSeoBySlug } from "../../../lib/moviesData";
 
 export const dynamic = "force-dynamic";
+
+function inferImageType(url) {
+  const value = String(url || "").toLowerCase();
+  if (value.includes(".png")) return "image/png";
+  if (value.includes(".webp")) return "image/webp";
+  if (value.includes(".jpg") || value.includes(".jpeg")) return "image/jpeg";
+  return "image/jpeg";
+}
+
+export async function generateMetadata({ params }) {
+  const resolved = await params;
+  const seo = await getPublishedMovieSeoBySlug(resolved?.slug);
+
+  if (!seo) {
+    return {
+      title: "Movie Not Found | WEBTVBD",
+      description: "The requested movie is not available on WEBTVBD.",
+      robots: { index: false, follow: false },
+    };
+  }
+
+  const movieTitle = seo.releaseYear ? `${seo.title} (${seo.releaseYear})` : seo.title;
+  const socialImage = seo.socialImageUrl
+    ? [{
+        url: seo.socialImageUrl,
+        secureUrl: seo.socialImageUrl,
+        type: inferImageType(seo.socialImageUrl),
+        width: 1200,
+        height: 630,
+        alt: movieTitle,
+      }]
+    : [];
+
+  return {
+    title: `${movieTitle} | WEBTVBD`,
+    description: seo.description,
+    alternates: { canonical: seo.canonicalUrl },
+    openGraph: {
+      type: "video.movie",
+      url: seo.canonicalUrl,
+      title: movieTitle,
+      description: seo.description,
+      images: socialImage,
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: movieTitle,
+      description: seo.description,
+      images: seo.socialImageUrl ? [seo.socialImageUrl] : [],
+    },
+  };
+}
 
 export default async function MovieWatchPage({ params }) {
   const resolved = await params;

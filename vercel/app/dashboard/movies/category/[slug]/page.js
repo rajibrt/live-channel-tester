@@ -3,8 +3,9 @@ import ManageMovies from "../../ManageMovies";
 import { getMoviesPageData } from "../../getPageData";
 
 export default async function CategoryMoviesPage({ params }) {
+  const resolvedParams = await params;
   const data = await getMoviesPageData();
-  const categorySlug = String(params?.slug || "").trim().toLowerCase();
+  const categorySlug = String(resolvedParams?.slug || "").trim().toLowerCase();
 
   return (
     <section className={styles.card}>

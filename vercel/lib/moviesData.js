@@ -2,6 +2,7 @@ import { getSupabaseAdmin } from "./supabaseAdmin";
 import { isPrivateNetworkUrl, normalizeStreamUrl, toStreamProxyUrl } from "./streamUrl";
 import { deriveWatchState, isWatchedProgress, normalizeSeconds } from "./movieProgress";
 import { inferVideoQualityLabelFromUrl } from "./videoQuality";
+import { getBaseUrl, toAbsoluteUrl } from "./siteUrl";
 
 const MOVIE_SELECT_COLUMNS =
   "id,slug,title,synopsis,poster_url,backdrop_url,release_year,runtime_seconds,is_published,updated_at,imdb_id,imdb_url,imdb_rating,imdb_votes,content_rating,imdb_genres,imdb_directors,imdb_writers,imdb_stars,imdb_release_date,imdb_countries,imdb_languages,video_quality";
@@ -646,6 +647,50 @@ export async function getMovieBySlugForUser(userId, slug) {
 
   const movies = await hydrateMoviesForUser(admin, userId, [data]);
   return movies[0] || null;
+}
+
+export async function getPublishedMovieSeoBySlug(slug) {
+  const normalizedSlug = text(slug).toLowerCase();
+  if (!normalizedSlug) return null;
+
+  const admin = getSupabaseAdmin();
+  const { data, error } = await admin
+    .from("movies")
+    .select("slug,title,synopsis,poster_url,backdrop_url,release_year,imdb_rating,imdb_genres,imdb_countries,imdb_languages,updated_at")
+    .eq("is_published", true)
+    .eq("slug", normalizedSlug)
+    .maybeSingle();
+
+  if (error || !data?.slug) return null;
+
+  const title = text(data?.title) || "Movie";
+  const releaseYear = Number.isFinite(Number(data?.release_year)) ? Number(data.release_year) : null;
+  const genres = toStringList(data?.imdb_genres);
+  const countries = toStringList(data?.imdb_countries);
+  const languages = toStringList(data?.imdb_languages);
+  const rating = Number.isFinite(Number(data?.imdb_rating)) ? Number(data.imdb_rating) : null;
+  const descriptionParts = [
+    text(data?.synopsis),
+    releaseYear ? `Release year: ${releaseYear}.` : "",
+    genres.length ? `Genres: ${genres.join(", ")}.` : "",
+    languages.length ? `Languages: ${languages.join(", ")}.` : "",
+    countries.length ? `Countries: ${countries.join(", ")}.` : "",
+    rating ? `IMDb rating: ${rating}.` : "",
+  ].filter(Boolean);
+  const description = descriptionParts.join(" ").trim() || `${title} is available on WEBTVBD.`;
+  const baseUrl = getBaseUrl();
+  const canonicalUrl = `${baseUrl}/movie/${encodeURIComponent(normalizedSlug)}`;
+  const socialImageUrl = toAbsoluteUrl(text(data?.backdrop_url) || text(data?.poster_url) || "/android-chrome-512x512.png");
+
+  return {
+    slug: normalizedSlug,
+    title,
+    releaseYear,
+    description,
+    canonicalUrl,
+    socialImageUrl,
+    updatedAt: text(data?.updated_at),
+  };
 }
 
 export async function getMoviesPageForUser(userId, options = {}) {

@@ -5,6 +5,8 @@ import { normalizeImdbId } from "../../../../../lib/imdbData";
 import { fetchMovieMetadataByTitle } from "../../../../../lib/movieMetadataProvider";
 import { fetchMovieMetadataByImdbIdWithFallback } from "../../../../../lib/movieMetadataByImdb";
 import { getMovieMetadataSettingsPublic } from "../../../../../lib/movieMetadataSettings";
+import { cleanMovieTitle } from "../../../../../lib/movieImporter";
+import { syncMovieMetadataToDuplicates } from "../../../../../lib/movieMetadataSync";
 
 function text(value) {
   return String(value || "").trim();
@@ -16,13 +18,14 @@ function parseTitleAndYear(rawTitle, rawYear) {
   const yearMatch = input.match(/\((19\d{2}|20\d{2})\)\s*$/) || input.match(/\b(19\d{2}|20\d{2})\b/);
   const detectedYear = yearMatch ? Number(yearMatch[1]) : null;
   const normalizedYear = explicitYear || detectedYear || null;
-  const normalizedTitle = input
+  const titleWithoutYear = input
     .replace(/\((19\d{2}|20\d{2})\)\s*$/g, "")
     .replace(/\[(19\d{2}|20\d{2})\]\s*$/g, "")
     .replace(/\s{2,}/g, " ")
     .trim();
+  const normalizedTitle = cleanMovieTitle(titleWithoutYear);
   return {
-    title: normalizedTitle || input,
+    title: normalizedTitle || titleWithoutYear || input,
     year: normalizedYear,
   };
 }
@@ -71,11 +74,53 @@ function metadataPayloadFromItem(meta = {}) {
   };
 }
 
+async function resolveImdbIdForSave(admin, imdbId, currentMovieId) {
+  const normalized = normalizeImdbId(imdbId);
+  if (!normalized) return "";
+  const { data, error } = await admin
+    .from("movies")
+    .select("id")
+    .eq("imdb_id", normalized)
+    .neq("id", currentMovieId)
+    .limit(1);
+  if (error) throw new Error(error.message || "Failed to validate IMDb ID");
+  return Array.isArray(data) && data.length ? "" : normalized;
+}
+
 async function fetchMovieMetaForRow(row, providers, adminUserId) {
   const imdbId = normalizeImdbId(row?.imdb_id);
   if (imdbId) {
-    const viaId = await fetchMovieMetadataByImdbIdWithFallback(imdbId, adminUserId);
-    return { item: viaId.item, provider: viaId.provider };
+    try {
+      const viaId = await fetchMovieMetadataByImdbIdWithFallback(imdbId, adminUserId);
+      return { item: viaId.item, provider: viaId.provider };
+    } catch (imdbLookupError) {
+      const normalized = parseTitleAndYear(row?.title, row?.release_year);
+      const title = normalized.title;
+      if (!title) {
+        throw imdbLookupError;
+      }
+      try {
+        const item = await fetchMovieMetadataByTitle({
+          title,
+          year: normalized.year,
+          providers,
+        });
+        return {
+          item,
+          provider: item?.provider || providers[0] || "unknown",
+          warning: imdbLookupError?.message || "",
+        };
+      } catch (titleLookupError) {
+        throw new Error(
+          [
+            imdbLookupError?.message || "IMDb ID lookup failed",
+            titleLookupError?.message || "Title lookup failed",
+          ]
+            .filter(Boolean)
+            .join("; ")
+        );
+      }
+    }
   }
   const normalized = parseTitleAndYear(row?.title, row?.release_year);
   const title = normalized.title;
@@ -121,8 +166,19 @@ export async function POST(request) {
     try {
       const meta = await fetchMovieMetaForRow(row, providers, auth.current.user.id);
       const patch = metadataPayloadFromItem(meta.item || {});
+      patch.imdb_id = await resolveImdbIdForSave(admin, patch.imdb_id, id);
       const { error: updateError } = await admin.from("movies").update(patch).eq("id", id);
       if (updateError) throw new Error(updateError.message || "Update failed");
+      await syncMovieMetadataToDuplicates({
+        admin,
+        currentMovieId: id,
+        reference: {
+          title: text(meta?.item?.title) || text(row?.title),
+          release_year: Number(meta?.item?.release_year || row?.release_year || 0) || null,
+          imdb_id: text(meta?.item?.imdb_id) || text(row?.imdb_id),
+        },
+        patch,
+      }).catch(() => ({ updatedIds: [] }));
       okCount += 1;
       results.push({
         movie_id: id,

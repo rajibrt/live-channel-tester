@@ -173,7 +173,7 @@ function decodePathPart(part) {
   }
 }
 
-function cleanMovieTitle(rawName) {
+export function cleanMovieTitle(rawName) {
   let name = text(rawName);
   name = name.replace(/\.[a-z0-9]{2,5}$/i, "");
   name = name.replace(/\[[^\]]*]/g, " ");
@@ -182,7 +182,7 @@ function cleanMovieTitle(rawName) {
   name = name.replace(/\s*[-–—]\s*/g, " ");
   name = name.replace(/\b(2160p|1440p|1080p|720p|576p|480p|360p)\b/gi, " ");
   name = name.replace(
-    /\b(x264|x265|h\.?264|h\.?265|hevc|avc|web.?dl|web.?rip|bluray|blu.?ray|brrip|dvdrip|hdrip|hdrip|hdtc|hdts|camrip|predvd|aac|ddp|ac3|eac3|atmos|dual audio|esub|yify|yts|reencoded|remux|proper|extended|uncut|unrated|org|original)\b/gi,
+    /\b(x264|x265|h\.?264|h\.?265|hevc|avc|web.?dl|web.?rip|bluray|blu.?ray|brrip|dvdrip|hdrip|hdrip|hdtc|hdts|camrip|predvd|dvd|dvdscr|dvdscr|aac|ddp|ac3|eac3|atmos|dual audio|esub|yify|yts|reencoded|remux|proper|extended|uncut|unrated|org|original)\b/gi,
     " "
   );
   name = name.replace(
@@ -194,6 +194,7 @@ function cleanMovieTitle(rawName) {
     " "
   );
   name = name.replace(/\b(19\d{2}|20\d{2})\b/g, " ");
+  name = name.replace(/[\(\[\{]\s*[\)\]\}]/g, " ");
   name = name.replace(/[._]+/g, " ");
   name = name.replace(/\s{2,}/g, " ").trim();
   return name;

@@ -457,19 +457,27 @@ export default function IptvHomeClient({
       search: movieSearchQuery,
     };
     const cacheKey = buildMoviePageCacheKey(normalizedQuery);
+    const requestKey = buildMovieRequestKey(normalizedQuery);
+
+    if (!options?.background) {
+      desiredMovieQueryRef.current = requestKey;
+    }
+
     const cached = moviePageCacheRef.current.get(cacheKey);
     if (cached && options?.preferCache !== false) {
-      setMovieCatalog((prev) => ({
-        ...prev,
-        movies: Array.isArray(cached.movies) ? cached.movies : [],
-        page: Number(cached.page || targetPage),
-        pageSize: Number(cached.pageSize || pageSize),
-        total: Number(cached.total || 0),
-        totalPages: Number(cached.totalPages || 1),
-      }));
-      setMovieSnapshot(Array.isArray(cached.movies) ? cached.movies : []);
-      setMoviePageLoading(false);
-      lastLoadedMovieQueryRef.current = buildMovieRequestKey(normalizedQuery);
+      if (!options?.background) {
+        setMovieCatalog((prev) => ({
+          ...prev,
+          movies: Array.isArray(cached.movies) ? cached.movies : [],
+          page: Number(cached.page || targetPage),
+          pageSize: Number(cached.pageSize || pageSize),
+          total: Number(cached.total || 0),
+          totalPages: Number(cached.totalPages || 1),
+        }));
+        setMovieSnapshot(Array.isArray(cached.movies) ? cached.movies : []);
+        setMoviePageLoading(false);
+        lastLoadedMovieQueryRef.current = requestKey;
+      }
       return cached;
     }
 
@@ -478,7 +486,7 @@ export default function IptvHomeClient({
     const existingRequest = moviePageRequestRef.current.get(cacheKey);
     if (existingRequest) {
       const payload = await existingRequest.catch(() => null);
-      if (payload && !options?.background && desiredMovieQueryRef.current === cacheKey) {
+      if (payload && !options?.background && desiredMovieQueryRef.current === requestKey) {
         const nextMovies = Array.isArray(payload?.movies) ? payload.movies : [];
         setMovieCatalog((prev) => ({
           ...prev,
@@ -490,7 +498,7 @@ export default function IptvHomeClient({
         }));
         setMovieSnapshot(nextMovies);
         setMoviePageLoading(false);
-        lastLoadedMovieQueryRef.current = buildMovieRequestKey(normalizedQuery);
+        lastLoadedMovieQueryRef.current = requestKey;
       }
       return payload;
     }
@@ -532,7 +540,7 @@ export default function IptvHomeClient({
 
     try {
       const payload = await requestPromise;
-      if (!options?.background && desiredMovieQueryRef.current === cacheKey) {
+      if (!options?.background && desiredMovieQueryRef.current === requestKey) {
         const nextMovies = Array.isArray(payload?.movies) ? payload.movies : [];
         setMovieCatalog((prev) => ({
           ...prev,
@@ -546,18 +554,13 @@ export default function IptvHomeClient({
         setMoviePageLoading(false);
       }
       lastLoadedMovieQueryRef.current = buildMovieRequestKey({
+        ...normalizedQuery,
         page: Number(payload?.page || targetPage),
         pageSize: Number(payload?.pageSize || pageSize),
-        mode: movieMode,
-        category: selectedMovieCategory,
-        genre: selectedMovieGenre,
-        language: selectedMovieLanguage,
-        year: selectedMovieYear,
-        search: movieSearchQuery,
       });
       return payload;
     } catch {
-      if (!options?.background && desiredMovieQueryRef.current === cacheKey) {
+      if (!options?.background && desiredMovieQueryRef.current === requestKey) {
         setMoviePageLoading(false);
       }
       return null;

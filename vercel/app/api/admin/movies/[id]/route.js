@@ -31,6 +31,19 @@ function toDecimal(value, fallback = null) {
   return Number.isFinite(fixed) ? fixed : fallback;
 }
 
+async function resolveImdbIdForSave(admin, imdbId, currentMovieId) {
+  const normalized = normalizeImdbId(imdbId);
+  if (!normalized) return "";
+  const { data, error } = await admin
+    .from("movies")
+    .select("id")
+    .eq("imdb_id", normalized)
+    .neq("id", currentMovieId)
+    .limit(1);
+  if (error) throw new Error(error.message || "Failed to validate IMDb ID");
+  return Array.isArray(data) && data.length ? "" : normalized;
+}
+
 export async function PATCH(request, context) {
   const auth = await requireAdminApi();
   if (!auth.ok) return auth.response;
@@ -71,6 +84,7 @@ export async function PATCH(request, context) {
   const admin = getSupabaseAdmin();
   const now = new Date().toISOString();
   const { data: existingMovie } = await admin.from("movies").select("video_quality").eq("id", id).single();
+  const imdbIdForSave = await resolveImdbIdForSave(admin, imdbId, id);
   const detectedVideoQuality = await detectVideoQualityLabel(sourceUrl);
   const videoQuality = detectedVideoQuality || videoQualityInput || String(existingMovie?.video_quality || "").trim().toUpperCase();
 
@@ -85,7 +99,7 @@ export async function PATCH(request, context) {
       release_year: releaseYear,
       runtime_seconds: runtimeSeconds,
       is_published: isPublished,
-      imdb_id: imdbId || null,
+      imdb_id: imdbIdForSave || null,
       imdb_url: imdbUrl,
       imdb_rating: imdbRating,
       imdb_votes: imdbVotes,

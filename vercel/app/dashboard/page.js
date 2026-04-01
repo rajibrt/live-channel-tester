@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Bell } from "lucide-react";
 import { getSupabaseAdmin } from "../../lib/supabaseAdmin";
 import { getActiveViewerSnapshot } from "../../lib/activeViewers";
 import { getDashboardReports } from "../../lib/dashboardReports";
@@ -80,7 +81,6 @@ async function getData() {
     activeViewers,
     reports,
     pushEnabledClients,
-    activePushSubscriptionCount: activePushRows.length,
   };
 }
 
@@ -108,15 +108,8 @@ function formatShortCount(value) {
   return String(n);
 }
 
-function formatDateTime(value) {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleString();
-}
-
 export default async function DashboardPage() {
-  const { playlists, tokenBySlug, jobRun, activeViewers, reports, pushEnabledClients, activePushSubscriptionCount } = await getData();
+  const { playlists, tokenBySlug, jobRun, activeViewers, reports, pushEnabledClients } = await getData();
   const base = process.env.PUBLIC_PLAYLIST_BASE_URL || "";
   const activeTokenCount = Object.keys(tokenBySlug).length;
   const lastRunText = jobRun?.last_run_at
@@ -209,20 +202,13 @@ export default async function DashboardPage() {
       </section>
 
       <section className={`${styles.stats} ${styles.statsCompact3}`}>
-        <article className={styles.statCard}>
-          <p>Push Enabled Clients</p>
-          <strong>{pushEnabledClients.length}</strong>
-          <small className={styles.metaMuted}>Distinct client accounts with push ON</small>
-        </article>
-        <article className={styles.statCard}>
-          <p>Active Push Subscriptions</p>
-          <strong>{activePushSubscriptionCount}</strong>
-          <small className={styles.metaMuted}>Includes multiple devices per client</small>
-        </article>
-        <article className={styles.statCard}>
-          <p>Latest Push Update</p>
-          <strong>{pushEnabledClients[0]?.updated_at ? formatDateTime(pushEnabledClients[0].updated_at) : "—"}</strong>
-          <small className={styles.metaMuted}>Most recent push subscription activity</small>
+        <article className={styles.card}>
+          <h2>Push Enabled</h2>
+          <p className={styles.hint}>Clients who currently have push notifications enabled.</p>
+          <p className={styles.metaLine}>
+            <Bell size={14} />
+            Total Active: <strong>{pushEnabledClients.length}</strong>
+          </p>
         </article>
       </section>
 
@@ -336,32 +322,12 @@ export default async function DashboardPage() {
           <Link href="/dashboard/clients" className={styles.navCta}>Open Clients</Link>
         </article>
         <article className={styles.card}>
-          <h2>Push Enabled Clients</h2>
-          <p className={styles.hint}>Clients who currently have push notifications enabled on one or more devices.</p>
-          {pushEnabledClients.length ? (
-            <div className={styles.pushEnabledList}>
-              {pushEnabledClients.slice(0, 8).map((client) => {
-                const primaryLabel = client.full_name || client.mobile_number || client.email || "Unnamed Client";
-                const secondaryLabel = client.mobile_number || client.email || "No mobile/email";
-                return (
-                  <div key={client.user_id} className={styles.pushEnabledRow}>
-                    <div className={styles.pushEnabledCopy}>
-                      <strong>{primaryLabel}</strong>
-                      <span>{secondaryLabel}</span>
-                      <span>
-                        Subs: {client.subscription_count} | Updated: {formatDateTime(client.updated_at)}
-                      </span>
-                    </div>
-                    <span className={client.is_active ? styles.pushEnabledBadge : styles.pushMutedBadge}>
-                      {client.is_active ? "Push ON" : "Inactive"}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <p className={styles.pending}>No client currently has push notifications enabled.</p>
-          )}
+          <h2>Push Enabled</h2>
+          <p className={styles.hint}>Clients who currently have push notifications enabled.</p>
+          <p className={styles.metaLine}>
+            <Bell size={14} />
+            Total Active: <strong>{pushEnabledClients.length}</strong>
+          </p>
         </article>
         <article className={styles.card}>
           <h2>Articles</h2>
