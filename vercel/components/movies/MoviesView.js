@@ -107,8 +107,11 @@ export default function MoviesView({
   const [continuePage, setContinuePage] = useState(1);
   const [isTouchContinueUi, setIsTouchContinueUi] = useState(false);
   const [isMobileFilterUi, setIsMobileFilterUi] = useState(false);
+  const [isMobilePortraitUi, setIsMobilePortraitUi] = useState(false);
+  const [isDocumentFullscreen, setIsDocumentFullscreen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
+  const [mobileEdgeBottom, setMobileEdgeBottom] = useState(88);
   const moviesSectionRef = useRef(null);
   const watchPlayerColRef = useRef(null);
   const hasFilterScrollMountedRef = useRef(false);
@@ -414,14 +417,34 @@ export default function MoviesView({
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
     const media = window.matchMedia("(max-width: 640px), (hover: none) and (pointer: coarse)");
+    const portraitMedia = window.matchMedia("(orientation: portrait)");
     const sync = () => {
       const matched = Boolean(media.matches);
       setIsTouchContinueUi(matched);
       setIsMobileFilterUi(matched);
+      setIsMobilePortraitUi(matched && Boolean(portraitMedia.matches));
     };
     sync();
     media.addEventListener?.("change", sync);
-    return () => media.removeEventListener?.("change", sync);
+    portraitMedia.addEventListener?.("change", sync);
+    return () => {
+      media.removeEventListener?.("change", sync);
+      portraitMedia.removeEventListener?.("change", sync);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return undefined;
+    const sync = () => {
+      setIsDocumentFullscreen(Boolean(document.fullscreenElement || document.webkitFullscreenElement));
+    };
+    sync();
+    document.addEventListener("fullscreenchange", sync);
+    document.addEventListener("webkitfullscreenchange", sync);
+    return () => {
+      document.removeEventListener("fullscreenchange", sync);
+      document.removeEventListener("webkitfullscreenchange", sync);
+    };
   }, []);
 
   useEffect(() => {
@@ -440,6 +463,23 @@ export default function MoviesView({
       document.body.style.overflow = previousOverflow;
     };
   }, [mobileFilterOpen, mobileSearchOpen]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    if (!isMobilePortraitUi || isDocumentFullscreen) return undefined;
+
+    const syncBounds = () => {
+      const viewportHeight = window.innerHeight || 0;
+      const preferredBottomGap = Math.round(viewportHeight * 0.2);
+      setMobileEdgeBottom(Math.max(88, preferredBottomGap));
+    };
+
+    syncBounds();
+    window.addEventListener("resize", syncBounds);
+    return () => {
+      window.removeEventListener("resize", syncBounds);
+    };
+  }, [isDocumentFullscreen, isMobilePortraitUi, variant]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -532,6 +572,37 @@ export default function MoviesView({
     if (showInlineFilters) setCategorySlug("all");
     onResetFilters?.();
   }, [onResetFilters, onSearchChange, showInlineFilters]);
+
+  const clearSearchOnly = useCallback(() => {
+    setSearchDraft("");
+    onSearchChange?.("");
+    if (!showInlineFilters) onSelectModeFilter?.("all");
+  }, [onSearchChange, onSelectModeFilter, showInlineFilters]);
+
+  const mobileSearchResults = useMemo(() => {
+    const query = String(searchDraft || "").trim().toLowerCase();
+    const baseList = applyMovieFilters(modeScopedMovies, { includeSearch: false });
+    const matched = query
+      ? baseList.filter((movie) => {
+          const haystack = [
+            movie?.title,
+            movie?.synopsis,
+            ...(Array.isArray(movie?.imdbGenres) ? movie.imdbGenres : []),
+            ...(Array.isArray(movie?.imdbDirectors) ? movie.imdbDirectors : []),
+            ...(Array.isArray(movie?.imdbWriters) ? movie.imdbWriters : []),
+            ...(Array.isArray(movie?.imdbStars) ? movie.imdbStars : []),
+            ...(Array.isArray(movie?.imdbCountries) ? movie.imdbCountries : []),
+            ...(Array.isArray(movie?.imdbLanguages) ? movie.imdbLanguages : []),
+            movie?.imdbId,
+          ]
+            .map((value) => text(value).toLowerCase())
+            .join(" ");
+          return haystack.includes(query);
+        })
+      : baseList;
+
+    return matched.slice(0, 10);
+  }, [applyMovieFilters, modeScopedMovies, searchDraft]);
 
   const searchControls = (
     <div className={styles.searchRow}>
@@ -694,6 +765,45 @@ export default function MoviesView({
     </div>
   ) : null;
 
+  const showMobileEdgeTools = isMobilePortraitUi && !isDocumentFullscreen;
+
+  useEffect(() => {
+    if (showMobileEdgeTools) return;
+    setMobileSearchOpen(false);
+    setMobileFilterOpen(false);
+  }, [showMobileEdgeTools]);
+  const mobileEdgeTools = showMobileEdgeTools ? (
+    <div
+      className={styles.mobileSectionEdgeTools}
+      style={{ bottom: `${mobileEdgeBottom}px` }}
+    >
+      <button
+        type="button"
+        className={`${styles.mobileEdgeToggle} ${styles.mobileEdgeToggleLeft}`}
+        onClick={() => {
+          setMobileSearchOpen(false);
+          setMobileFilterOpen(true);
+        }}
+        aria-label="Open movie filter"
+      >
+        <SlidersHorizontal size={16} strokeWidth={2.2} />
+        <span>Movie Filter</span>
+      </button>
+      <button
+        type="button"
+        className={`${styles.mobileEdgeToggle} ${styles.mobileEdgeToggleRight}`}
+        onClick={() => {
+          setMobileFilterOpen(false);
+          setMobileSearchOpen(true);
+        }}
+        aria-label="Open movie search"
+      >
+        <Search size={16} strokeWidth={2.2} />
+        <span>Search Movie</span>
+      </button>
+    </div>
+  ) : null;
+
   const upsertMovieProgress = useCallback((movieId, progress) => {
     const id = String(movieId || "");
     if (!id) return;
@@ -804,25 +914,132 @@ export default function MoviesView({
 
   if (variant === "watch") {
     return (
-      <section className={`${styles.wrap} ${styles.wrapWatch}`}>
-        <div ref={watchPlayerColRef} className={styles.watchPlayerCol}>
-          <MoviePlayer
-            movie={selectedMovie}
-            startFrom={playerStartFrom}
-            replayToken={playerReplayToken}
-            onRestart={handleRestartAction}
-            onMarkComplete={handleMarkComplete}
-            onToggleFavorite={handleToggleFavorite}
-            onBackToList={() => onBackToMovieList?.()}
-            onProgressSaved={upsertMovieProgress}
-            onMarkedComplete={handleMarkedComplete}
-            onTrackActivity={onTrackActivity}
-          />
-        </div>
-        <aside className={styles.watchInfoCol}>
-          <MovieDetail movie={selectedMovie} />
-        </aside>
-      </section>
+      <>
+        <section className={`${styles.wrap} ${styles.wrapWatch}`}>
+          <div ref={watchPlayerColRef} className={styles.watchPlayerCol}>
+            <MoviePlayer
+              movie={selectedMovie}
+              startFrom={playerStartFrom}
+              replayToken={playerReplayToken}
+              onRestart={handleRestartAction}
+              onMarkComplete={handleMarkComplete}
+              onToggleFavorite={handleToggleFavorite}
+              onBackToList={() => onBackToMovieList?.()}
+              onProgressSaved={upsertMovieProgress}
+              onMarkedComplete={handleMarkedComplete}
+              onTrackActivity={onTrackActivity}
+            />
+          </div>
+          <aside className={styles.watchInfoCol}>
+            <MovieDetail movie={selectedMovie} />
+          </aside>
+        </section>
+        {mobileEdgeTools}
+        {isMobileFilterUi ? (
+          <>
+            {mobileSearchOpen || mobileFilterOpen ? (
+              <button
+                type="button"
+                aria-label="Close mobile drawer"
+                className={`${styles.mobileDrawerBackdrop} ${styles.mobileDrawerBackdropOpen}`}
+                onClick={() => {
+                  setMobileSearchOpen(false);
+                  setMobileFilterOpen(false);
+                }}
+              />
+            ) : null}
+            <aside
+              className={`${styles.mobileDrawer} ${styles.mobileDrawerLeft} ${
+                mobileFilterOpen ? styles.mobileDrawerOpen : ""
+              }`}
+              aria-hidden={!mobileFilterOpen}
+            >
+              <div className={styles.mobileDrawerHead}>
+                <div className={styles.mobileDrawerTitleWrap}>
+                  <SlidersHorizontal size={18} strokeWidth={2.2} />
+                  <strong>Movie Filter</strong>
+                </div>
+                <button
+                  type="button"
+                  className={styles.mobileDrawerClose}
+                  onClick={() => setMobileFilterOpen(false)}
+                  aria-label="Close filter panel"
+                >
+                  <X size={18} strokeWidth={2.2} />
+                </button>
+              </div>
+              <div className={styles.mobileDrawerBody}>
+                {filterControls}
+                {activeFilterControls}
+              </div>
+            </aside>
+            <aside
+              className={`${styles.mobileDrawer} ${styles.mobileDrawerRight} ${
+                mobileSearchOpen ? styles.mobileDrawerOpen : ""
+              }`}
+              aria-hidden={!mobileSearchOpen}
+            >
+              <div className={styles.mobileDrawerHead}>
+                <div className={styles.mobileDrawerTitleWrap}>
+                  <Search size={18} strokeWidth={2.2} />
+                  <strong>Search Movie</strong>
+                </div>
+                <button
+                  type="button"
+                  className={styles.mobileDrawerClose}
+                  onClick={() => setMobileSearchOpen(false)}
+                  aria-label="Close search panel"
+                >
+                  <X size={18} strokeWidth={2.2} />
+                </button>
+              </div>
+              <div className={styles.mobileDrawerBody}>
+                {searchControls}
+                <div className={styles.mobileSearchMeta}>
+                  <span className={styles.mobileSearchCount}>
+                    {String(searchDraft || "").trim()
+                      ? `${mobileSearchResults.length} result${mobileSearchResults.length === 1 ? "" : "s"}`
+                      : "All movies"}
+                  </span>
+                  <button type="button" className={styles.mobileSearchClearBtn} onClick={clearSearchOnly}>
+                    Clear Search
+                  </button>
+                </div>
+                <div className={styles.mobileSearchResults}>
+                  {mobileSearchResults.length ? (
+                    mobileSearchResults.map((movie) => (
+                      <button
+                        key={String(movie?.id || movie?.slug || "")}
+                        type="button"
+                        className={styles.mobileSearchResultItem}
+                        onClick={() => {
+                          handleSelectMovie(movie);
+                          setMobileSearchOpen(false);
+                        }}
+                      >
+                        {movie?.posterUrl ? (
+                          <img src={movie.posterUrl} alt="" className={styles.mobileSearchResultPoster} />
+                        ) : (
+                          <span className={styles.mobileSearchResultPosterFallback}>No Poster</span>
+                        )}
+                        <span className={styles.mobileSearchResultText}>
+                          <strong>{movie?.title || "Untitled"}</strong>
+                          <span>
+                            {movie?.releaseYear || "Year unknown"}
+                            {movie?.imdbRating ? ` | IMDb ${movie.imdbRating}` : ""}
+                          </span>
+                        </span>
+                      </button>
+                    ))
+                  ) : (
+                    <p className={styles.mobileSearchEmpty}>No movies matched this search.</p>
+                  )}
+                </div>
+              </div>
+            </aside>
+          </>
+        ) : null}
+      </>
     );
   }
 
@@ -974,32 +1191,9 @@ export default function MoviesView({
           </div>
         </section>
       </div>
+      {mobileEdgeTools}
       {isMobileFilterUi ? (
         <>
-          <button
-            type="button"
-            className={`${styles.mobileEdgeToggle} ${styles.mobileEdgeToggleLeft}`}
-            onClick={() => {
-              setMobileSearchOpen(false);
-              setMobileFilterOpen(true);
-            }}
-            aria-label="Open movie filter"
-          >
-            <SlidersHorizontal size={16} strokeWidth={2.2} />
-            <span>Movie Filter</span>
-          </button>
-          <button
-            type="button"
-            className={`${styles.mobileEdgeToggle} ${styles.mobileEdgeToggleRight}`}
-            onClick={() => {
-              setMobileFilterOpen(false);
-              setMobileSearchOpen(true);
-            }}
-            aria-label="Open movie search"
-          >
-            <Search size={16} strokeWidth={2.2} />
-            <span>Search Movie</span>
-          </button>
           {mobileSearchOpen || mobileFilterOpen ? (
             <button
               type="button"
@@ -1056,7 +1250,49 @@ export default function MoviesView({
                 <X size={18} strokeWidth={2.2} />
               </button>
             </div>
-            <div className={styles.mobileDrawerBody}>{searchControls}</div>
+            <div className={styles.mobileDrawerBody}>
+              {searchControls}
+              <div className={styles.mobileSearchMeta}>
+                <span className={styles.mobileSearchCount}>
+                  {String(searchDraft || "").trim()
+                    ? `${mobileSearchResults.length} result${mobileSearchResults.length === 1 ? "" : "s"}`
+                    : "All movies"}
+                </span>
+                <button type="button" className={styles.mobileSearchClearBtn} onClick={clearSearchOnly}>
+                  Clear Search
+                </button>
+              </div>
+              <div className={styles.mobileSearchResults}>
+                {mobileSearchResults.length ? (
+                  mobileSearchResults.map((movie) => (
+                    <button
+                      key={String(movie?.id || movie?.slug || "")}
+                      type="button"
+                      className={styles.mobileSearchResultItem}
+                      onClick={() => {
+                        handleSelectMovie(movie);
+                        setMobileSearchOpen(false);
+                      }}
+                    >
+                      {movie?.posterUrl ? (
+                        <img src={movie.posterUrl} alt="" className={styles.mobileSearchResultPoster} />
+                      ) : (
+                        <span className={styles.mobileSearchResultPosterFallback}>No Poster</span>
+                      )}
+                      <span className={styles.mobileSearchResultText}>
+                        <strong>{movie?.title || "Untitled"}</strong>
+                        <span>
+                          {movie?.releaseYear || "Year unknown"}
+                          {movie?.imdbRating ? ` | IMDb ${movie.imdbRating}` : ""}
+                        </span>
+                      </span>
+                    </button>
+                  ))
+                ) : (
+                  <p className={styles.mobileSearchEmpty}>No movies matched this search.</p>
+                )}
+              </div>
+            </div>
           </aside>
         </>
       ) : !showInlineFilters || activeFilterTags.length ? (
