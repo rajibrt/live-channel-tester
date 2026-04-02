@@ -1,6 +1,7 @@
 "use client";
 
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Search, SlidersHorizontal, X } from "lucide-react";
 import MovieDetail from "./MovieDetail";
 import MovieCard from "./MovieCard";
 import MovieGrid from "./MovieGrid";
@@ -105,12 +106,25 @@ export default function MoviesView({
   const [moviesPageSize, setMoviesPageSize] = useState(() => Math.max(1, Number(initialPageSize || DEFAULT_MOVIES_PAGE_SIZE)));
   const [continuePage, setContinuePage] = useState(1);
   const [isTouchContinueUi, setIsTouchContinueUi] = useState(false);
+  const [isMobileFilterUi, setIsMobileFilterUi] = useState(false);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
   const moviesSectionRef = useRef(null);
   const watchPlayerColRef = useRef(null);
   const hasFilterScrollMountedRef = useRef(false);
   const pendingPageScrollRef = useRef(false);
   const [categorySlug, setCategorySlug] = useState("all");
   const [selectedMovieId, setSelectedMovieId] = useState(() => {
+    const normalizedSelectedSlug = text(initialSelectedMovieSlug).toLowerCase();
+    const preferredBySlug =
+      (Array.isArray(initialMovies) ? initialMovies : []).find(
+        (movie) => text(movie?.slug).toLowerCase() === normalizedSelectedSlug
+      ) ||
+      (Array.isArray(initialContinueWatching) ? initialContinueWatching : []).find(
+        (movie) => text(movie?.slug).toLowerCase() === normalizedSelectedSlug
+      ) ||
+      null;
+    if (preferredBySlug?.id) return String(preferredBySlug.id);
     const preferred = Array.isArray(initialContinueWatching) && initialContinueWatching.length ? initialContinueWatching[0] : null;
     if (preferred?.id) return String(preferred.id);
     const first = Array.isArray(initialMovies) && initialMovies.length ? initialMovies[0] : null;
@@ -141,17 +155,26 @@ export default function MoviesView({
   }, [searchValue]);
 
   useEffect(() => {
-    if (!movies.length) return;
     if (!selectedMovieSlug) return;
-    const row = movies.find((movie) => text(movie?.slug).toLowerCase() === selectedMovieSlug);
+    const row =
+      movies.find((movie) => text(movie?.slug).toLowerCase() === selectedMovieSlug) ||
+      continueItems.find((movie) => text(movie?.slug).toLowerCase() === selectedMovieSlug) ||
+      null;
     if (!row?.id) return;
     setSelectedMovieId(String(row.id));
-  }, [movies, selectedMovieSlug]);
+  }, [continueItems, movies, selectedMovieSlug]);
 
-  const selectedMovie = useMemo(
-    () => movies.find((movie) => String(movie?.id || "") === String(selectedMovieId || "")) || null,
-    [movies, selectedMovieId]
-  );
+  const selectedMovie = useMemo(() => {
+    const normalizedSelectedId = String(selectedMovieId || "");
+    const normalizedSelectedSlug = text(selectedMovieSlug).toLowerCase();
+    return (
+      movies.find((movie) => String(movie?.id || "") === normalizedSelectedId) ||
+      continueItems.find((movie) => String(movie?.id || "") === normalizedSelectedId) ||
+      movies.find((movie) => text(movie?.slug).toLowerCase() === normalizedSelectedSlug) ||
+      continueItems.find((movie) => text(movie?.slug).toLowerCase() === normalizedSelectedSlug) ||
+      null
+    );
+  }, [continueItems, movies, selectedMovieId, selectedMovieSlug]);
 
   useEffect(() => {
     onMoviesSnapshotChange?.(movies);
@@ -167,9 +190,14 @@ export default function MoviesView({
 
   useEffect(() => {
     if (selectedMovie) return;
-    const first = movies[0] || null;
+    const first =
+      movies.find((movie) => text(movie?.slug).toLowerCase() === selectedMovieSlug) ||
+      continueItems.find((movie) => text(movie?.slug).toLowerCase() === selectedMovieSlug) ||
+      movies[0] ||
+      continueItems[0] ||
+      null;
     if (first?.id) setSelectedMovieId(String(first.id));
-  }, [movies, selectedMovie]);
+  }, [continueItems, movies, selectedMovie, selectedMovieSlug]);
 
   const categoryCounts = useMemo(() => {
     const map = new Map();
@@ -386,11 +414,32 @@ export default function MoviesView({
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
     const media = window.matchMedia("(max-width: 640px), (hover: none) and (pointer: coarse)");
-    const sync = () => setIsTouchContinueUi(Boolean(media.matches));
+    const sync = () => {
+      const matched = Boolean(media.matches);
+      setIsTouchContinueUi(matched);
+      setIsMobileFilterUi(matched);
+    };
     sync();
     media.addEventListener?.("change", sync);
     return () => media.removeEventListener?.("change", sync);
   }, []);
+
+  useEffect(() => {
+    if (!isMobileFilterUi) {
+      setMobileSearchOpen(false);
+      setMobileFilterOpen(false);
+    }
+  }, [isMobileFilterUi]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return undefined;
+    if (!mobileSearchOpen && !mobileFilterOpen) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [mobileFilterOpen, mobileSearchOpen]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -453,6 +502,197 @@ export default function MoviesView({
     }
     return tags;
   }, [search, categorySlug, filterCategorySlug, filterGenreSlug, filterLanguageSlug, filterYear, filterMode, showInlineFilters]);
+
+  const clearFilterTag = useCallback(
+    (tagKey) => {
+      if (tagKey === "search") {
+        setSearchDraft("");
+        onSearchChange?.("");
+      }
+      if (tagKey === "inline_category") setCategorySlug("all");
+      if (tagKey === "category") onSelectCategoryFilter?.("");
+      if (tagKey === "genre") onSelectGenreFilter?.("");
+      if (tagKey === "language") onSelectLanguageFilter?.("");
+      if (tagKey === "year") onSelectYearFilter?.("");
+      if (tagKey === "mode") onSelectModeFilter?.("all");
+    },
+    [
+      onSearchChange,
+      onSelectCategoryFilter,
+      onSelectGenreFilter,
+      onSelectLanguageFilter,
+      onSelectModeFilter,
+      onSelectYearFilter,
+    ]
+  );
+
+  const clearAllFilters = useCallback(() => {
+    setSearchDraft("");
+    onSearchChange?.("");
+    if (showInlineFilters) setCategorySlug("all");
+    onResetFilters?.();
+  }, [onResetFilters, onSearchChange, showInlineFilters]);
+
+  const searchControls = (
+    <div className={styles.searchRow}>
+      <div className={styles.searchInputWrap}>
+        <input
+          value={searchDraft}
+          onChange={(event) => setSearchDraft(event.target.value)}
+          placeholder="Search movies or genre:horror"
+          className={`${styles.searchInput} ${styles.searchInputCentered}`}
+        />
+        {isSearchSyncing || isSearchLoading ? (
+          <span className={styles.searchStatusBadge}>
+            {isSearchSyncing ? "Waiting..." : "Searching..."}
+          </span>
+        ) : null}
+      </div>
+    </div>
+  );
+
+  const filterControls = (
+    <>
+      <div className={styles.filters}>
+        {showInlineFilters ? (
+          <>
+            <button
+              type="button"
+              className={`${styles.filterBtn} ${categorySlug === "all" ? styles.filterBtnActive : ""}`}
+              onClick={() => setCategorySlug("all")}
+            >
+              All ({movies.length})
+            </button>
+            {categoriesWithCount.map((category) => (
+              <button
+                type="button"
+                key={category.slug || category.id}
+                className={`${styles.filterBtn} ${categorySlug === category.slug ? styles.filterBtnActive : ""}`}
+                onClick={() => setCategorySlug(category.slug)}
+              >
+                {category.name} ({category.count})
+              </button>
+            ))}
+          </>
+        ) : null}
+      </div>
+      {!showInlineFilters ? (
+        <div className={styles.filterSections}>
+          <section className={styles.filterSection}>
+            <header className={styles.filterSectionHead}>
+              <strong>Genres</strong>
+            </header>
+            <div className={styles.filterSectionBody}>
+              <button
+                type="button"
+                className={`${styles.filterBtn} ${!filterGenreSlug ? styles.filterBtnActive : ""}`}
+                onClick={() => onSelectGenreFilter?.("")}
+              >
+                All Genres
+              </button>
+              {(Array.isArray(facetedGenreOptions) ? facetedGenreOptions : genreOptions).map((genre) => {
+                const key = String(genre?.key || "").trim().toLowerCase();
+                return (
+                  <button
+                    type="button"
+                    key={key || genre?.name}
+                    className={`${styles.filterBtn} ${key && key === String(filterGenreSlug || "").trim().toLowerCase() ? styles.filterBtnActive : ""}`}
+                    onClick={() => onSelectGenreFilter?.(key)}
+                  >
+                    {genre?.name} ({Number(genre?.count || 0)})
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          <section className={styles.filterSection}>
+            <header className={styles.filterSectionHead}>
+              <strong>Languages</strong>
+            </header>
+            <div className={styles.filterSectionBody}>
+              <button
+                type="button"
+                className={`${styles.filterBtn} ${!filterLanguageSlug ? styles.filterBtnActive : ""}`}
+                onClick={() => onSelectLanguageFilter?.("")}
+              >
+                All Languages
+              </button>
+              {(Array.isArray(facetedLanguageOptions) ? facetedLanguageOptions : languageOptions).map((language) => {
+                const key = String(language?.key || "").trim().toLowerCase();
+                return (
+                  <button
+                    type="button"
+                    key={key || language?.name}
+                    className={`${styles.filterBtn} ${key && key === String(filterLanguageSlug || "").trim().toLowerCase() ? styles.filterBtnActive : ""}`}
+                    onClick={() => onSelectLanguageFilter?.(key)}
+                  >
+                    {language?.name} ({Number(language?.count || 0)})
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          <section className={styles.filterSection}>
+            <header className={styles.filterSectionHead}>
+              <strong>Years</strong>
+            </header>
+            <div className={styles.filterSectionBody}>
+              <button
+                type="button"
+                className={`${styles.filterBtn} ${!filterYear ? styles.filterBtnActive : ""}`}
+                onClick={() => onSelectYearFilter?.("")}
+              >
+                All Years
+              </button>
+              {(Array.isArray(facetedYearOptions) ? facetedYearOptions : yearOptions).map((yearRow) => {
+                const key = String(yearRow?.key || "").trim();
+                return (
+                  <button
+                    type="button"
+                    key={key || yearRow?.name}
+                    className={`${styles.filterBtn} ${key && key === String(filterYear || "").trim() ? styles.filterBtnActive : ""}`}
+                    onClick={() => onSelectYearFilter?.(key)}
+                  >
+                    {yearRow?.name} ({Number(yearRow?.count || 0)})
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        </div>
+      ) : null}
+    </>
+  );
+
+  const activeFilterControls = !showInlineFilters ? (
+    <div className={styles.activeFilterWrap}>
+      <strong className={styles.activeFilterTitle}>Active Filters</strong>
+      <div className={styles.activeFilterChips}>
+        {activeFilterTags.length ? (
+          activeFilterTags.map((tag) => (
+            <button
+              type="button"
+              key={tag.key}
+              className={styles.activeFilterChip}
+              onClick={() => clearFilterTag(tag.key)}
+              title="Clear this filter"
+            >
+              {tag.label} ×
+            </button>
+          ))
+        ) : (
+          <span className={styles.activeFilterChip}>All Movies</span>
+        )}
+        {activeFilterTags.length ? (
+          <button type="button" className={styles.clearAllBtn} onClick={clearAllFilters}>
+            Clear All Filters
+          </button>
+        ) : null}
+      </div>
+    </div>
+  ) : null;
 
   const upsertMovieProgress = useCallback((movieId, progress) => {
     const id = String(movieId || "");
@@ -654,164 +894,9 @@ export default function MoviesView({
               {isSearchSyncing ? "Typing..." : isSearchLoading ? "Searching..." : "Live results"}
             </span>
           </header>
-          <div className={styles.searchRow}>
-            <div className={styles.searchInputWrap}>
-              <input
-                value={searchDraft}
-                onChange={(event) => setSearchDraft(event.target.value)}
-                placeholder="Search movies or genre:horror"
-                className={`${styles.searchInput} ${styles.searchInputCentered}`}
-              />
-              {isSearchSyncing || isSearchLoading ? (
-                <span className={styles.searchStatusBadge}>
-                  {isSearchSyncing ? "Waiting..." : "Searching..."}
-                </span>
-              ) : null}
-            </div>
-          </div>
-          <div className={styles.filters}>
-            {showInlineFilters ? (
-              <>
-                <button
-                  type="button"
-                  className={`${styles.filterBtn} ${categorySlug === "all" ? styles.filterBtnActive : ""}`}
-                  onClick={() => setCategorySlug("all")}
-                >
-                  All ({movies.length})
-                </button>
-                {categoriesWithCount.map((category) => (
-                  <button
-                    type="button"
-                    key={category.slug || category.id}
-                    className={`${styles.filterBtn} ${categorySlug === category.slug ? styles.filterBtnActive : ""}`}
-                    onClick={() => setCategorySlug(category.slug)}
-                  >
-                    {category.name} ({category.count})
-                  </button>
-                ))}
-              </>
-            ) : null}
-          </div>
-          {!showInlineFilters ? (
-            <div className={styles.filterSections}>
-              <section className={styles.filterSection}>
-                <header className={styles.filterSectionHead}>
-                  <strong>Genres</strong>
-                </header>
-                <div className={styles.filterSectionBody}>
-                  <button
-                    type="button"
-                    className={`${styles.filterBtn} ${!filterGenreSlug ? styles.filterBtnActive : ""}`}
-                    onClick={() => onSelectGenreFilter?.("")}
-                  >
-                    All Genres
-                  </button>
-                  {(Array.isArray(facetedGenreOptions) ? facetedGenreOptions : genreOptions).map((genre) => {
-                    const key = String(genre?.key || "").trim().toLowerCase();
-                    return (
-                      <button
-                        type="button"
-                        key={key || genre?.name}
-                        className={`${styles.filterBtn} ${key && key === String(filterGenreSlug || "").trim().toLowerCase() ? styles.filterBtnActive : ""}`}
-                        onClick={() => onSelectGenreFilter?.(key)}
-                      >
-                        {genre?.name} ({Number(genre?.count || 0)})
-                      </button>
-                    );
-                  })}
-                </div>
-              </section>
-
-              <section className={styles.filterSection}>
-                <header className={styles.filterSectionHead}>
-                  <strong>Languages</strong>
-                </header>
-                <div className={styles.filterSectionBody}>
-                  <button
-                    type="button"
-                    className={`${styles.filterBtn} ${!filterLanguageSlug ? styles.filterBtnActive : ""}`}
-                    onClick={() => onSelectLanguageFilter?.("")}
-                  >
-                    All Languages
-                  </button>
-                  {(Array.isArray(facetedLanguageOptions) ? facetedLanguageOptions : languageOptions).map((language) => {
-                    const key = String(language?.key || "").trim().toLowerCase();
-                    return (
-                      <button
-                        type="button"
-                        key={key || language?.name}
-                        className={`${styles.filterBtn} ${key && key === String(filterLanguageSlug || "").trim().toLowerCase() ? styles.filterBtnActive : ""}`}
-                        onClick={() => onSelectLanguageFilter?.(key)}
-                      >
-                        {language?.name} ({Number(language?.count || 0)})
-                      </button>
-                    );
-                  })}
-                </div>
-              </section>
-
-              <section className={styles.filterSection}>
-                <header className={styles.filterSectionHead}>
-                  <strong>Years</strong>
-                </header>
-                <div className={styles.filterSectionBody}>
-                  <button
-                    type="button"
-                    className={`${styles.filterBtn} ${!filterYear ? styles.filterBtnActive : ""}`}
-                    onClick={() => onSelectYearFilter?.("")}
-                  >
-                    All Years
-                  </button>
-                  {(Array.isArray(facetedYearOptions) ? facetedYearOptions : yearOptions).map((yearRow) => {
-                    const key = String(yearRow?.key || "").trim();
-                    return (
-                      <button
-                        type="button"
-                        key={key || yearRow?.name}
-                        className={`${styles.filterBtn} ${key && key === String(filterYear || "").trim() ? styles.filterBtnActive : ""}`}
-                        onClick={() => onSelectYearFilter?.(key)}
-                      >
-                        {yearRow?.name} ({Number(yearRow?.count || 0)})
-                      </button>
-                    );
-                  })}
-                </div>
-              </section>
-            </div>
-          ) : null}
-          {!showInlineFilters ? (
-            <div className={styles.activeFilterWrap}>
-              <strong className={styles.activeFilterTitle}>Active Filters</strong>
-              <div className={styles.activeFilterChips}>
-                {activeFilterTags.length ? activeFilterTags.map((tag) => (
-                  <button
-                    type="button"
-                    key={tag.key}
-                    className={styles.activeFilterChip}
-                    onClick={() => {
-                      if (tag.key === "search") {
-                        setSearchDraft("");
-                        onSearchChange?.("");
-                      }
-                      if (tag.key === "category") onSelectCategoryFilter?.("");
-                      if (tag.key === "genre") onSelectGenreFilter?.("");
-                      if (tag.key === "language") onSelectLanguageFilter?.("");
-                      if (tag.key === "year") onSelectYearFilter?.("");
-                      if (tag.key === "mode") onSelectModeFilter?.("all");
-                    }}
-                    title="Clear this filter"
-                  >
-                    {tag.label} ×
-                  </button>
-                )) : <span className={styles.activeFilterChip}>All Movies</span>}
-                {activeFilterTags.length ? (
-                  <button type="button" className={styles.clearAllBtn} onClick={() => onResetFilters?.()}>
-                    Clear All Filters
-                  </button>
-                ) : null}
-              </div>
-            </div>
-          ) : null}
+          {searchControls}
+          {filterControls}
+          {activeFilterControls}
         </section>
 
         <section className={`${styles.sectionCard} ${styles.sectionMovies}`} ref={moviesSectionRef}>
@@ -889,7 +974,92 @@ export default function MoviesView({
           </div>
         </section>
       </div>
-      {!showInlineFilters || activeFilterTags.length ? (
+      {isMobileFilterUi ? (
+        <>
+          <button
+            type="button"
+            className={`${styles.mobileEdgeToggle} ${styles.mobileEdgeToggleLeft}`}
+            onClick={() => {
+              setMobileSearchOpen(false);
+              setMobileFilterOpen(true);
+            }}
+            aria-label="Open movie filter"
+          >
+            <SlidersHorizontal size={16} strokeWidth={2.2} />
+            <span>Movie Filter</span>
+          </button>
+          <button
+            type="button"
+            className={`${styles.mobileEdgeToggle} ${styles.mobileEdgeToggleRight}`}
+            onClick={() => {
+              setMobileFilterOpen(false);
+              setMobileSearchOpen(true);
+            }}
+            aria-label="Open movie search"
+          >
+            <Search size={16} strokeWidth={2.2} />
+            <span>Search Movie</span>
+          </button>
+          {mobileSearchOpen || mobileFilterOpen ? (
+            <button
+              type="button"
+              aria-label="Close mobile drawer"
+              className={`${styles.mobileDrawerBackdrop} ${styles.mobileDrawerBackdropOpen}`}
+              onClick={() => {
+                setMobileSearchOpen(false);
+                setMobileFilterOpen(false);
+              }}
+            />
+          ) : null}
+          <aside
+            className={`${styles.mobileDrawer} ${styles.mobileDrawerLeft} ${
+              mobileFilterOpen ? styles.mobileDrawerOpen : ""
+            }`}
+            aria-hidden={!mobileFilterOpen}
+          >
+            <div className={styles.mobileDrawerHead}>
+              <div className={styles.mobileDrawerTitleWrap}>
+                <SlidersHorizontal size={18} strokeWidth={2.2} />
+                <strong>Movie Filter</strong>
+              </div>
+              <button
+                type="button"
+                className={styles.mobileDrawerClose}
+                onClick={() => setMobileFilterOpen(false)}
+                aria-label="Close filter panel"
+              >
+                <X size={18} strokeWidth={2.2} />
+              </button>
+            </div>
+            <div className={styles.mobileDrawerBody}>
+              {filterControls}
+              {activeFilterControls}
+            </div>
+          </aside>
+          <aside
+            className={`${styles.mobileDrawer} ${styles.mobileDrawerRight} ${
+              mobileSearchOpen ? styles.mobileDrawerOpen : ""
+            }`}
+            aria-hidden={!mobileSearchOpen}
+          >
+            <div className={styles.mobileDrawerHead}>
+              <div className={styles.mobileDrawerTitleWrap}>
+                <Search size={18} strokeWidth={2.2} />
+                <strong>Search Movie</strong>
+              </div>
+              <button
+                type="button"
+                className={styles.mobileDrawerClose}
+                onClick={() => setMobileSearchOpen(false)}
+                aria-label="Close search panel"
+              >
+                <X size={18} strokeWidth={2.2} />
+              </button>
+            </div>
+            <div className={styles.mobileDrawerBody}>{searchControls}</div>
+          </aside>
+        </>
+      ) : !showInlineFilters || activeFilterTags.length ? (
         <div className={styles.filterDock}>
           <div className={styles.filterDockInner}>
             <div className={styles.filterDockSearchRow}>
@@ -914,18 +1084,7 @@ export default function MoviesView({
                     key={tag.key}
                     type="button"
                     className={styles.activeFilterChip}
-                    onClick={() => {
-                      if (tag.key === "search") {
-                        setSearchDraft("");
-                        onSearchChange?.("");
-                      }
-                      if (tag.key === "inline_category") setCategorySlug("all");
-                      if (tag.key === "category") onSelectCategoryFilter?.("");
-                      if (tag.key === "genre") onSelectGenreFilter?.("");
-                      if (tag.key === "language") onSelectLanguageFilter?.("");
-                      if (tag.key === "year") onSelectYearFilter?.("");
-                      if (tag.key === "mode") onSelectModeFilter?.("all");
-                    }}
+                    onClick={() => clearFilterTag(tag.key)}
                     title="Clear this filter"
                   >
                     {tag.label} ×
@@ -933,16 +1092,7 @@ export default function MoviesView({
                 ))}
               </div>
               {activeFilterTags.length ? (
-                <button
-                  type="button"
-                  className={styles.filterDockClearBtn}
-                  onClick={() => {
-                    setSearchDraft("");
-                    onSearchChange?.("");
-                    if (showInlineFilters) setCategorySlug("all");
-                    onResetFilters?.();
-                  }}
-                >
+                <button type="button" className={styles.filterDockClearBtn} onClick={clearAllFilters}>
                   Clear All Filters
                 </button>
               ) : null}

@@ -352,6 +352,12 @@
   min-width: 0;
 }
 
+.mobileEdgeToggle,
+.mobileDrawer,
+.mobileDrawerBackdrop {
+  display: none;
+}
+
 .filterDock {
   position: fixed;
   left: 0;
@@ -473,6 +479,129 @@
   line-height: 1;
   appearance: none;
   cursor: pointer;
+}
+
+.mobileEdgeToggle {
+  position: fixed;
+  top: 50%;
+  z-index: 66;
+  border: 1px solid color-mix(in oklab, var(--ring) 28%, var(--border));
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in oklab, var(--card) 96%, transparent) 0%,
+      color-mix(in oklab, var(--background) 92%, transparent) 100%
+    );
+  color: var(--foreground);
+  border-radius: 16px 16px 0 0;
+  padding: 12px 8px;
+  box-shadow: var(--shadow-lg);
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+
+.mobileEdgeToggleLeft {
+  left: 0;
+  border-radius: 0 16px 16px 0;
+}
+
+.mobileEdgeToggleRight {
+  right: 0;
+  border-radius: 16px 0 0 16px;
+}
+
+.mobileDrawerBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 67;
+  border: 0;
+  padding: 0;
+  background: color-mix(in oklab, black 48%, transparent);
+  backdrop-filter: blur(4px);
+  appearance: none;
+  cursor: pointer;
+}
+
+.mobileDrawer {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  z-index: 68;
+  width: min(86vw, 360px);
+  border: 1px solid color-mix(in oklab, var(--border) 86%, transparent);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in oklab, var(--card) 96%, transparent) 0%,
+      color-mix(in oklab, var(--background) 92%, transparent) 100%
+    );
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: transform 0.28s ease;
+}
+
+.mobileDrawerLeft {
+  left: 0;
+  transform: translateX(-104%);
+  border-right-color: color-mix(in oklab, var(--ring) 26%, var(--border));
+}
+
+.mobileDrawerRight {
+  right: 0;
+  transform: translateX(104%);
+  border-left-color: color-mix(in oklab, var(--ring) 26%, var(--border));
+}
+
+.mobileDrawerOpen {
+  transform: translateX(0);
+}
+
+.mobileDrawerHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 14px 12px;
+  border-bottom: 1px solid color-mix(in oklab, var(--border) 88%, transparent);
+}
+
+.mobileDrawerTitleWrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 800;
+  color: color-mix(in oklab, var(--foreground) 96%, transparent);
+}
+
+.mobileDrawerClose {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid color-mix(in oklab, var(--border) 88%, transparent);
+  border-radius: 10px;
+  background: color-mix(in oklab, var(--card) 88%, transparent);
+  color: var(--foreground);
+  cursor: pointer;
+}
+
+.mobileDrawerBody {
+  flex: 1 1 auto;
+  overflow: auto;
+  padding-bottom: 16px;
 }
 
 .searchInput {
@@ -1348,6 +1477,27 @@
 @media (max-width: 640px) {
   .leftCol {
     gap: 8px;
+  }
+
+  .sectionControls {
+    display: none;
+  }
+
+  .filterDock {
+    display: none;
+  }
+
+  .mobileEdgeToggle {
+    display: inline-flex;
+  }
+
+  .mobileDrawer,
+  .mobileDrawerBackdrop {
+    display: flex;
+  }
+
+  .mobileDrawerBackdrop {
+    display: block;
   }
 
   .sectionCard {

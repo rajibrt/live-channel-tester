@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Clapperboard, FolderPlus, Pencil, Trash2 } from "lucide-react";
 import {
   resolveBrowserPlaybackUrl,
@@ -531,23 +531,48 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
     importForm.max_depth,
     importForm.category_ids,
   ]);
-  const isImportableItemId = (id) => {
-    const status = String(importStatusMap[id] || "");
+  const isImportableWithMaps = (id, statusMap = importStatusMap, selection = selectionMap) => {
+    const status = String((statusMap || {})[id] || "");
     if (!id) return false;
     if (status === "saved" || status === "skipped" || status === "duplicate") return false;
-    return Boolean(selectionMap[id]);
+    return Boolean((selection || {})[id]);
   };
+  const isImportableItemId = (id) => {
+    return isImportableWithMaps(id, importStatusMap, selectionMap);
+  };
+  const currentScanAbsoluteRange = useMemo(() => {
+    const totalPrepared = effectivePreparedItems.length;
+    const summaryStart = clampPositiveInteger(importSummary?.range_start, 1);
+    const summaryEndRaw = clampNonNegativeInteger(importSummary?.range_end, 0);
+    const summaryEnd = summaryEndRaw > 0 ? summaryEndRaw : Math.max(summaryStart, summaryStart + totalPrepared - 1);
+    return {
+      start: summaryStart,
+      end: summaryEnd,
+    };
+  }, [effectivePreparedItems.length, importSummary]);
+  const getPreparedIdsForAbsoluteRange = useCallback((orderedIds, absoluteStart, absoluteEnd) => {
+    const list = Array.isArray(orderedIds) ? orderedIds.filter(Boolean) : [];
+    if (!list.length) return [];
+
+    const windowStart = Math.max(1, Number(currentScanAbsoluteRange.start || 1));
+    const requestedStart = Math.max(1, Number(absoluteStart || windowStart));
+    const requestedEndRaw = Math.max(0, Number(absoluteEnd || 0));
+    const requestedEnd = requestedEndRaw > 0 ? requestedEndRaw : Math.max(windowStart, windowStart + list.length - 1);
+    const relativeStart = Math.max(0, requestedStart - windowStart);
+    const relativeEnd = Math.min(list.length, requestedEnd - windowStart + 1);
+    if (relativeStart >= relativeEnd) return [];
+    return list.slice(relativeStart, relativeEnd);
+  }, [currentScanAbsoluteRange.start]);
   const rangePreviewSummary = useMemo(() => {
     const orderedIds = effectivePreparedItems.map((item) => String(item?.item_id || "")).filter(Boolean);
-    const totalOrdered = orderedIds.length;
-    if (!totalOrdered) {
+    if (!orderedIds.length) {
       return { start: 0, end: 0, totalInRange: 0, importable: 0 };
     }
     const parsedRangeStart = clampPositiveInteger(importForm.range_start, 1);
     const parsedRangeEndRaw = clampNonNegativeInteger(importForm.range_end, 0);
-    const safeRangeEnd = parsedRangeEndRaw > 0 ? Math.min(parsedRangeEndRaw, totalOrdered) : totalOrdered;
+    const safeRangeEnd = parsedRangeEndRaw > 0 ? parsedRangeEndRaw : currentScanAbsoluteRange.end;
     const safeRangeStart = Math.min(parsedRangeStart, safeRangeEnd);
-    const rangeIds = orderedIds.slice(Math.max(0, safeRangeStart - 1), safeRangeEnd);
+    const rangeIds = getPreparedIdsForAbsoluteRange(orderedIds, safeRangeStart, safeRangeEnd);
     return {
       start: safeRangeStart,
       end: safeRangeEnd,
@@ -555,7 +580,9 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
       importable: rangeIds.filter((id) => isImportableItemId(id)).length,
     };
   }, [
+    currentScanAbsoluteRange.end,
     effectivePreparedItems,
+    getPreparedIdsForAbsoluteRange,
     importForm.range_start,
     importForm.range_end,
     importStatusMap,
@@ -569,7 +596,7 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
     const nextStart = Math.max(1, currentEnd + 1);
     const nextEnd = nextStart + batchSize - 1;
     return {
-      canContinue: Boolean(String(importForm.base_url || "").trim()) && !importingMovies,
+      canContinue: Boolean(String(importForm.base_url || "").trim()) && !importingMovies && !importingPrepared,
       pendingCount: batchSize,
       nextStart,
       nextEnd,
@@ -580,6 +607,7 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
     importForm.range_end,
     importForm.batch_size,
     importingMovies,
+    importingPrepared,
   ]);
   const selectedCategory = useMemo(
     () => categories.find((row) => String(row?.slug || "").trim().toLowerCase() === activeCategorySlug) || null,
@@ -1164,8 +1192,17 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
         range_end: String(Number(finalSummary?.range_end || parsedRangeEndRaw) || parsedRangeEndRaw || 0),
       }));
       setMessage("Scan complete. এই range review করে Import দিন।");
+      return {
+        summary: finalSummary,
+        items,
+        selectionMap: nextSelection,
+        statusMap: nextStatus,
+        rangeStart: Number(finalSummary?.range_start || parsedRangeStart) || parsedRangeStart,
+        rangeEnd: Number(finalSummary?.range_end || parsedRangeEndRaw) || parsedRangeEndRaw || 0,
+      };
     } catch (err) {
       setError(err?.message || "Movie import failed");
+      return null;
     } finally {
       setImportingMovies(false);
     }
@@ -1222,6 +1259,9 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
     rangeStart,
     rangeEnd,
     categoryIds = [],
+    preparedItemsOverride = null,
+    selectionMapOverride = null,
+    statusMapOverride = null,
   }) => {
     const safeQueue = Array.isArray(queuedIds) ? queuedIds.filter(Boolean) : [];
     if (!safeQueue.length) {
@@ -1238,8 +1278,11 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
     const queuedIdSet = new Set(batchIds);
     const frozenCategoryIds = normalizeIds(categoryIds);
     const frozenCategoryRows = categories.filter((row) => frozenCategoryIds.includes(Number(row?.id)));
+    const preparedSourceItems = Array.isArray(preparedItemsOverride) ? preparedItemsOverride : preparedItems;
+    const effectiveSelectionMap = selectionMapOverride && typeof selectionMapOverride === "object" ? selectionMapOverride : selectionMap;
+    const effectiveStatusMap = statusMapOverride && typeof statusMapOverride === "object" ? statusMapOverride : importStatusMap;
     const itemsSource = frozenCategoryIds.length
-      ? preparedItems.map((row) => ({
+      ? preparedSourceItems.map((row) => ({
           ...row,
           category_ids: frozenCategoryIds,
           category_names: frozenCategoryRows.map((item) => String(item?.name || "").trim()).filter(Boolean),
@@ -1247,10 +1290,10 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
           category_slug: frozenCategoryRows[0]?.slug || row?.category_slug || "",
           category_source: "manual_override",
         }))
-      : effectivePreparedItems;
+      : preparedSourceItems;
     const selectedItems = itemsSource.filter((item) => {
       const id = String(item?.item_id || "");
-      return queuedIdSet.has(id) && isImportableItemId(id);
+      return queuedIdSet.has(id) && isImportableWithMaps(id, effectiveStatusMap, effectiveSelectionMap);
     });
 
     setImportProgress({
@@ -1427,12 +1470,11 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
       if (!orderedIds.length) {
         throw new Error("Prepared list-এ valid item নেই।");
       }
-      const totalOrdered = orderedIds.length;
       const parsedRangeStart = clampPositiveInteger(importForm.range_start, 1);
       const parsedRangeEndRaw = clampNonNegativeInteger(importForm.range_end, 0);
-      const safeRangeEnd = parsedRangeEndRaw > 0 ? Math.min(parsedRangeEndRaw, totalOrdered) : totalOrdered;
+      const safeRangeEnd = parsedRangeEndRaw > 0 ? parsedRangeEndRaw : currentScanAbsoluteRange.end;
       const safeRangeStart = Math.min(parsedRangeStart, safeRangeEnd);
-      const rangeOrderedIds = orderedIds.slice(Math.max(0, safeRangeStart - 1), safeRangeEnd);
+      const rangeOrderedIds = getPreparedIdsForAbsoluteRange(orderedIds, safeRangeStart, safeRangeEnd);
       if (!rangeOrderedIds.length) {
         throw new Error("Selected range-এ কোনো item নেই।");
       }
@@ -1488,10 +1530,47 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
       setError("আগে Base URL দিন।");
       return;
     }
-    await runMovieScan({
+    setError("");
+    setMessage("");
+    const scanResult = await runMovieScan({
       range_start: String(nextStart),
       range_end: String(nextEnd),
     });
+    if (!scanResult) return;
+
+    const scannedItems = Array.isArray(scanResult.items) ? scanResult.items : [];
+    const orderedIds = scannedItems.map((item) => String(item?.item_id || "")).filter(Boolean);
+    if (!orderedIds.length) {
+      setMessage("Next batch scan complete, কিন্তু import করার মতো item পাওয়া যায়নি।");
+      return;
+    }
+
+    const importableCount = orderedIds.filter((id) =>
+      isImportableWithMaps(id, scanResult.statusMap, scanResult.selectionMap)
+    ).length;
+    if (!importableCount) {
+      setMessage("Next batch scan complete, কিন্তু সব item duplicate, already imported, অথবা unselected.");
+      return;
+    }
+
+    setImportingPrepared(true);
+    try {
+      await runPreparedMovieImportBatch({
+        queuedIds: orderedIds,
+        batchStartIndex: 0,
+        batchSize: orderedIds.length,
+        rangeStart: Number(scanResult.rangeStart || nextStart),
+        rangeEnd: Number(scanResult.rangeEnd || nextEnd),
+        categoryIds: normalizeIds(importForm.category_ids),
+        preparedItemsOverride: scannedItems,
+        selectionMapOverride: scanResult.selectionMap,
+        statusMapOverride: scanResult.statusMap,
+      });
+    } catch (err) {
+      setError(err?.message || "Continue import failed");
+    } finally {
+      setImportingPrepared(false);
+    }
   };
 
   const handleCategorySubmit = async (event) => {

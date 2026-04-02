@@ -218,6 +218,62 @@ async function diagnoseTranscodeFailure(playbackUrl) {
   }
 }
 
+function getFullscreenElement() {
+  if (typeof document === 'undefined') return null
+  return (
+    document.fullscreenElement ||
+    document.webkitFullscreenElement ||
+    document.mozFullScreenElement ||
+    document.msFullscreenElement ||
+    null
+  )
+}
+
+async function requestElementFullscreen(element, video) {
+  if (element?.requestFullscreen) {
+    await element.requestFullscreen()
+    return true
+  }
+  if (element?.webkitRequestFullscreen) {
+    element.webkitRequestFullscreen()
+    return true
+  }
+  if (element?.mozRequestFullScreen) {
+    element.mozRequestFullScreen()
+    return true
+  }
+  if (element?.msRequestFullscreen) {
+    element.msRequestFullscreen()
+    return true
+  }
+  if (video?.webkitEnterFullscreen) {
+    video.webkitEnterFullscreen()
+    return true
+  }
+  return false
+}
+
+async function exitDocumentFullscreen() {
+  if (typeof document === 'undefined') return false
+  if (document.exitFullscreen) {
+    await document.exitFullscreen()
+    return true
+  }
+  if (document.webkitExitFullscreen) {
+    document.webkitExitFullscreen()
+    return true
+  }
+  if (document.mozCancelFullScreen) {
+    document.mozCancelFullScreen()
+    return true
+  }
+  if (document.msExitFullscreen) {
+    document.msExitFullscreen()
+    return true
+  }
+  return false
+}
+
 export default function MoviePlayer({
   movie,
   startFrom = null,
@@ -230,9 +286,11 @@ export default function MoviePlayer({
   onMarkedComplete,
   onTrackActivity,
 }) {
+  const playerWrapRef = useRef(null)
   const videoRef = useRef(null)
   const hlsRef = useRef(null)
   const intervalRef = useRef(null)
+  const autoLandscapeFullscreenRef = useRef(false)
   const onProgressSavedRef = useRef(onProgressSaved)
   const onMarkedCompleteRef = useRef(onMarkedComplete)
   const onTrackActivityRef = useRef(onTrackActivity)
@@ -956,8 +1014,73 @@ export default function MoviePlayer({
     privateHostedMode,
   ])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined
+
+    const syncLandscapeFullscreen = async () => {
+      const playerWrap = playerWrapRef.current
+      const video = videoRef.current
+      if (!playerWrap || !video) return
+
+      const isTouchDevice =
+        window.matchMedia?.('(pointer: coarse)')?.matches ||
+        navigator.maxTouchPoints > 0
+      const isSmallScreen = Math.min(window.innerWidth || 0, window.innerHeight || 0) <= 900
+      const isLandscape = window.innerWidth > window.innerHeight
+      const fullscreenElement = getFullscreenElement()
+      const wrapperIsFullscreen = fullscreenElement === playerWrap
+
+      if (isTouchDevice && isSmallScreen && isLandscape) {
+        if (!fullscreenElement) {
+          try {
+            const entered = await requestElementFullscreen(playerWrap, video)
+            if (entered) autoLandscapeFullscreenRef.current = true
+          } catch {
+            // ignore fullscreen request failures
+          }
+        }
+        return
+      }
+
+      if (autoLandscapeFullscreenRef.current && wrapperIsFullscreen) {
+        try {
+          await exitDocumentFullscreen()
+        } catch {
+          // ignore exit failures
+        }
+      }
+      autoLandscapeFullscreenRef.current = false
+    }
+
+    const handleViewportChange = () => {
+      syncLandscapeFullscreen().catch(() => {})
+    }
+
+    const handleFullscreenChange = () => {
+      const playerWrap = playerWrapRef.current
+      const fullscreenElement = getFullscreenElement()
+      if (fullscreenElement !== playerWrap) {
+        autoLandscapeFullscreenRef.current = false
+      }
+    }
+
+    window.addEventListener('resize', handleViewportChange)
+    window.addEventListener('orientationchange', handleViewportChange)
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange)
+
+    syncLandscapeFullscreen().catch(() => {})
+
+    return () => {
+      window.removeEventListener('resize', handleViewportChange)
+      window.removeEventListener('orientationchange', handleViewportChange)
+      document.removeEventListener('fullscreenchange', handleFullscreenChange)
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange)
+    }
+  }, [movie?.id])
+
   return (
-    <section className={styles.playerWrap}>
+    <section ref={playerWrapRef} className={styles.playerWrap}>
       <div className={styles.videoShell}>
         <video
           key={videoElementKey}
