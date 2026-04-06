@@ -42,6 +42,10 @@ export async function generateMetadata({ params }) {
   return {
     title: `${movieTitle} | WEBTVBD`,
     description: seo.description,
+    robots: {
+      index: false,
+      follow: true,
+    },
     alternates: { canonical: seo.canonicalUrl },
     openGraph: {
       type: "video.movie",

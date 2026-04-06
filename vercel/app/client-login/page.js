@@ -10,9 +10,25 @@ import ClientAuthTabs from "./ClientAuthTabs";
 export async function generateMetadata() {
   try {
     const settings = await loadSiteSeoSettingsCached();
-    return buildHomePageMetadata(settings);
+    const metadata = buildHomePageMetadata(settings);
+    return {
+      ...metadata,
+      title: "Client Login | WEBTVBD",
+      robots: {
+        index: false,
+        follow: true,
+      },
+    };
   } catch {
-    return buildHomePageMetadata({});
+    const metadata = buildHomePageMetadata({});
+    return {
+      ...metadata,
+      title: "Client Login | WEBTVBD",
+      robots: {
+        index: false,
+        follow: true,
+      },
+    };
   }
 }
 

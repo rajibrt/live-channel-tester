@@ -68,6 +68,7 @@ export default function VideoPlayer({
   onPlaybackAttempt,
   onPlaybackFailure,
 }) {
+  const LIVE_PLAYER_SCOPE = "live-player";
   const videoRef = useRef(null);
   const shellRef = useRef(null);
   const hlsRef = useRef(null);
@@ -76,6 +77,7 @@ export default function VideoPlayer({
   const hlsNativeFallbackTriedRef = useRef(false);
   const hudTimerRef = useRef(null);
   const fsPanelsTimerRef = useRef(null);
+  const autoplayRecoveryTimerRef = useRef(null);
   const autoFullscreenByOrientationRef = useRef(false);
   const fsInteractionActiveRef = useRef(false);
   const lastShellTapTsRef = useRef(0);
@@ -85,6 +87,7 @@ export default function VideoPlayer({
   const allCategoriesBtnRef = useRef(null);
   const categoryBtnRefs = useRef({});
   const channelBtnRefs = useRef({});
+  const focusScopeRestoreTimerRef = useRef(null);
   const lastVolumeBeforeMuteRef = useRef(100);
   const preferredVolumeRef = useRef(100);
   const userMutedRef = useRef(false);
@@ -92,6 +95,8 @@ export default function VideoPlayer({
   const [status, setStatus] = useState("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const [volumePercent, setVolumePercent] = useState(100);
+  const [isActuallyMuted, setIsActuallyMuted] = useState(false);
+  const [audioStatusMessage, setAudioStatusMessage] = useState("");
   const [showVolumeHud, setShowVolumeHud] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -212,13 +217,25 @@ export default function VideoPlayer({
     return Math.max(1, Math.min(100, preferred));
   };
 
+  const syncAudioUiState = (video, { forceMutedLabel = false } = {}) => {
+    if (!video) {
+      setVolumePercent(0);
+      setIsActuallyMuted(true);
+      return;
+    }
+    const nextMuted = Boolean(forceMutedLabel || video.muted || (video.volume || 0) <= 0);
+    const nextPercent = nextMuted ? 0 : Math.round((video.volume || 0) * 100);
+    setIsActuallyMuted(nextMuted);
+    setVolumePercent(nextPercent);
+  };
+
   const applyPreferredAudio = (video, { forceAudible = false } = {}) => {
     if (!video) return;
     const preferred = getPreferredVolumePercent();
     const shouldMute = forceAudible ? false : userMutedRef.current;
     video.muted = shouldMute;
     video.volume = shouldMute ? 0 : preferred / 100;
-    setVolumePercent(shouldMute ? 0 : preferred);
+    syncAudioUiState(video);
   };
 
   const handleToggleMute = () => {
@@ -233,7 +250,8 @@ export default function VideoPlayer({
       autoplayMutedRef.current = false;
       video.volume = 0;
       video.muted = true;
-      setVolumePercent(0);
+      syncAudioUiState(video, { forceMutedLabel: true });
+      setAudioStatusMessage("Muted");
       showHud();
       return;
     }
@@ -244,7 +262,8 @@ export default function VideoPlayer({
     autoplayMutedRef.current = false;
     video.muted = false;
     video.volume = restorePercent / 100;
-    setVolumePercent(restorePercent);
+    syncAudioUiState(video);
+    setAudioStatusMessage("");
     showHud();
   };
 
@@ -273,6 +292,11 @@ export default function VideoPlayer({
     setStatus("loading");
     setErrorMessage("");
     autoplayMutedRef.current = false;
+    setAudioStatusMessage("");
+    if (autoplayRecoveryTimerRef.current) {
+      clearTimeout(autoplayRecoveryTimerRef.current);
+      autoplayRecoveryTimerRef.current = null;
+    }
     applyPreferredAudio(video);
 
     const reportAttempt = () => {
@@ -334,13 +358,10 @@ export default function VideoPlayer({
       video.load();
       const result = await tryStartPlayback(video, { allowMutedFallback: true });
       autoplayMutedRef.current = Boolean(result?.usedMutedFallback) && !userMutedRef.current;
-      if (autoplayMutedRef.current) {
-        setTimeout(() => {
-          if (cancelled || !videoRef.current || userMutedRef.current) return;
-          applyPreferredAudio(videoRef.current, { forceAudible: true });
-          autoplayMutedRef.current = false;
-        }, 120);
-      }
+      syncAudioUiState(video, { forceMutedLabel: autoplayMutedRef.current });
+      setAudioStatusMessage(
+        autoplayMutedRef.current ? "Muted by browser autoplay. Click the sound icon to unmute." : ""
+      );
       if (!result?.started && !cancelled && !playbackStarted) {
         setStatus("idle");
       }
@@ -370,13 +391,10 @@ export default function VideoPlayer({
               if (!cancelled) setStatus("playing");
               const result = await tryStartPlayback(video, { allowMutedFallback: true });
               autoplayMutedRef.current = Boolean(result?.usedMutedFallback) && !userMutedRef.current;
-              if (autoplayMutedRef.current) {
-                setTimeout(() => {
-                  if (cancelled || !videoRef.current || userMutedRef.current) return;
-                  applyPreferredAudio(videoRef.current, { forceAudible: true });
-                  autoplayMutedRef.current = false;
-                }, 120);
-              }
+              syncAudioUiState(video, { forceMutedLabel: autoplayMutedRef.current });
+              setAudioStatusMessage(
+                autoplayMutedRef.current ? "Muted by browser autoplay. Click the sound icon to unmute." : ""
+              );
             });
             hls.on(Hls.Events.ERROR, (_event, data) => {
               if (!data?.fatal || cancelled) return;
@@ -425,6 +443,10 @@ export default function VideoPlayer({
         hlsRef.current.destroy();
         hlsRef.current = null;
       }
+      if (autoplayRecoveryTimerRef.current) {
+        clearTimeout(autoplayRecoveryTimerRef.current);
+        autoplayRecoveryTimerRef.current = null;
+      }
     };
   }, [channel?.id, channel?.name, channel?.streamUrl]);
 
@@ -435,20 +457,27 @@ export default function VideoPlayer({
       video.volume = Math.min(1, Math.max(0, (video.volume || 0) + delta));
       if (video.volume > 0 && video.muted) video.muted = false;
       const nextPercent = Math.round(video.volume * 100);
-      setVolumePercent(nextPercent);
+      syncAudioUiState(video);
       if (video.volume > 0) {
         lastVolumeBeforeMuteRef.current = nextPercent;
         preferredVolumeRef.current = nextPercent;
         userMutedRef.current = false;
         autoplayMutedRef.current = false;
+        setAudioStatusMessage("");
+      } else {
+        setAudioStatusMessage("Muted");
       }
       showHud();
     };
 
     const onKeyDown = (event) => {
       const target = event.target;
+      const isTvFocusableInput =
+        target instanceof HTMLElement &&
+        String(target.dataset.tvFocusable || "").trim() === "true";
       if (
         target instanceof HTMLElement &&
+        !isTvFocusableInput &&
         (target.tagName === "INPUT" ||
           target.tagName === "TEXTAREA" ||
           target.tagName === "SELECT" ||
@@ -459,6 +488,7 @@ export default function VideoPlayer({
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       const key = String(event.key || "");
       const code = String(event.code || "");
+      const useTvShellNavigation = Boolean(isTvMode);
 
       if (key === "f" || key === "F" || key === "F11" || code === "KeyF") {
         event.preventDefault();
@@ -478,39 +508,39 @@ export default function VideoPlayer({
         return;
       }
 
-      if (key === "ArrowLeft") {
+      if (!useTvShellNavigation && key === "ArrowLeft") {
         event.preventDefault();
         onPrevChannel?.();
         return;
       }
 
-      if (key === "ArrowRight") {
+      if (!useTvShellNavigation && key === "ArrowRight") {
         event.preventDefault();
         onNextChannel?.();
         return;
       }
 
-      if (key === "ArrowUp") {
+      if (!useTvShellNavigation && key === "ArrowUp") {
         event.preventDefault();
         if (isTvMode) onNextChannel?.();
         else adjustVolume(0.05);
         return;
       }
 
-      if (key === "ArrowDown") {
+      if (!useTvShellNavigation && key === "ArrowDown") {
         event.preventDefault();
         if (isTvMode) onPrevChannel?.();
         else adjustVolume(-0.05);
         return;
       }
 
-      if (key === "PageUp" || key === "ChannelUp") {
+      if (!useTvShellNavigation && (key === "PageUp" || key === "ChannelUp")) {
         event.preventDefault();
         onNextChannel?.();
         return;
       }
 
-      if (key === "PageDown" || key === "ChannelDown") {
+      if (!useTvShellNavigation && (key === "PageDown" || key === "ChannelDown")) {
         event.preventDefault();
         onPrevChannel?.();
         return;
@@ -522,7 +552,7 @@ export default function VideoPlayer({
         return;
       }
 
-      if (key === "MediaPlayPause") {
+      if (!useTvShellNavigation && key === "MediaPlayPause") {
         event.preventDefault();
         const video = videoRef.current;
         if (!video) return;
@@ -534,19 +564,19 @@ export default function VideoPlayer({
         return;
       }
 
-      if (key === "MediaPlay") {
+      if (!useTvShellNavigation && key === "MediaPlay") {
         event.preventDefault();
         videoRef.current?.play?.().catch(() => {});
         return;
       }
 
-      if (key === "MediaPause") {
+      if (!useTvShellNavigation && key === "MediaPause") {
         event.preventDefault();
         videoRef.current?.pause?.();
         return;
       }
 
-      if (key === "MediaStop") {
+      if (!useTvShellNavigation && key === "MediaStop") {
         event.preventDefault();
         const video = videoRef.current;
         if (!video) return;
@@ -561,10 +591,8 @@ export default function VideoPlayer({
       }
 
       if (
-        key === "Escape" ||
-        key === "Backspace" ||
-        key === "BrowserBack" ||
-        key === "GoBack"
+        !useTvShellNavigation &&
+        (key === "Escape" || key === "Backspace" || key === "BrowserBack" || key === "GoBack")
       ) {
         if (document.fullscreenElement) {
           event.preventDefault();
@@ -616,6 +644,10 @@ export default function VideoPlayer({
       window.removeEventListener("tv-media-stop", onCustomStop);
       window.removeEventListener("tv-back", onCustomBack);
       if (hudTimerRef.current) clearTimeout(hudTimerRef.current);
+      if (autoplayRecoveryTimerRef.current) {
+        clearTimeout(autoplayRecoveryTimerRef.current);
+        autoplayRecoveryTimerRef.current = null;
+      }
     };
   }, [isTvMode, onNextChannel, onPrevChannel]);
 
@@ -681,6 +713,34 @@ export default function VideoPlayer({
   }, []);
 
   useEffect(() => {
+    if (typeof window === "undefined" || !isTvMode) return undefined;
+    const scope = isFullscreen && showFsPanels ? LIVE_PLAYER_SCOPE : "";
+    window.dispatchEvent(new CustomEvent("tv-focus-scope-change", { detail: { scope } }));
+    return () => {
+      if (!scope) return;
+      window.dispatchEvent(new CustomEvent("tv-focus-scope-change", { detail: { scope: "" } }));
+    };
+  }, [isFullscreen, isTvMode, showFsPanels]);
+
+  useEffect(() => {
+    if (!isTvMode || !isFullscreen || !showFsPanels || typeof window === "undefined") return undefined;
+    if (focusScopeRestoreTimerRef.current) clearTimeout(focusScopeRestoreTimerRef.current);
+    focusScopeRestoreTimerRef.current = window.setTimeout(() => {
+      const scopeNodes = Array.from(document.querySelectorAll("[data-tv-focusable='true']")).filter((node) => {
+        if (!(node instanceof HTMLElement)) return false;
+        return String(node.dataset.tvFocusScope || "") === LIVE_PLAYER_SCOPE;
+      });
+      const activeNode = scopeNodes.find((node) => String(node.dataset.tvActive || "") === "true");
+      const defaultNode = scopeNodes.find((node) => String(node.dataset.tvDefaultFocus || "") === "true");
+      const target = activeNode || defaultNode || scopeNodes[0] || null;
+      if (target instanceof HTMLElement) target.focus({ preventScroll: false });
+    }, 40);
+    return () => {
+      if (focusScopeRestoreTimerRef.current) clearTimeout(focusScopeRestoreTimerRef.current);
+    };
+  }, [isFullscreen, isTvMode, showFsPanels]);
+
+  useEffect(() => {
     fsPanelsVisibleRef.current = showFsPanels;
   }, [showFsPanels]);
 
@@ -690,12 +750,15 @@ export default function VideoPlayer({
 
     const onVolumeChange = () => {
       const next = video.muted ? 0 : Math.round((video.volume || 0) * 100);
-      setVolumePercent(next);
+      syncAudioUiState(video);
       if (!video.muted && next > 0) {
         lastVolumeBeforeMuteRef.current = next;
         preferredVolumeRef.current = next;
         userMutedRef.current = false;
         autoplayMutedRef.current = false;
+        setAudioStatusMessage("");
+      } else if (video.muted || next === 0) {
+        setAudioStatusMessage((current) => current || "Muted");
       }
     };
     const onPlay = () => setIsPaused(false);
@@ -714,6 +777,64 @@ export default function VideoPlayer({
       video.removeEventListener("pause", onPause);
     };
   }, []);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !channel?.id) return undefined;
+
+    let cancelled = false;
+    let lastAudioBytes = -1;
+    let stableSilentSamples = 0;
+
+    const readDecodedAudioBytes = () => {
+      const webkitValue = Number(video.webkitAudioDecodedByteCount);
+      if (Number.isFinite(webkitValue) && webkitValue >= 0) return webkitValue;
+      const mozValue = Number(video.mozAudioCaptured);
+      if (Number.isFinite(mozValue) && mozValue >= 0) return mozValue;
+      return -1;
+    };
+
+    const hasDeclaredNoAudioTrack = () => {
+      if (typeof video.mozHasAudio === "boolean") return video.mozHasAudio === false;
+      if (Array.isArray(video.audioTracks)) return video.audioTracks.length === 0;
+      if (video.audioTracks && typeof video.audioTracks.length === "number") return video.audioTracks.length === 0;
+      return false;
+    };
+
+    const timer = window.setInterval(() => {
+      if (cancelled) return;
+      if (status !== "playing" || video.paused || autoplayMutedRef.current || userMutedRef.current || video.muted) return;
+
+      if (hasDeclaredNoAudioTrack()) {
+        setAudioStatusMessage("This channel appears to have no audio track.");
+        return;
+      }
+
+      const decodedAudioBytes = readDecodedAudioBytes();
+      if (decodedAudioBytes < 0) return;
+      if (decodedAudioBytes > 0) {
+        stableSilentSamples = 0;
+        lastAudioBytes = decodedAudioBytes;
+        if (audioStatusMessage === "This channel appears to have no audio track.") {
+          setAudioStatusMessage("");
+        }
+        return;
+      }
+
+      if (lastAudioBytes === decodedAudioBytes) stableSilentSamples += 1;
+      else stableSilentSamples = 0;
+      lastAudioBytes = decodedAudioBytes;
+
+      if (stableSilentSamples >= 4) {
+        setAudioStatusMessage("This channel appears to have no audio track.");
+      }
+    }, 1500);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [audioStatusMessage, channel?.id, status]);
 
   const handlePlay = async () => {
     const video = videoRef.current;
@@ -766,8 +887,11 @@ export default function VideoPlayer({
     if (safe > 0) {
       lastVolumeBeforeMuteRef.current = safe;
       preferredVolumeRef.current = safe;
+      setAudioStatusMessage("");
+    } else {
+      setAudioStatusMessage("Muted");
     }
-    setVolumePercent(safe);
+    syncAudioUiState(video);
   };
 
   const cycleVideoFitMode = () => {
@@ -778,7 +902,7 @@ export default function VideoPlayer({
   const isPlayingActive = hasStream && status === "playing" && !isPaused;
   const isPauseActive = hasStream && isPaused;
   const isStopActive = !hasStream || status === "idle" || status === "error";
-  const isMuted = volumePercent === 0;
+  const isMuted = isActuallyMuted;
 
   const filteredFsCategories = useMemo(() => {
     const query = fsCategorySearch.trim().toLowerCase();
@@ -845,7 +969,7 @@ export default function VideoPlayer({
   };
 
   return (
-    <div className={styles.videoSection}>
+    <div className={`${styles.videoSection} ${isTvMode ? styles.videoSectionTv : ""}`}>
       <div
         ref={shellRef}
         className={styles.videoShell}
@@ -898,6 +1022,11 @@ export default function VideoPlayer({
         />
 
         {showVolumeHud ? <div className={styles.volumeHud}>Volume {volumePercent}%</div> : null}
+        {hasStream && audioStatusMessage ? (
+          <div className={styles.volumeHud} style={{ top: "18px", bottom: "auto" }}>
+            {audioStatusMessage}
+          </div>
+        ) : null}
         {hasStream && isMuted ? (
           <button
             type="button"
@@ -909,6 +1038,9 @@ export default function VideoPlayer({
             }}
             aria-label="Unmute player"
             title="Unmute"
+            data-tv-focusable={isTvMode ? "true" : undefined}
+            data-tv-focus-scope={isTvMode ? LIVE_PLAYER_SCOPE : undefined}
+            data-tv-focus-id={isTvMode ? "live-player-overlay-unmute" : undefined}
           >
             <Icon name="VolumeX" size={16} />
             <span>Muted</span>
@@ -923,6 +1055,9 @@ export default function VideoPlayer({
               cycleVideoFitMode();
               showPanels({ keepVisible: false, focusSelected: false });
             }}
+            data-tv-focusable={isTvMode ? "true" : undefined}
+            data-tv-focus-scope={isTvMode ? LIVE_PLAYER_SCOPE : undefined}
+            data-tv-focus-id={isTvMode ? "live-player-fit-mode" : undefined}
           >
             <Icon name="MonitorPlay" size={14} />
             {videoFitMode === "cover" ? "Fit" : "Fill"}
@@ -931,7 +1066,7 @@ export default function VideoPlayer({
 
         {isFullscreen && showFsPanels ? (
           <div
-            className={styles.fullscreenOverlay}
+            className={`${styles.fullscreenOverlay} ${isTvMode ? styles.fullscreenOverlayTv : ""}`}
             onClick={(event) => event.stopPropagation()}
             onPointerDown={(event) => event.stopPropagation()}
             onPointerUp={(event) => event.stopPropagation()}
@@ -979,6 +1114,9 @@ export default function VideoPlayer({
                   onChange={(event) => setFsCategorySearch(event.target.value)}
                   placeholder="Search categories..."
                   className={styles.fullscreenSearchInput}
+                  data-tv-focusable={isTvMode ? "true" : undefined}
+                  data-tv-focus-scope={isTvMode ? LIVE_PLAYER_SCOPE : undefined}
+                  data-tv-focus-id={isTvMode ? "live-player-category-search" : undefined}
                 />
               </div>
               <div
@@ -991,6 +1129,10 @@ export default function VideoPlayer({
                   type="button"
                   className={`${styles.fullscreenListBtn} ${!selectedCategory ? styles.fullscreenListBtnActive : ""}`}
                   onClick={() => onSelectCategory?.(null)}
+                  data-tv-focusable={isTvMode ? "true" : undefined}
+                  data-tv-focus-scope={isTvMode ? LIVE_PLAYER_SCOPE : undefined}
+                  data-tv-focus-id={isTvMode ? "live-player-category-all" : undefined}
+                  data-tv-active={isTvMode && !selectedCategory ? "true" : undefined}
                 >
                   All Channels
                 </button>
@@ -1003,6 +1145,10 @@ export default function VideoPlayer({
                     type="button"
                     className={`${styles.fullscreenListBtn} ${selectedCategory === item.id ? styles.fullscreenListBtnActive : ""}`}
                     onClick={() => onSelectCategory?.(item.id)}
+                    data-tv-focusable={isTvMode ? "true" : undefined}
+                    data-tv-focus-scope={isTvMode ? LIVE_PLAYER_SCOPE : undefined}
+                    data-tv-focus-id={isTvMode ? `live-player-category-${String(item.id || "")}` : undefined}
+                    data-tv-active={isTvMode && selectedCategory === item.id ? "true" : undefined}
                   >
                     {item.name}
                   </button>
@@ -1038,6 +1184,9 @@ export default function VideoPlayer({
                   onChange={(event) => setFsChannelSearch(event.target.value)}
                   placeholder="Search channels..."
                   className={styles.fullscreenSearchInput}
+                  data-tv-focusable={isTvMode ? "true" : undefined}
+                  data-tv-focus-scope={isTvMode ? LIVE_PLAYER_SCOPE : undefined}
+                  data-tv-focus-id={isTvMode ? "live-player-channel-search" : undefined}
                 />
               </div>
               <div
@@ -1054,6 +1203,10 @@ export default function VideoPlayer({
                     type="button"
                     className={`${styles.fullscreenListBtn} ${channel?.id === item.id ? styles.fullscreenListBtnActive : ""}`}
                     onClick={() => onSelectChannel?.(item)}
+                    data-tv-focusable={isTvMode ? "true" : undefined}
+                    data-tv-focus-scope={isTvMode ? LIVE_PLAYER_SCOPE : undefined}
+                    data-tv-focus-id={isTvMode ? `live-player-channel-${String(item.id || "")}` : undefined}
+                    data-tv-active={isTvMode && channel?.id === item.id ? "true" : undefined}
                   >
                     <span className={styles.fullscreenChannelInfo}>
                       <span className={styles.fullscreenChannelLogo} aria-hidden="true">
@@ -1091,6 +1244,9 @@ export default function VideoPlayer({
                             : `Add ${item?.name || "channel"} to favorites`
                         }
                         title={favoriteSet.has(String(item?.id || "").trim()) ? "Favorited" : "Add to Favorites"}
+                        data-tv-focusable={isTvMode ? "true" : undefined}
+                        data-tv-focus-scope={isTvMode ? LIVE_PLAYER_SCOPE : undefined}
+                        data-tv-focus-id={isTvMode ? `live-player-channel-favorite-${String(item.id || "")}` : undefined}
                       >
                         <Icon
                           name="Heart"
@@ -1105,7 +1261,7 @@ export default function VideoPlayer({
             </aside>
 
             <div
-              className={`${styles.fsControlDock} ${isDark ? styles.darkGlass : styles.lightGlass}`}
+              className={`${styles.fsControlDock} ${isTvMode ? styles.fsControlDockTv : ""} ${isDark ? styles.darkGlass : styles.lightGlass}`}
               onPointerDown={() => {
                 fsInteractionActiveRef.current = true;
                 showPanels({ keepVisible: true });
@@ -1131,6 +1287,10 @@ export default function VideoPlayer({
                   disabled={!hasStream}
                   aria-label={isPaused ? "Play" : "Pause"}
                   title={isPaused ? "Play" : "Pause"}
+                  data-tv-focusable={isTvMode ? "true" : undefined}
+                  data-tv-focus-scope={isTvMode ? LIVE_PLAYER_SCOPE : undefined}
+                  data-tv-focus-id={isTvMode ? "live-player-playpause" : undefined}
+                  data-tv-default-focus={isTvMode ? "true" : undefined}
                 >
                   <Icon name={isPaused ? "Play" : "Pause"} size={18} />
                 </button>
@@ -1141,6 +1301,9 @@ export default function VideoPlayer({
                   disabled={!hasStream}
                   aria-label="Stop"
                   title="Stop"
+                  data-tv-focusable={isTvMode ? "true" : undefined}
+                  data-tv-focus-scope={isTvMode ? LIVE_PLAYER_SCOPE : undefined}
+                  data-tv-focus-id={isTvMode ? "live-player-stop" : undefined}
                 >
                   <Icon name="Square" size={16} />
                 </button>
@@ -1151,6 +1314,9 @@ export default function VideoPlayer({
                   disabled={!hasChannelNav}
                   aria-label="Previous channel"
                   title="Previous"
+                  data-tv-focusable={isTvMode ? "true" : undefined}
+                  data-tv-focus-scope={isTvMode ? LIVE_PLAYER_SCOPE : undefined}
+                  data-tv-focus-id={isTvMode ? "live-player-prev-channel" : undefined}
                 >
                   <Icon name="ChevronLeft" size={18} />
                 </button>
@@ -1161,6 +1327,9 @@ export default function VideoPlayer({
                   disabled={!hasChannelNav}
                   aria-label="Next channel"
                   title="Next"
+                  data-tv-focusable={isTvMode ? "true" : undefined}
+                  data-tv-focus-scope={isTvMode ? LIVE_PLAYER_SCOPE : undefined}
+                  data-tv-focus-id={isTvMode ? "live-player-next-channel" : undefined}
                 >
                   <Icon name="ChevronRight" size={18} />
                 </button>
@@ -1172,6 +1341,9 @@ export default function VideoPlayer({
                   onClick={handleToggleMute}
                   aria-label={isMuted ? "Unmute" : "Mute"}
                   title={isMuted ? "Unmute" : "Mute"}
+                  data-tv-focusable={isTvMode ? "true" : undefined}
+                  data-tv-focus-scope={isTvMode ? LIVE_PLAYER_SCOPE : undefined}
+                  data-tv-focus-id={isTvMode ? "live-player-mute" : undefined}
                 >
                   <Icon name={isMuted ? "VolumeX" : "Volume2"} size={18} />
                 </button>
@@ -1184,6 +1356,9 @@ export default function VideoPlayer({
                   value={volumePercent}
                   onChange={handleVolumeInput}
                   aria-label="Volume"
+                  data-tv-focusable={isTvMode ? "true" : undefined}
+                  data-tv-focus-scope={isTvMode ? LIVE_PLAYER_SCOPE : undefined}
+                  data-tv-focus-id={isTvMode ? "live-player-volume-slider" : undefined}
                 />
                 <span className={styles.fsVolumeValue}>{volumePercent}%</span>
               </div>
@@ -1214,7 +1389,7 @@ export default function VideoPlayer({
         ) : null}
       </div>
 
-      <div className={`${styles.playerControlsRow} ${isDark ? styles.darkGlass : styles.lightGlass}`}>
+      <div className={`${styles.playerControlsRow} ${isTvMode ? styles.playerControlsRowTv : ""} ${isDark ? styles.darkGlass : styles.lightGlass}`}>
         <div className={styles.playerButtons}>
           <button
             type="button"
@@ -1223,6 +1398,10 @@ export default function VideoPlayer({
             disabled={!hasStream}
             aria-pressed={isPlayingActive}
             aria-label={isPaused ? "Play" : "Pause"}
+            data-tv-focusable={isTvMode ? "true" : undefined}
+            data-tv-focus-scope={isTvMode ? LIVE_PLAYER_SCOPE : undefined}
+            data-tv-focus-id={isTvMode ? "live-inline-playpause" : undefined}
+            data-tv-default-focus={isTvMode ? "true" : undefined}
           >
             <Icon name={isPaused ? "Play" : "Pause"} size={16} />
             <span className={styles.controlLabel}>{isPaused ? "Play" : "Pause"}</span>
@@ -1234,6 +1413,9 @@ export default function VideoPlayer({
             disabled={!hasStream}
             aria-pressed={isStopActive}
             aria-label="Stop"
+            data-tv-focusable={isTvMode ? "true" : undefined}
+            data-tv-focus-scope={isTvMode ? LIVE_PLAYER_SCOPE : undefined}
+            data-tv-focus-id={isTvMode ? "live-inline-stop" : undefined}
           >
             <Icon name="Square" size={14} />
             <span className={styles.controlLabel}>Stop</span>
@@ -1245,16 +1427,37 @@ export default function VideoPlayer({
             disabled={!hasStream}
             aria-pressed={isFullscreen}
             aria-label="Fullscreen"
+            data-tv-focusable={isTvMode ? "true" : undefined}
+            data-tv-focus-scope={isTvMode ? LIVE_PLAYER_SCOPE : undefined}
+            data-tv-focus-id={isTvMode ? "live-inline-fullscreen" : undefined}
           >
             <Icon name="Maximize2" size={14} />
             <span className={styles.controlLabel}>Fullscreen</span>
           </button>
           <div className={styles.desktopChannelNav}>
-            <button type="button" className={styles.navBtn} onClick={onPrevChannel} disabled={!hasChannelNav} aria-label="Previous channel">
+            <button
+              type="button"
+              className={styles.navBtn}
+              onClick={onPrevChannel}
+              disabled={!hasChannelNav}
+              aria-label="Previous channel"
+              data-tv-focusable={isTvMode ? "true" : undefined}
+              data-tv-focus-scope={isTvMode ? LIVE_PLAYER_SCOPE : undefined}
+              data-tv-focus-id={isTvMode ? "live-inline-prev-channel" : undefined}
+            >
               <Icon name="ChevronLeft" size={16} />
               <span className={styles.controlLabel}>Prev</span>
             </button>
-            <button type="button" className={styles.navBtn} onClick={onNextChannel} disabled={!hasChannelNav} aria-label="Next channel">
+            <button
+              type="button"
+              className={styles.navBtn}
+              onClick={onNextChannel}
+              disabled={!hasChannelNav}
+              aria-label="Next channel"
+              data-tv-focusable={isTvMode ? "true" : undefined}
+              data-tv-focus-scope={isTvMode ? LIVE_PLAYER_SCOPE : undefined}
+              data-tv-focus-id={isTvMode ? "live-inline-next-channel" : undefined}
+            >
               <span className={styles.controlLabel}>Next</span>
               <Icon name="ChevronRight" size={16} />
             </button>
@@ -1268,16 +1471,34 @@ export default function VideoPlayer({
             aria-label={isMuted ? "Unmute" : "Mute"}
             title={isMuted ? "Unmute (M)" : "Mute (M)"}
             aria-pressed={isMuted}
+            data-tv-focusable={isTvMode ? "true" : undefined}
+            data-tv-focus-scope={isTvMode ? LIVE_PLAYER_SCOPE : undefined}
+            data-tv-focus-id={isTvMode ? "live-inline-mute" : undefined}
           >
             <Icon name={isMuted ? "VolumeX" : "Volume2"} size={16} />
           </button>
-          <input type="range" min="0" max="100" step="1" value={volumePercent} onChange={handleVolumeInput} />
+          <input
+            type="range"
+            min="0"
+            max="100"
+            step="1"
+            value={volumePercent}
+            onChange={handleVolumeInput}
+            data-tv-focusable={isTvMode ? "true" : undefined}
+            data-tv-focus-scope={isTvMode ? LIVE_PLAYER_SCOPE : undefined}
+            data-tv-focus-id={isTvMode ? "live-inline-volume-slider" : undefined}
+          />
           <span>{volumePercent}%</span>
         </div>
       </div>
+      {hasStream && audioStatusMessage ? (
+        <p style={{ margin: "8px 0 0", color: "var(--muted-foreground)", fontSize: "0.92rem" }}>
+          {audioStatusMessage}
+        </p>
+      ) : null}
 
       {channel ? (
-        <article className={`${styles.channelInfo} ${isDark ? styles.darkGlass : styles.lightGlass}`}>
+        <article className={`${styles.channelInfo} ${isTvMode ? styles.channelInfoTv : ""} ${isDark ? styles.darkGlass : styles.lightGlass}`}>
           <div className={styles.channelInfoLeft}>
             <div className={styles.channelInfoLogo} style={{ background: channel.gradientStyle }}>
               {showLogoImage ? (
@@ -1308,6 +1529,9 @@ export default function VideoPlayer({
               className={`${styles.favoriteBtn} ${isFavorite ? styles.favoriteBtnActive : styles.favoriteBtnInactive}`}
               onClick={() => onToggleFavorite(channel.id)}
               aria-pressed={isFavorite}
+              data-tv-focusable={isTvMode ? "true" : undefined}
+              data-tv-focus-scope={isTvMode ? LIVE_PLAYER_SCOPE : undefined}
+              data-tv-focus-id={isTvMode ? "live-inline-favorite" : undefined}
             >
               <Icon name="Heart" size={16} fill={isFavorite ? "currentColor" : "none"} />
               {isFavorite ? "Favorited" : "Add Favorite"}

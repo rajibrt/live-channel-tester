@@ -28,6 +28,10 @@ export async function generateMetadata({ params }) {
   return {
     title: seo.title,
     description: seo.description,
+    robots: {
+      index: false,
+      follow: true,
+    },
     alternates: { canonical: seo.canonicalUrl },
     openGraph: {
       type: "article",
@@ -52,9 +56,9 @@ function PublicChannelLanding({ channel, locale = "en" }) {
       ? {
           category: "ক্যাটাগরি",
           liveAvailable: "লাইভ স্ট্রিম WEBTVBD-তে উপলভ্য।",
-          sourceTitle: "সোর্স নোটিশ",
+          sourceTitle: "অ্যাভেইলেবিলিটি নোটিশ",
           sourceBody:
-            "WEBTVBD এখানে দেখানো লাইভ স্ট্রিম লিংক হোস্ট, আপলোড বা মালিকানা দাবি করে না। স্ট্রিম রেফারেন্সগুলো পাবলিক বা থার্ড-পার্টি সোর্স থেকে আসতে পারে এবং ভিজিটরদের সহজে কনটেন্ট খুঁজে পাওয়ার জন্য শুধু গুছিয়ে দেখানো হয়।",
+            "Channel listing, playback status এবং access availability সময়ের সাথে বদলাতে পারে। Operational review, content update, technical issue বা rights-related request-এর কারণে কোনো item update, restrict বা remove করা হতে পারে.",
           login: "দেখতে লগইন করুন",
           home: "হোম খুলুন",
           notFound: "চ্যানেল পাওয়া যায়নি।",
@@ -62,9 +66,9 @@ function PublicChannelLanding({ channel, locale = "en" }) {
       : {
           category: "Category",
           liveAvailable: "Live stream available on WEBTVBD.",
-          sourceTitle: "Source Notice",
+          sourceTitle: "Availability Notice",
           sourceBody:
-            "WEBTVBD does not host, upload, or claim ownership of the live stream links shown here. Stream references may come from publicly available or third-party sources and are listed only to help visitors discover and access content more easily.",
+            "Channel listings, playback status, and access availability can change over time. Items may be updated, restricted, or removed when operational review, content updates, technical issues, or rights-related requests require changes.",
           login: "Login to Watch",
           home: "Open Home",
           notFound: "Channel not found.",

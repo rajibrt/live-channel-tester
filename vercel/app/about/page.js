@@ -12,9 +12,9 @@ const COPY = {
     title: "Streaming access built for fast channel discovery",
     intro:
       "WEBTVBD organizes live TV channels and on-demand movies into a single browser-based experience designed for quick playback, simple navigation, and multilingual viewers.",
-    noticeTitle: "Important source notice",
+    noticeTitle: "Important service notice",
     noticeBody:
-      "WEBTVBD does not host, own, or claim ownership of the live stream links or video sources listed on this site. These links may come from publicly available or third-party sources and are organized here only to make discovery and access easier for viewers.",
+      "WEBTVBD provides the browsing experience, account layer, and editorial organization for the catalog shown on this site. Stream availability and playback status can change over time because listings may be updated, reviewed, restricted, or removed when operational or rights-related issues are identified.",
     home: "Open Home",
     contact: "Contact WEBTVBD",
     whatWeDo: "What we do",
@@ -31,7 +31,7 @@ const COPY = {
     searchTrafficBody: "Public watch pages and informational pages help search engines understand the site and route visitors to relevant content.",
     editorial: "Editorial approach",
     editorialBody:
-      "Channel groups, movie categories, and public information pages are maintained to make the site easier to review, easier to understand, and more trustworthy for visitors, advertisers, and search engines.",
+      "Channel groups, movie categories, articles, and public information pages are maintained to make the site easier to understand, easier to review, and more trustworthy for visitors, advertisers, and search engines.",
     rights: "Rights and removals",
     rightsBody:
       "If you are a copyright owner, publisher, or authorized representative and need any material reviewed or removed, use the public contact or DMCA page so the item can be checked and handled quickly.",
@@ -41,9 +41,9 @@ const COPY = {
     title: "দ্রুত চ্যানেল খুঁজে পাওয়ার জন্য তৈরি স্ট্রিমিং অ্যাক্সেস",
     intro:
       "WEBTVBD লাইভ টিভি চ্যানেল এবং অন-ডিমান্ড মুভিকে একটি ব্রাউজারভিত্তিক অভিজ্ঞতায় গুছিয়ে আনে, যাতে দ্রুত প্লেব্যাক, সহজ নেভিগেশন এবং বহুভাষী ভিউয়ারদের জন্য ব্যবহার আরামদায়ক হয়।",
-    noticeTitle: "গুরুত্বপূর্ণ সোর্স নোটিশ",
+    noticeTitle: "গুরুত্বপূর্ণ সার্ভিস নোটিশ",
     noticeBody:
-      "WEBTVBD এই সাইটে দেখানো লাইভ স্ট্রিম লিংক বা ভিডিও সোর্স হোস্ট, নিজস্ব মালিকানা দাবি বা নিয়ন্ত্রণ করে না। এই লিংকগুলো পাবলিক বা থার্ড-পার্টি সোর্স থেকে আসতে পারে এবং ভিউয়ারদের সহজে খুঁজে পাওয়া ও অ্যাক্সেসের জন্য শুধু গুছিয়ে দেখানো হয়।",
+      "WEBTVBD এই সাইটে দেখানো ক্যাটালগের browsing experience, account layer এবং editorial organization পরিচালনা করে। Listing, stream availability এবং playback status সময়ের সাথে বদলাতে পারে, কারণ operational বা rights-related issue শনাক্ত হলে item update, review, restrict বা remove করা হতে পারে।",
     home: "হোম খুলুন",
     contact: "WEBTVBD-র সাথে যোগাযোগ",
     whatWeDo: "আমরা কী করি",
@@ -60,7 +60,7 @@ const COPY = {
     searchTrafficBody: "পাবলিক watch page এবং informational page সার্চ ইঞ্জিনকে সাইট বুঝতে সাহায্য করে এবং প্রাসঙ্গিক ভিজিটরদের route করে।",
     editorial: "সম্পাদনাগত দৃষ্টিভঙ্গি",
     editorialBody:
-      "চ্যানেল গ্রুপ, মুভি ক্যাটাগরি এবং পাবলিক তথ্যভিত্তিক পেজগুলো এমনভাবে রক্ষণাবেক্ষণ করা হয় যাতে সাইটটি review করা সহজ হয়, বুঝতে সহজ হয় এবং visitor, advertiser ও search engine-এর কাছে বেশি বিশ্বাসযোগ্য লাগে।",
+      "চ্যানেল গ্রুপ, মুভি ক্যাটাগরি, আর্টিকেল এবং পাবলিক তথ্যভিত্তিক পেজগুলো এমনভাবে রক্ষণাবেক্ষণ করা হয় যাতে সাইটটি review করা সহজ হয়, বুঝতে সহজ হয় এবং visitor, advertiser ও search engine-এর কাছে বেশি বিশ্বাসযোগ্য লাগে।",
     rights: "অধিকার ও অপসারণ",
     rightsBody:
       "আপনি যদি copyright owner, publisher বা authorized representative হন এবং কোনো কনটেন্ট review বা remove করতে চান, তাহলে public contact বা DMCA page ব্যবহার করুন যাতে বিষয়টি দ্রুত যাচাই ও পরিচালনা করা যায়।",

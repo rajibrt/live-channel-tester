@@ -11,8 +11,8 @@ const COPY = {
     eyebrow: "DMCA",
     title: "Copyright and rights notice guidance",
     intro: "If you are a copyright owner or an authorized representative, include enough detail for the reported material to be identified and reviewed.",
-    noticeTitle: "Third-party source notice",
-    noticeBody: "WEBTVBD does not host the stream files or video assets referenced through its listings. The site organizes links from public or third-party sources, and reported items can be reviewed or removed when valid rights concerns are submitted.",
+    noticeTitle: "Review notice",
+    noticeBody: "WEBTVBD reviews reported listings and related platform references when valid rights concerns are submitted. Reported items can be checked, restricted, or removed as needed after review.",
     include: "What to include",
     includeItems: [
       "The exact URL or URLs where the material appears.",
@@ -32,8 +32,8 @@ const COPY = {
     eyebrow: "DMCA",
     title: "কপিরাইট ও অধিকার সংক্রান্ত নির্দেশনা",
     intro: "আপনি যদি copyright owner বা authorized representative হন, তাহলে reported material সনাক্ত ও review করার জন্য পর্যাপ্ত detail দিন।",
-    noticeTitle: "থার্ড-পার্টি সোর্স নোটিশ",
-    noticeBody: "WEBTVBD তার listing-এর মাধ্যমে দেখানো stream file বা video asset host করে না। সাইটটি public বা third-party source-এর link organize করে এবং valid rights concern জমা পড়লে reported item review বা remove করা যেতে পারে।",
+    noticeTitle: "রিভিউ নোটিশ",
+    noticeBody: "Valid rights concern জমা পড়লে WEBTVBD reported listing এবং সম্পর্কিত platform reference review করে। Review শেষে প্রয়োজন হলে reported item check, restrict বা remove করা যেতে পারে।",
     include: "কী কী তথ্য দেবেন",
     includeItems: [
       "যেখানে material দেখা যাচ্ছে সেই exact URL বা URLগুলো।",
