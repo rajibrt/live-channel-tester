@@ -16,12 +16,13 @@ const DISABLED_PREFIXES = [
   "/movie/",
 ];
 
-export default function PublicSmoothScroll() {
+export default function PublicSmoothScroll({ hasClientSession = false }) {
   const pathname = usePathname();
   const path = String(pathname || "");
+  const isViewerShell = hasClientSession && (path === "/" || path.startsWith("/watch/") || path.startsWith("/movie/"));
 
   useEffect(() => {
-    if (!path || DISABLED_PREFIXES.some((prefix) => path.startsWith(prefix))) {
+    if (!path || isViewerShell || DISABLED_PREFIXES.some((prefix) => path.startsWith(prefix))) {
       return undefined;
     }
 
@@ -54,7 +55,7 @@ export default function PublicSmoothScroll() {
       }
       lenis.destroy();
     };
-  }, [path]);
+  }, [isViewerShell, path]);
 
   return null;
 }
