@@ -1172,6 +1172,11 @@ export default function MoviePlayer({
       if (event.defaultPrevented || isTypingTarget(event.target)) return
 
       const key = String(event.key || '')
+      if (key === ' ' || key === 'Spacebar' || key === 'Space') {
+        event.preventDefault()
+        handleTogglePlayPause()
+        return
+      }
       if (key === 'f' || key === 'F') {
         event.preventDefault()
         togglePlayerFullscreen()
@@ -1207,7 +1212,7 @@ export default function MoviePlayer({
     return () => {
       window.removeEventListener('keydown', onKeyDown)
     }
-  }, [adjustVolume, jumpBySeconds, toggleMute, togglePlayerFullscreen])
+  }, [adjustVolume, handleTogglePlayPause, jumpBySeconds, toggleMute, togglePlayerFullscreen])
 
   useEffect(() => {
     return () => {

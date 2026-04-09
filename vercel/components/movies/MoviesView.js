@@ -1962,7 +1962,7 @@ export default function MoviesView({
               isTvMode={isTvMode}
               startFrom={playerStartFrom}
               replayToken={playerReplayToken}
-              autoStartPlayback={isTvMode}
+              autoStartPlayback={true}
               autoEnterFullscreen={isTvMode}
               onRestart={handleRestartAction}
               onMarkComplete={handleMarkComplete}
