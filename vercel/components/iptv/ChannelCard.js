@@ -4,7 +4,17 @@ import { useEffect, useMemo, useState } from "react";
 import { Icon } from "./icons";
 import styles from "./iptv.module.css";
 
-export default function ChannelCard({ channel, isActive, isFavorite, onToggleFavorite, onClick, isDark }) {
+export default function ChannelCard({
+  channel,
+  isActive,
+  isFavorite,
+  onToggleFavorite,
+  onClick,
+  isDark,
+  tvFocusId = "",
+  tvFocusScope = "",
+  tvActive = false,
+}) {
   const [logoFailed, setLogoFailed] = useState(false);
 
   useEffect(() => {
@@ -24,6 +34,10 @@ export default function ChannelCard({ channel, isActive, isFavorite, onToggleFav
       type="button"
       onClick={onClick}
       className={`${styles.channelCard} ${isActive ? styles.channelCardActive : ""} ${isDark ? styles.channelDark : styles.channelLight}`}
+      data-tv-focusable={tvFocusId ? "true" : undefined}
+      data-tv-focus-id={tvFocusId || undefined}
+      data-tv-focus-scope={tvFocusScope || undefined}
+      data-tv-active={tvFocusId ? (tvActive ? "true" : "false") : undefined}
     >
       <div className={styles.channelLogoWrap}>
         <div className={styles.channelLogo} style={{ background: channel.gradientStyle }}>

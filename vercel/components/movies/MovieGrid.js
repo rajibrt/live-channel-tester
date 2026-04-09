@@ -14,6 +14,8 @@ export default function MovieGrid({
   onSelectMovie,
   onToggleFavorite,
   onMetricsChange,
+  isTvMode = false,
+  tvFocusScope = "movie-content",
 }) {
   const gridRef = useRef(null);
 
@@ -72,10 +74,10 @@ export default function MovieGrid({
   }, [movies.length, onMetricsChange]);
 
   return (
-    <section className={styles.gridWrap}>
+    <section className={`${styles.gridWrap} ${isTvMode ? styles.gridWrapTv : ""}`}>
       {title ? <h3 className={styles.gridTitle}>{title}</h3> : null}
       {movies.length ? (
-        <div ref={gridRef} className={styles.grid}>
+        <div ref={gridRef} className={`${styles.grid} ${isTvMode ? styles.gridTv : ""}`}>
           {movies.map((movie) => (
             <MovieCard
               key={movie.id}
@@ -83,6 +85,9 @@ export default function MovieGrid({
               isActive={String(selectedMovieId || "") === String(movie.id || "")}
               onSelect={onSelectMovie}
               onToggleFavorite={onToggleFavorite}
+              isTvMode={isTvMode}
+              tvFocusScope={tvFocusScope}
+              tvFocusId={`movie-grid-${String(movie.id || "")}`}
             />
           ))}
         </div>

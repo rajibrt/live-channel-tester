@@ -22,6 +22,7 @@ export default function LeftSidebar({
   movieFilterView = "categories",
   movieStats = {},
   homeMode = "tv",
+  isTvMode = false,
   onSelectHomeMode,
   onSelectCategory,
   onSelectMode,
@@ -67,7 +68,16 @@ export default function LeftSidebar({
       <div className={styles.sidebarTop}>
         <div className={styles.sidebarHeaderMobile}>
           <h2>Menu</h2>
-          <Button type="button" variant="ghost" size="icon" className={styles.closeBtn} onClick={onClose}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={styles.closeBtn}
+            onClick={onClose}
+            data-tv-focusable={isTvMode ? "true" : undefined}
+            data-tv-focus-scope={isTvMode ? "left-nav" : undefined}
+            data-tv-focus-id={isTvMode ? "leftnav-close" : undefined}
+          >
             <Icon name="X" size={18} />
           </Button>
         </div>
@@ -85,6 +95,10 @@ export default function LeftSidebar({
                 : "Search Category"
             }
             className={styles.searchInput}
+            data-tv-focusable={isTvMode ? "true" : undefined}
+            data-tv-focus-scope={isTvMode ? "left-nav" : undefined}
+            data-tv-focus-id={isTvMode ? "leftnav-search" : undefined}
+            data-tv-default-focus={isTvMode ? "true" : undefined}
           />
         </div>
 
@@ -97,6 +111,10 @@ export default function LeftSidebar({
               onSelectHomeMode?.("tv");
             }}
             className={`justify-start ${styles.linkBtn} ${homeMode === "tv" ? styles.linkBtnActive : ""}`}
+            data-tv-focusable={isTvMode ? "true" : undefined}
+            data-tv-focus-scope={isTvMode ? "left-nav" : undefined}
+            data-tv-focus-id={isTvMode ? "leftnav-home-tv" : undefined}
+            data-tv-active={isTvMode && homeMode === "tv" ? "true" : undefined}
           >
             <Icon name="MonitorPlay" size={16} />
             <span>Live TV Channels</span>
@@ -109,6 +127,10 @@ export default function LeftSidebar({
               onSelectHomeMode?.("movies");
             }}
             className={`justify-start ${styles.linkBtn} ${homeMode === "movies" ? styles.linkBtnActive : ""}`}
+            data-tv-focusable={isTvMode ? "true" : undefined}
+            data-tv-focus-scope={isTvMode ? "left-nav" : undefined}
+            data-tv-focus-id={isTvMode ? "leftnav-home-movies" : undefined}
+            data-tv-active={isTvMode && homeMode === "movies" ? "true" : undefined}
           >
             <Icon name="Film" size={16} />
             <span>Movies</span>
@@ -129,6 +151,10 @@ export default function LeftSidebar({
                 onSelectCategory?.(null);
               }}
               className={`justify-start ${rowClass} ${mode === "all" && !selectedCategory ? styles.linkBtnActive : ""}`}
+              data-tv-focusable={isTvMode ? "true" : undefined}
+              data-tv-focus-scope={isTvMode ? "left-nav" : undefined}
+              data-tv-focus-id={isTvMode ? "leftnav-tv-all" : undefined}
+              data-tv-active={isTvMode && mode === "all" && !selectedCategory ? "true" : undefined}
             >
               <Icon name="MonitorPlay" size={16} />
               <span>All Channels</span>
@@ -143,6 +169,10 @@ export default function LeftSidebar({
                 onSelectCategory?.(null);
               }}
               className={`justify-start ${rowClass} ${mode === "favorites" ? styles.linkBtnActive : ""}`}
+              data-tv-focusable={isTvMode ? "true" : undefined}
+              data-tv-focus-scope={isTvMode ? "left-nav" : undefined}
+              data-tv-focus-id={isTvMode ? "leftnav-tv-favorites" : undefined}
+              data-tv-active={isTvMode && mode === "favorites" ? "true" : undefined}
             >
               <Icon name="Heart" size={16} />
               <span>Favourites</span>
@@ -157,6 +187,10 @@ export default function LeftSidebar({
                 onSelectCategory?.(null);
               }}
               className={`justify-start ${rowClass} ${mode === "recent" ? styles.linkBtnActive : ""}`}
+              data-tv-focusable={isTvMode ? "true" : undefined}
+              data-tv-focus-scope={isTvMode ? "left-nav" : undefined}
+              data-tv-focus-id={isTvMode ? "leftnav-tv-recent" : undefined}
+              data-tv-active={isTvMode && mode === "recent" ? "true" : undefined}
             >
               <Icon name="Clock" size={16} />
               <span>Recently Watched</span>
@@ -174,6 +208,10 @@ export default function LeftSidebar({
                   onSelectCategory?.(category.id);
                 }}
                 className={`justify-start ${rowClass} ${selectedCategory === category.id && mode === "all" ? styles.linkBtnActive : ""}`}
+                data-tv-focusable={isTvMode ? "true" : undefined}
+                data-tv-focus-scope={isTvMode ? "left-nav" : undefined}
+                data-tv-focus-id={isTvMode ? `leftnav-category-${category.id}` : undefined}
+                data-tv-active={isTvMode && selectedCategory === category.id && mode === "all" ? "true" : undefined}
               >
                 <Icon name={category.icon} size={16} />
                 <span className={styles.linkText}>{category.name}</span>
@@ -194,6 +232,10 @@ export default function LeftSidebar({
                 onSelectMovieCategory?.("");
               }}
               className={`justify-start ${rowClass} ${movieMode === "all" && !selectedMovieCategory ? styles.linkBtnActive : ""}`}
+              data-tv-focusable={isTvMode ? "true" : undefined}
+              data-tv-focus-scope={isTvMode ? "left-nav" : undefined}
+              data-tv-focus-id={isTvMode ? "leftnav-movies-all" : undefined}
+              data-tv-active={isTvMode && movieMode === "all" && !selectedMovieCategory ? "true" : undefined}
             >
               <Icon name="Film" size={16} />
               <span>All Movies</span>
@@ -207,6 +249,10 @@ export default function LeftSidebar({
                 onSelectMovieMode?.("favorites");
               }}
               className={`justify-start ${rowClass} ${movieMode === "favorites" ? styles.linkBtnActive : ""}`}
+              data-tv-focusable={isTvMode ? "true" : undefined}
+              data-tv-focus-scope={isTvMode ? "left-nav" : undefined}
+              data-tv-focus-id={isTvMode ? "leftnav-movies-favorites" : undefined}
+              data-tv-active={isTvMode && movieMode === "favorites" ? "true" : undefined}
             >
               <Icon name="Heart" size={16} />
               <span>Favourites</span>
@@ -220,6 +266,10 @@ export default function LeftSidebar({
                 onSelectMovieMode?.("recent");
               }}
               className={`justify-start ${rowClass} ${movieMode === "recent" ? styles.linkBtnActive : ""}`}
+              data-tv-focusable={isTvMode ? "true" : undefined}
+              data-tv-focus-scope={isTvMode ? "left-nav" : undefined}
+              data-tv-focus-id={isTvMode ? "leftnav-movies-recent" : undefined}
+              data-tv-active={isTvMode && movieMode === "recent" ? "true" : undefined}
             >
               <Icon name="Clock" size={16} />
               <span>Recently Watched</span>
@@ -233,6 +283,10 @@ export default function LeftSidebar({
                 onSelectMovieMode?.("watched");
               }}
               className={`justify-start ${rowClass} ${movieMode === "watched" ? styles.linkBtnActive : ""}`}
+              data-tv-focusable={isTvMode ? "true" : undefined}
+              data-tv-focus-scope={isTvMode ? "left-nav" : undefined}
+              data-tv-focus-id={isTvMode ? "leftnav-movies-watched" : undefined}
+              data-tv-active={isTvMode && movieMode === "watched" ? "true" : undefined}
             >
               <Icon name="Eye" size={16} />
               <span>Watched List</span>
@@ -249,6 +303,10 @@ export default function LeftSidebar({
                   onSelectMovieCategory?.(String(category.slug || ""));
                 }}
                 className={`justify-start ${rowClass} ${movieMode === "all" && selectedMovieCategory === String(category.slug || "") ? styles.linkBtnActive : ""}`}
+                data-tv-focusable={isTvMode ? "true" : undefined}
+                data-tv-focus-scope={isTvMode ? "left-nav" : undefined}
+                data-tv-focus-id={isTvMode ? `leftnav-movie-category-${String(category.slug || category.id || "")}` : undefined}
+                data-tv-active={isTvMode && movieMode === "all" && selectedMovieCategory === String(category.slug || "") ? "true" : undefined}
               >
                 <Icon name="Film" size={16} />
                 <span className={styles.linkText}>{category.name}</span>
@@ -266,6 +324,10 @@ export default function LeftSidebar({
                   onSelectMovieLanguage?.(String(language.key || "").toLowerCase());
                 }}
                 className={`justify-start ${rowClass} ${movieMode === "all" && selectedMovieLanguage === String(language.key || "").toLowerCase() ? styles.linkBtnActive : ""}`}
+                data-tv-focusable={isTvMode ? "true" : undefined}
+                data-tv-focus-scope={isTvMode ? "left-nav" : undefined}
+                data-tv-focus-id={isTvMode ? `leftnav-language-${String(language.key || language.name || "").toLowerCase()}` : undefined}
+                data-tv-active={isTvMode && movieMode === "all" && selectedMovieLanguage === String(language.key || "").toLowerCase() ? "true" : undefined}
               >
                 <Icon name="Globe" size={16} />
                 <span className={styles.linkText}>{language.name}</span>
@@ -283,6 +345,10 @@ export default function LeftSidebar({
                   onSelectMovieGenre?.(String(genre.key || "").toLowerCase());
                 }}
                 className={`justify-start ${rowClass} ${movieMode === "all" && selectedMovieGenre === String(genre.key || "").toLowerCase() ? styles.linkBtnActive : ""}`}
+                data-tv-focusable={isTvMode ? "true" : undefined}
+                data-tv-focus-scope={isTvMode ? "left-nav" : undefined}
+                data-tv-focus-id={isTvMode ? `leftnav-genre-${String(genre.key || genre.name || "").toLowerCase()}` : undefined}
+                data-tv-active={isTvMode && movieMode === "all" && selectedMovieGenre === String(genre.key || "").toLowerCase() ? "true" : undefined}
               >
                 <Icon name="Tags" size={16} />
                 <span className={styles.linkText}>{genre.name}</span>
@@ -300,6 +366,10 @@ export default function LeftSidebar({
                   onSelectMovieYear?.(String(yearRow.key || ""));
                 }}
                 className={`justify-start ${rowClass} ${movieMode === "all" && selectedMovieYear === String(yearRow.key || "") ? styles.linkBtnActive : ""}`}
+                data-tv-focusable={isTvMode ? "true" : undefined}
+                data-tv-focus-scope={isTvMode ? "left-nav" : undefined}
+                data-tv-focus-id={isTvMode ? `leftnav-year-${String(yearRow.key || yearRow.name || "")}` : undefined}
+                data-tv-active={isTvMode && movieMode === "all" && selectedMovieYear === String(yearRow.key || "") ? "true" : undefined}
               >
                 <Icon name="Clock" size={16} />
                 <span className={styles.linkText}>{yearRow.name}</span>

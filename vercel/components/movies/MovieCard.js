@@ -32,7 +32,17 @@ function clampSummary(text) {
   return `${clean.slice(0, 117)}...`;
 }
 
-export default function MovieCard({ movie, isActive, onSelect, onToggleFavorite }) {
+export default function MovieCard({
+  movie,
+  isActive,
+  onSelect,
+  onToggleFavorite,
+  isTvMode = false,
+  tvFocusId = "",
+  tvFocusScope = "",
+  tvNavRow = "",
+  tvNavCol = "",
+}) {
   const watchLabel = movie?.watchState === "watched" ? "Watched" : movie?.watchState === "continue" ? "Continue" : "New";
   const rating = formatRating(movie?.imdbRating);
   const votes = formatVotes(movie?.imdbVotes);
@@ -72,10 +82,17 @@ export default function MovieCard({ movie, isActive, onSelect, onToggleFavorite 
     <article
       ref={cardRef}
       data-movie-card="true"
-      className={`${styles.card} ${isActive ? styles.cardActive : ""} ${touchOverlayActive ? styles.cardTouchActive : ""}`}
+      className={`${styles.card} ${isTvMode ? styles.cardTv : ""} ${isActive ? styles.cardActive : ""} ${touchOverlayActive ? styles.cardTouchActive : ""}`}
       role="button"
       tabIndex={0}
+      data-tv-focusable={isTvMode ? "true" : undefined}
+      data-tv-focus-id={isTvMode ? tvFocusId || `movie-card-${String(movie?.id || "")}` : undefined}
+      data-tv-focus-scope={isTvMode ? tvFocusScope || "movie-content" : undefined}
+      data-tv-active={isTvMode ? (isActive ? "true" : "false") : undefined}
+      data-tv-nav-row={isTvMode && tvNavRow !== "" ? String(tvNavRow) : undefined}
+      data-tv-nav-col={isTvMode && tvNavCol !== "" ? String(tvNavCol) : undefined}
       onClick={() => {
+        cardRef.current?.focus();
         if (isTouchUi && !touchOverlayActive) {
           setTouchOverlayActive(true);
           return;

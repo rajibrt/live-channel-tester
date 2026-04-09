@@ -276,8 +276,11 @@ async function exitDocumentFullscreen() {
 
 export default function MoviePlayer({
   movie,
+  isTvMode = false,
   startFrom = null,
   replayToken = 0,
+  autoStartPlayback = false,
+  autoEnterFullscreen = false,
   onRestart,
   onMarkComplete,
   onToggleFavorite,
@@ -306,6 +309,7 @@ export default function MoviePlayer({
   const [compatModeRequested, setCompatModeRequested] = useState(false)
   const [compatibilityDisabled, setCompatibilityDisabled] = useState(false)
   const [scrubValue, setScrubValue] = useState(null)
+  const [isPlayerFullscreen, setIsPlayerFullscreen] = useState(false)
 
   useEffect(() => {
     onProgressSavedRef.current = onProgressSaved
@@ -329,6 +333,37 @@ export default function MoviePlayer({
     setMediaDurationSeconds(0)
     setProbedDurationSeconds(0)
   }, [movie?.id])
+
+  useEffect(() => {
+    if (!autoEnterFullscreen || typeof window === 'undefined') return undefined
+    const playerWrap = playerWrapRef.current
+    const video = videoRef.current
+    if (!playerWrap || !video) return undefined
+    let cancelled = false
+    const timer = window.setTimeout(() => {
+      if (cancelled) return
+      requestElementFullscreen(playerWrap, video).catch?.(() => {})
+    }, 40)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [autoEnterFullscreen, movie?.id, replayToken])
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return undefined
+    const syncFullscreenState = () => {
+      const fullscreenElement = getFullscreenElement()
+      setIsPlayerFullscreen(fullscreenElement === playerWrapRef.current)
+    }
+    syncFullscreenState()
+    document.addEventListener('fullscreenchange', syncFullscreenState)
+    document.addEventListener('webkitfullscreenchange', syncFullscreenState)
+    return () => {
+      document.removeEventListener('fullscreenchange', syncFullscreenState)
+      document.removeEventListener('webkitfullscreenchange', syncFullscreenState)
+    }
+  }, [])
 
   useEffect(() => {
     const rawUrl = getPreferredRawMovieUrl(movie)
@@ -708,7 +743,7 @@ export default function MoviePlayer({
       video.muted = false
       video.volume = 1
       applyNativeSource(sourceForPlayback)
-      if (!isTranscoded && !compatModeRequested) {
+      if (!isTranscoded && !compatModeRequested && !autoStartPlayback) {
         setIsPaused(true)
         setStatusText('Ready. Press Play to start normal mode.')
         return
@@ -822,6 +857,7 @@ export default function MoviePlayer({
       window.removeEventListener('movie-force-pause', onForcePause)
     }
   }, [
+    autoStartPlayback,
     fallbackPlaybackUrl,
     movie?.id,
     movie?.playbackUrl,
@@ -895,10 +931,14 @@ export default function MoviePlayer({
     scrubDuration || 0,
     Math.max(0, toSeconds(scrubValue == null ? watchedSeconds : scrubValue)),
   )
+  const hideTvFullscreenChrome = isTvMode && isPlayerFullscreen
   const handleTogglePlayPause = useCallback(() => {
     const video = videoRef.current
     if (!video) return
     if (video.paused || video.ended) {
+      if (autoEnterFullscreen) {
+        requestElementFullscreen(playerWrapRef.current, video).catch?.(() => {})
+      }
       if (video.ended) {
         try {
           video.currentTime = 0
@@ -910,7 +950,7 @@ export default function MoviePlayer({
       return
     }
     video.pause()
-  }, [])
+  }, [autoEnterFullscreen])
 
   const jumpBySeconds = useCallback(
     (delta) => {
@@ -1015,6 +1055,53 @@ export default function MoviePlayer({
   ])
 
   useEffect(() => {
+    if (!isTvMode || typeof window === 'undefined') return undefined
+
+    const onPlayPause = () => handleTogglePlayPause()
+    const onPlay = () => {
+      const video = videoRef.current
+      if (!video || !video.paused) return
+      if (autoEnterFullscreen) {
+        requestElementFullscreen(playerWrapRef.current, video).catch?.(() => {})
+      }
+      video.play().catch(() => {})
+    }
+    const onPause = () => {
+      const video = videoRef.current
+      if (!video || video.paused) return
+      video.pause()
+    }
+    const onStop = () => {
+      const video = videoRef.current
+      if (!video) return
+      video.pause()
+      try {
+        video.currentTime = 0
+      } catch {
+        // ignore seek failures
+      }
+    }
+    const onForward = () => jumpBySeconds(10)
+    const onBackward = () => jumpBySeconds(-10)
+
+    window.addEventListener('tv-media-playpause', onPlayPause)
+    window.addEventListener('tv-media-play', onPlay)
+    window.addEventListener('tv-media-pause', onPause)
+    window.addEventListener('tv-media-stop', onStop)
+    window.addEventListener('tv-media-forward', onForward)
+    window.addEventListener('tv-media-backward', onBackward)
+
+    return () => {
+      window.removeEventListener('tv-media-playpause', onPlayPause)
+      window.removeEventListener('tv-media-play', onPlay)
+      window.removeEventListener('tv-media-pause', onPause)
+      window.removeEventListener('tv-media-stop', onStop)
+      window.removeEventListener('tv-media-forward', onForward)
+      window.removeEventListener('tv-media-backward', onBackward)
+    }
+  }, [autoEnterFullscreen, handleTogglePlayPause, isTvMode, jumpBySeconds])
+
+  useEffect(() => {
     if (typeof window === 'undefined') return undefined
 
     const syncLandscapeFullscreen = async () => {
@@ -1080,8 +1167,8 @@ export default function MoviePlayer({
   }, [movie?.id])
 
   return (
-    <section ref={playerWrapRef} className={styles.playerWrap}>
-      <div className={styles.videoShell}>
+    <section ref={playerWrapRef} className={`${styles.playerWrap} ${isTvMode ? styles.playerWrapTv : ""}`}>
+      <div className={`${styles.videoShell} ${isTvMode ? styles.videoShellTv : ""}`}>
         <video
           key={videoElementKey}
           ref={videoRef}
@@ -1091,15 +1178,20 @@ export default function MoviePlayer({
           preload='metadata'
         />
       </div>
-      <div className={styles.moviePlayerControlsRow}>
-        <div className={styles.moviePlayerButtons}>
-          <div className={styles.moviePlayerButtonRowTop}>
+      {!hideTvFullscreenChrome ? (
+      <div className={`${styles.moviePlayerControlsRow} ${isTvMode ? styles.moviePlayerControlsRowTv : ""}`}>
+        <div className={`${styles.moviePlayerButtons} ${isTvMode ? styles.moviePlayerButtonsTv : ""}`}>
+          <div className={`${styles.moviePlayerButtonRowTop} ${isTvMode ? styles.moviePlayerButtonRowTv : ""}`}>
           <button
             type='button'
             className={`${styles.movieNavBtn} ${styles.movieNavBtnInactive}`}
             onClick={onBackToList}
             aria-label='Back to movie list'
             title='Back to movie list'
+            data-tv-focusable={isTvMode ? 'true' : undefined}
+            data-tv-focus-scope={isTvMode ? 'movie-content' : undefined}
+            data-tv-focus-id={isTvMode ? 'movie-watch-back' : undefined}
+            data-tv-default-focus={isTvMode ? 'true' : undefined}
           >
             <ArrowLeft size={15} />
             <span className={styles.movieBtnText}>Back to Movie List</span>
@@ -1111,6 +1203,9 @@ export default function MoviePlayer({
               disabled={!hasPlayableMovie}
               aria-label={showPlayAction ? 'Play' : 'Pause'}
               title={showPlayAction ? 'Play' : 'Pause'}
+              data-tv-focusable={isTvMode ? 'true' : undefined}
+              data-tv-focus-scope={isTvMode ? 'movie-content' : undefined}
+              data-tv-focus-id={isTvMode ? 'movie-watch-playpause' : undefined}
             >
               {showPlayAction ? <Play size={15} /> : <Pause size={15} />}
               <span className={styles.movieBtnText}>
@@ -1121,6 +1216,9 @@ export default function MoviePlayer({
               type='button'
               className={`${styles.movieNavBtn} ${styles.movieNavBtnInactive}`}
               onClick={() => onRestart?.(movie)}
+              data-tv-focusable={isTvMode ? 'true' : undefined}
+              data-tv-focus-scope={isTvMode ? 'movie-content' : undefined}
+              data-tv-focus-id={isTvMode ? 'movie-watch-restart' : undefined}
             >
               <RotateCcw size={15} />
               <span className={styles.movieBtnText}>Restart</span>
@@ -1130,6 +1228,9 @@ export default function MoviePlayer({
               className={`${styles.movieNavBtn} ${styles.movieNavBtnInactive}`}
               onClick={() => jumpBySeconds(-10)}
               disabled={!hasPlayableMovie}
+              data-tv-focusable={isTvMode ? 'true' : undefined}
+              data-tv-focus-scope={isTvMode ? 'movie-content' : undefined}
+              data-tv-focus-id={isTvMode ? 'movie-watch-rewind' : undefined}
             >
               <Rewind size={15} />
               <span className={styles.movieBtnText}>-10s</span>
@@ -1139,18 +1240,24 @@ export default function MoviePlayer({
               className={`${styles.movieNavBtn} ${styles.movieNavBtnInactive}`}
               onClick={() => jumpBySeconds(10)}
               disabled={!hasPlayableMovie}
+              data-tv-focusable={isTvMode ? 'true' : undefined}
+              data-tv-focus-scope={isTvMode ? 'movie-content' : undefined}
+              data-tv-focus-id={isTvMode ? 'movie-watch-forward' : undefined}
             >
               <FastForward size={15} />
               <span className={styles.movieBtnText}>+10s</span>
             </button>
           </div>
-          <div className={styles.moviePlayerButtonRowBottom}>
+          <div className={`${styles.moviePlayerButtonRowBottom} ${isTvMode ? styles.moviePlayerButtonRowTv : ""}`}>
             <button
               type='button'
               className={`${styles.movieNavBtn} ${isMarkedWatched ? styles.movieNavBtnSuccess : styles.movieNavBtnInactive}`}
               onClick={() => onMarkComplete?.(movie)}
               aria-label={isMarkedWatched ? 'Watched' : 'Mark Watched'}
               title={isMarkedWatched ? 'Already watched' : 'Mark Watched'}
+              data-tv-focusable={isTvMode ? 'true' : undefined}
+              data-tv-focus-scope={isTvMode ? 'movie-content' : undefined}
+              data-tv-focus-id={isTvMode ? 'movie-watch-mark-complete' : undefined}
             >
               <CheckCircle2
                 size={15}
@@ -1173,6 +1280,9 @@ export default function MoviePlayer({
                   ? 'Switch to normal mode'
                   : 'Switch to compatibility mode'
               }
+              data-tv-focusable={isTvMode ? 'true' : undefined}
+              data-tv-focus-scope={isTvMode ? 'movie-content' : undefined}
+              data-tv-focus-id={isTvMode ? 'movie-watch-compatibility' : undefined}
             >
               <AudioLines size={15} className={styles.movieBtnIcon} />
               <span className={styles.movieBtnText}>
@@ -1188,6 +1298,9 @@ export default function MoviePlayer({
               onClick={() => onToggleFavorite?.(movie)}
               aria-label={favoriteActive ? 'Favorited' : 'Add Favorite'}
               title={favoriteActive ? 'Favorited' : 'Add Favorite'}
+              data-tv-focusable={isTvMode ? 'true' : undefined}
+              data-tv-focus-scope={isTvMode ? 'movie-content' : undefined}
+              data-tv-focus-id={isTvMode ? 'movie-watch-favorite' : undefined}
             >
               <Heart size={15} fill={favoriteActive ? 'currentColor' : 'none'} />
               <span className={styles.movieBtnText}>
@@ -1197,8 +1310,9 @@ export default function MoviePlayer({
           </div>
         </div>
       </div>
-      {scrubDuration > 0 ? (
-        <div className={styles.playerInfoPanel} style={{ marginTop: 8 }}>
+      ) : null}
+      {!hideTvFullscreenChrome && scrubDuration > 0 ? (
+        <div className={`${styles.playerInfoPanel} ${isTvMode ? styles.playerInfoPanelTv : ""}`} style={{ marginTop: 8 }}>
           <input
             type='range'
             min={0}
@@ -1221,7 +1335,8 @@ export default function MoviePlayer({
           </div>
         </div>
       ) : null}
-      <div className={styles.playerInfoPanel}>
+      {!hideTvFullscreenChrome ? (
+      <div className={`${styles.playerInfoPanel} ${isTvMode ? styles.playerInfoPanelTv : ""}`}>
         <div className={styles.playerInfoTop}>
           <span className={styles.playerInfoPill}>
             {movie?.releaseYear || 'Year N/A'}
@@ -1250,6 +1365,7 @@ export default function MoviePlayer({
           </p>
         ) : null}
       </div>
+      ) : null}
     </section>
   )
 }

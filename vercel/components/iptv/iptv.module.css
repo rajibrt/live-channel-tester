@@ -15,6 +15,36 @@
   background: var(--background);
 }
 
+.pageTvMode {
+  --tv-focus-ring: color-mix(in oklab, var(--primary) 84%, white 16%);
+  --tv-focus-glow: color-mix(in oklab, var(--primary) 38%, transparent);
+}
+
+.pageTvMode :focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px var(--tv-focus-ring),
+    0 0 0 6px var(--tv-focus-glow);
+}
+
+.pageTvMode button,
+.pageTvMode a,
+.pageTvMode [role="button"],
+.pageTvMode input,
+.pageTvMode select,
+.pageTvMode textarea {
+  scroll-margin: 24px;
+}
+
+.pageTvMode .iconBtn,
+.pageTvMode .userBtn,
+.pageTvMode .closeBtn,
+.pageTvMode .roundBtn,
+.pageTvMode .favoriteBtn {
+  min-width: 44px;
+  min-height: 44px;
+}
+
 .topNavbar {
   position: fixed;
   top: 0;
@@ -177,6 +207,127 @@
 
 .tvControl {
   display: grid;
+}
+
+.videoSectionTv .videoShell {
+  border-radius: 22px;
+  overflow: hidden;
+  box-shadow:
+    0 18px 38px color-mix(in oklab, black 24%, transparent),
+    inset 0 0 0 1px color-mix(in oklab, white 6%, transparent);
+}
+
+.videoSectionTv .videoBackdrop h2 {
+  font-size: 30px;
+}
+
+.videoSectionTv .videoBackdrop p {
+  font-size: 16px;
+}
+
+.playerControlsRowTv {
+  border-radius: 20px;
+  padding: 18px 20px;
+  gap: 18px;
+}
+
+.playerControlsRowTv .navBtn,
+.playerControlsRowTv .volumeMuteBtn {
+  min-height: 54px;
+  border-radius: 16px;
+}
+
+.playerControlsRowTv .controlLabel {
+  font-size: 15px;
+}
+
+.playerControlsRowTv .volumeControl {
+  min-height: 54px;
+}
+
+.channelInfoTv {
+  border-radius: 20px;
+  padding: 18px 20px;
+}
+
+.channelInfoTv h3 {
+  font-size: 26px;
+}
+
+.channelInfoTv .channelMetaRow,
+.channelInfoTv .categoryPill,
+.channelInfoTv .metaLive,
+.channelInfoTv .metaOffline {
+  font-size: 14px;
+}
+
+.channelInfoTv .favoriteBtn {
+  min-height: 52px;
+  padding: 12px 18px;
+  border-radius: 16px;
+  font-size: 15px;
+}
+
+.fullscreenOverlayTv {
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in oklab, black 18%, transparent) 0%,
+      color-mix(in oklab, black 58%, transparent) 100%
+    );
+}
+
+.fullscreenOverlayTv .fullscreenPanel {
+  border-radius: 20px;
+  min-width: min(24vw, 360px);
+  box-shadow:
+    0 20px 44px color-mix(in oklab, black 34%, transparent),
+    inset 0 0 0 1px color-mix(in oklab, white 5%, transparent);
+}
+
+.fullscreenOverlayTv .fullscreenPanelTitle {
+  font-size: 18px;
+}
+
+.fullscreenOverlayTv .fullscreenSearchInput {
+  min-height: 46px;
+  font-size: 15px;
+}
+
+.fullscreenOverlayTv .fullscreenListBtn {
+  min-height: 52px;
+  padding: 12px 14px;
+  font-size: 15px;
+  border-radius: 14px;
+}
+
+.fullscreenOverlayTv .fullscreenChannelName {
+  font-size: 15px;
+}
+
+.fullscreenOverlayTv .fullscreenFavoriteBtn {
+  min-width: 40px;
+  min-height: 40px;
+  border-radius: 12px;
+}
+
+.fsControlDockTv {
+  border-radius: 22px;
+  padding: 16px 18px;
+  gap: 18px;
+  box-shadow:
+    0 20px 44px color-mix(in oklab, black 36%, transparent),
+    inset 0 0 0 1px color-mix(in oklab, white 6%, transparent);
+}
+
+.fsControlDockTv .fsControlBtn {
+  min-width: 58px;
+  min-height: 58px;
+  border-radius: 18px;
+}
+
+.fsControlDockTv .fsVolumeSlider {
+  min-height: 34px;
 }
 
 .badge {

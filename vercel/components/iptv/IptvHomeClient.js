@@ -19,6 +19,7 @@ const LAST_MODE_KEY = "iptv:v1:last-mode";
 const LAST_MOVIE_FILTER_KEY = "iptv:v1:last-movie-filter";
 const LAST_MOVIE_VIEW_KEY = "iptv:v1:last-movie-view";
 const DEVICE_KEY_STORAGE = "iptv:v1:device-key";
+const FORCE_TV_MODE_KEY = "iptv:v1:force-tv-mode";
 const DEFAULT_MOVIES_PAGE_SIZE = 24;
 
 function normalizeChannelId(value) {
@@ -64,6 +65,35 @@ function buildMovieRequestKey(query) {
 
 function buildMoviePageCacheKey(query) {
   return buildMovieRequestKey(query);
+}
+
+const TV_FOCUS_SELECTOR = "[data-tv-focusable='true']";
+
+function isTvFocusableVisible(element) {
+  if (!(element instanceof HTMLElement)) return false;
+  if (element.hidden) return false;
+  const style = window.getComputedStyle(element);
+  if (style.display === "none" || style.visibility === "hidden") return false;
+  const rect = element.getBoundingClientRect();
+  return rect.width > 0 && rect.height > 0;
+}
+
+function getTvDistanceScore(fromRect, candidateRect, direction) {
+  const fromCenterX = fromRect.left + fromRect.width / 2;
+  const fromCenterY = fromRect.top + fromRect.height / 2;
+  const candidateCenterX = candidateRect.left + candidateRect.width / 2;
+  const candidateCenterY = candidateRect.top + candidateRect.height / 2;
+  const deltaX = candidateCenterX - fromCenterX;
+  const deltaY = candidateCenterY - fromCenterY;
+
+  if (direction === "left" && deltaX >= -4) return Number.POSITIVE_INFINITY;
+  if (direction === "right" && deltaX <= 4) return Number.POSITIVE_INFINITY;
+  if (direction === "up" && deltaY >= -4) return Number.POSITIVE_INFINITY;
+  if (direction === "down" && deltaY <= 4) return Number.POSITIVE_INFINITY;
+
+  const primaryDistance = direction === "left" || direction === "right" ? Math.abs(deltaX) : Math.abs(deltaY);
+  const secondaryDistance = direction === "left" || direction === "right" ? Math.abs(deltaY) : Math.abs(deltaX);
+  return primaryDistance * 1000 + secondaryDistance;
 }
 
 export default function IptvHomeClient({
@@ -250,7 +280,14 @@ export default function IptvHomeClient({
     { persist: cookieConsent === "accepted" }
   );
   const [isTvDevice, setIsTvDevice] = useState(false);
-  const [forceTvMode, setForceTvMode] = useState(false);
+  const [forceTvMode, setForceTvMode] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return String(window.localStorage.getItem(FORCE_TV_MODE_KEY) || "").trim() === "1";
+    } catch {
+      return false;
+    }
+  });
   const [hasRestoredChannel, setHasRestoredChannel] = useState(false);
   const movieCatalogRequestRef = useRef(false);
   const lastLoadedMovieQueryRef = useRef("");
@@ -258,6 +295,13 @@ export default function IptvHomeClient({
   const moviePageCacheRef = useRef(new Map());
   const moviePageRequestRef = useRef(new Map());
   const watchSessionRef = useRef({ channelId: "", channelName: "", startedAt: 0 });
+  const shellRef = useRef(null);
+  const lastTvFocusIdRef = useRef("");
+  const leftDrawerReturnFocusIdRef = useRef("");
+  const rightDrawerReturnFocusIdRef = useRef("");
+  const prevLeftDrawerOpenRef = useRef(false);
+  const prevRightDrawerOpenRef = useRef(false);
+  const [activeTvFocusScope, setActiveTvFocusScope] = useState("");
   const deviceMeta = useMemo(() => {
     if (typeof window === "undefined") return {};
     let deviceKey = "";
@@ -744,11 +788,84 @@ export default function IptvHomeClient({
 
   useEffect(() => {
     const ua = typeof navigator === "undefined" ? "" : navigator.userAgent.toLowerCase();
-    const tvLike = /smart-tv|hbbtv|appletv|googletv|viera|tizen|web0s|netcast|silk|aft/.test(ua);
+    const tvLike = /smart-tv|hbbtv|appletv|googletv|viera|tizen|web0s|webos|netcast|silk|aft|bravia|roku|inettvbrowser/.test(ua);
     setIsTvDevice(tvLike);
   }, []);
 
   const isTvMode = isTvDevice || forceTvMode;
+
+  const getVisibleTvFocusables = useCallback((scope = "") => {
+    if (typeof document === "undefined") return [];
+    const root = shellRef.current || document;
+    const effectiveScope =
+      String(scope || "").trim() ||
+      (showLeftSidebar ? "left-nav" : "") ||
+      (showRightPanel ? "right-panel" : "") ||
+      String(activeTvFocusScope || "").trim();
+    return Array.from(root.querySelectorAll(TV_FOCUS_SELECTOR)).filter((node) => {
+      if (!(node instanceof HTMLElement)) return false;
+      if (effectiveScope && String(node.dataset.tvFocusScope || "") !== effectiveScope) return false;
+      return isTvFocusableVisible(node);
+    });
+  }, [activeTvFocusScope, showLeftSidebar, showRightPanel]);
+
+  const focusTvElement = useCallback((element) => {
+    if (!(element instanceof HTMLElement)) return false;
+    if (!isTvFocusableVisible(element)) return false;
+    element.focus({ preventScroll: false });
+    element.scrollIntoView({ block: "nearest", inline: "nearest" });
+    return true;
+  }, []);
+
+  const focusTvElementById = useCallback(
+    (focusId) => {
+      const safeId = String(focusId || "").trim();
+      if (!safeId) return false;
+      const match = getVisibleTvFocusables().find((node) => String(node.dataset.tvFocusId || "") === safeId);
+      return focusTvElement(match || null);
+    },
+    [focusTvElement, getVisibleTvFocusables]
+  );
+
+  const focusPreferredTvElement = useCallback(
+    (scope = "") => {
+      const nodes = getVisibleTvFocusables(scope);
+      if (!nodes.length) return false;
+      const activeMatch = nodes.find((node) => String(node.dataset.tvActive || "") === "true");
+      if (focusTvElement(activeMatch || null)) return true;
+      const defaultMatch = nodes.find((node) => String(node.dataset.tvDefaultFocus || "") === "true");
+      if (focusTvElement(defaultMatch || null)) return true;
+      return focusTvElement(nodes[0]);
+    },
+    [focusTvElement, getVisibleTvFocusables]
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(FORCE_TV_MODE_KEY, forceTvMode ? "1" : "0");
+    } catch {
+      // ignore localStorage write issues
+    }
+  }, [forceTvMode]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const html = document.documentElement;
+    const body = document.body;
+    if (isTvMode) {
+      html.classList.add("tv-mode");
+      body.classList.add("tv-mode");
+    } else {
+      html.classList.remove("tv-mode");
+      body.classList.remove("tv-mode");
+    }
+
+    return () => {
+      html.classList.remove("tv-mode");
+      body.classList.remove("tv-mode");
+    };
+  }, [isTvMode]);
 
   useEffect(() => {
     if (homeMode !== "tv") {
@@ -818,14 +935,43 @@ export default function IptvHomeClient({
     const emit = (name) => window.dispatchEvent(new CustomEvent(name));
     const onKeyDown = (event) => {
       const target = event.target;
+      const isTvFocusableInput =
+        target instanceof HTMLElement &&
+        String(target.dataset.tvFocusable || "").trim() === "true";
       const isTyping =
         target instanceof HTMLElement &&
+        !isTvFocusableInput &&
         (target.tagName === "INPUT" ||
           target.tagName === "TEXTAREA" ||
           target.tagName === "SELECT" ||
           target.isContentEditable);
 
       const key = String(event.key || "");
+      if (!isTyping && key === "ArrowLeft") {
+        event.preventDefault();
+        emit("tv-nav-left");
+        return;
+      }
+      if (!isTyping && key === "ArrowRight") {
+        event.preventDefault();
+        emit("tv-nav-right");
+        return;
+      }
+      if (!isTyping && key === "ArrowUp") {
+        event.preventDefault();
+        emit("tv-nav-up");
+        return;
+      }
+      if (!isTyping && key === "ArrowDown") {
+        event.preventDefault();
+        emit("tv-nav-down");
+        return;
+      }
+      if (!isTyping && (key === "Enter" || key === "NumpadEnter")) {
+        event.preventDefault();
+        emit("tv-select");
+        return;
+      }
       if (!isTyping && (key === "PageUp" || key === "ChannelUp")) {
         event.preventDefault();
         emit("tv-channel-next");
@@ -856,7 +1002,22 @@ export default function IptvHomeClient({
         emit("tv-media-stop");
         return;
       }
-      if (key === "BrowserBack" || key === "GoBack") {
+      if (!isTyping && (key === "MediaFastForward" || key === "MediaTrackNext")) {
+        event.preventDefault();
+        emit("tv-media-forward");
+        return;
+      }
+      if (!isTyping && (key === "MediaRewind" || key === "MediaTrackPrevious")) {
+        event.preventDefault();
+        emit("tv-media-backward");
+        return;
+      }
+      if (!isTyping && key === "Home") {
+        event.preventDefault();
+        emit("tv-home");
+        return;
+      }
+      if (key === "BrowserBack" || key === "GoBack" || (!isTyping && (key === "Escape" || key === "Backspace"))) {
         event.preventDefault();
         emit("tv-back");
       }
@@ -865,6 +1026,308 @@ export default function IptvHomeClient({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [isTvMode]);
+
+  useEffect(() => {
+    if (!isTvMode || typeof window === "undefined") return undefined;
+
+    const rememberFocus = () => {
+      const active = document.activeElement;
+      if (!(active instanceof HTMLElement)) return;
+      const focusId = String(active.dataset.tvFocusId || "").trim();
+      if (focusId) lastTvFocusIdRef.current = focusId;
+      const focusScope = String(active.dataset.tvFocusScope || "").trim();
+      if (focusScope) {
+        setActiveTvFocusScope((prev) => (prev === focusScope ? prev : focusScope));
+      }
+    };
+
+    window.addEventListener("focusin", rememberFocus);
+    return () => window.removeEventListener("focusin", rememberFocus);
+  }, [isTvMode]);
+
+  useEffect(() => {
+    if (!isTvMode || typeof window === "undefined") return undefined;
+
+    const onScopeChange = (event) => {
+      const nextScope = String(event?.detail?.scope || "").trim();
+      setActiveTvFocusScope(nextScope);
+    };
+
+    window.addEventListener("tv-focus-scope-change", onScopeChange);
+    return () => window.removeEventListener("tv-focus-scope-change", onScopeChange);
+  }, [isTvMode]);
+
+  useEffect(() => {
+    if (!isTvMode) return;
+    if (lastTvFocusIdRef.current && focusTvElementById(lastTvFocusIdRef.current)) return;
+    focusPreferredTvElement();
+  }, [isTvMode, focusPreferredTvElement, focusTvElementById]);
+
+  useEffect(() => {
+    if (!isTvMode) {
+      prevLeftDrawerOpenRef.current = showLeftSidebar;
+      return;
+    }
+    const wasOpen = prevLeftDrawerOpenRef.current;
+    prevLeftDrawerOpenRef.current = showLeftSidebar;
+
+    if (showLeftSidebar && !wasOpen) {
+      leftDrawerReturnFocusIdRef.current = lastTvFocusIdRef.current;
+      requestAnimationFrame(() => {
+        focusPreferredTvElement("left-nav");
+      });
+      return;
+    }
+
+    if (!showLeftSidebar && wasOpen && leftDrawerReturnFocusIdRef.current) {
+      const restoreId = leftDrawerReturnFocusIdRef.current;
+      requestAnimationFrame(() => {
+        focusTvElementById(restoreId);
+      });
+    }
+  }, [focusPreferredTvElement, focusTvElementById, isTvMode, showLeftSidebar]);
+
+  useEffect(() => {
+    if (!isTvMode) {
+      prevRightDrawerOpenRef.current = showRightPanel;
+      return;
+    }
+    const wasOpen = prevRightDrawerOpenRef.current;
+    prevRightDrawerOpenRef.current = showRightPanel;
+
+    if (showRightPanel && !wasOpen) {
+      rightDrawerReturnFocusIdRef.current = lastTvFocusIdRef.current;
+      requestAnimationFrame(() => {
+        focusPreferredTvElement("right-panel");
+      });
+      return;
+    }
+
+    if (!showRightPanel && wasOpen && rightDrawerReturnFocusIdRef.current) {
+      const restoreId = rightDrawerReturnFocusIdRef.current;
+      requestAnimationFrame(() => {
+        focusTvElementById(restoreId);
+      });
+    }
+  }, [focusPreferredTvElement, focusTvElementById, isTvMode, showRightPanel]);
+
+  useEffect(() => {
+    if (!isTvMode) return;
+    if (!activeTvFocusScope) return;
+    if (showLeftSidebar || showRightPanel) return;
+    requestAnimationFrame(() => {
+      const active = document.activeElement;
+      if (active instanceof HTMLElement) {
+        const currentScope = String(active.dataset.tvFocusScope || "").trim();
+        if (currentScope === activeTvFocusScope) return;
+      }
+      focusPreferredTvElement(activeTvFocusScope);
+    });
+  }, [activeTvFocusScope, focusPreferredTvElement, isTvMode, showLeftSidebar, showRightPanel]);
+
+  useEffect(() => {
+    if (!isTvMode || typeof window === "undefined") return undefined;
+
+    const attemptDirectionalRefocus = (direction, previousRect) => {
+      const candidates = getVisibleTvFocusables();
+      if (!candidates.length) return;
+      let next = null;
+      let nextScore = Number.POSITIVE_INFINITY;
+      for (const candidate of candidates) {
+        const score = getTvDistanceScore(previousRect, candidate.getBoundingClientRect(), direction);
+        if (score < nextScore) {
+          next = candidate;
+          nextScore = score;
+        }
+      }
+      if (next) {
+        focusTvElement(next);
+        return;
+      }
+      focusPreferredTvElement();
+    };
+
+    const getStructuredTvNeighbor = (active, candidates, direction) => {
+      if (!(active instanceof HTMLElement)) return null;
+      const activeRow = Number(active.dataset.tvNavRow || "");
+      const activeCol = Number(active.dataset.tvNavCol || "");
+      if (!Number.isFinite(activeRow) || !Number.isFinite(activeCol)) return null;
+
+      if (direction === "left" || direction === "right") {
+        const sameRow = [];
+        for (const candidate of candidates) {
+          if (!(candidate instanceof HTMLElement) || candidate === active) continue;
+          const row = Number(candidate.dataset.tvNavRow || "");
+          const col = Number(candidate.dataset.tvNavCol || "");
+          if (!Number.isFinite(row) || !Number.isFinite(col)) continue;
+          if (row !== activeRow) continue;
+          if (direction === "left" && col >= activeCol) continue;
+          if (direction === "right" && col <= activeCol) continue;
+          sameRow.push({ candidate, col });
+        }
+        if (!sameRow.length) return null;
+        sameRow.sort((a, b) => {
+          const distanceDiff = Math.abs(a.col - activeCol) - Math.abs(b.col - activeCol);
+          if (distanceDiff !== 0) return distanceDiff;
+          return a.col - b.col;
+        });
+        return sameRow[0]?.candidate || null;
+      }
+
+      if (direction !== "up" && direction !== "down") return null;
+
+      const directionalRows = [];
+      for (const candidate of candidates) {
+        if (!(candidate instanceof HTMLElement) || candidate === active) continue;
+        const row = Number(candidate.dataset.tvNavRow || "");
+        const col = Number(candidate.dataset.tvNavCol || "");
+        if (!Number.isFinite(row) || !Number.isFinite(col)) continue;
+        if (direction === "down" && row <= activeRow) continue;
+        if (direction === "up" && row >= activeRow) continue;
+        directionalRows.push({ candidate, row, col });
+      }
+      if (!directionalRows.length) return null;
+
+      const targetRow =
+        direction === "down"
+          ? Math.min(...directionalRows.map((entry) => entry.row))
+          : Math.max(...directionalRows.map((entry) => entry.row));
+
+      const rowMatches = directionalRows.filter((entry) => entry.row === targetRow);
+      rowMatches.sort((a, b) => {
+        const colDistanceDiff = Math.abs(a.col - activeCol) - Math.abs(b.col - activeCol);
+        if (colDistanceDiff !== 0) return colDistanceDiff;
+        return a.col - b.col;
+      });
+      return rowMatches[0]?.candidate || null;
+    };
+
+    const scrollViewportForDirection = (direction, activeRect) => {
+      if (direction !== "up" && direction !== "down") return;
+      const viewportStep = Math.max(220, Math.round((window.innerHeight || 0) * 0.7));
+      const deltaY = direction === "down" ? viewportStep : -viewportStep;
+      window.scrollBy({ top: deltaY, behavior: "smooth" });
+      window.setTimeout(() => {
+        attemptDirectionalRefocus(direction, activeRect);
+      }, 220);
+    };
+
+    const handleMove = (direction) => {
+      const candidates = getVisibleTvFocusables();
+      if (!candidates.length) return;
+      const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      if (!active || !candidates.includes(active)) {
+        focusPreferredTvElement();
+        return;
+      }
+
+      const activeScope = String(active.dataset.tvFocusScope || "").trim();
+      const scopedCandidates = activeScope
+        ? candidates.filter((candidate) => String(candidate.dataset.tvFocusScope || "").trim() === activeScope)
+        : candidates;
+      const hasStructuredGridPosition =
+        Number.isFinite(Number(active.dataset.tvNavRow || "")) &&
+        Number.isFinite(Number(active.dataset.tvNavCol || ""));
+
+      const structuredNeighbor = getStructuredTvNeighbor(active, scopedCandidates, direction);
+      if (structuredNeighbor) {
+        focusTvElement(structuredNeighbor);
+        return;
+      }
+
+      if (activeScope === "movie-content" && direction === "up") {
+        const topNavCandidates = getVisibleTvFocusables("top-nav");
+        if (topNavCandidates.length) {
+          focusPreferredTvElement("top-nav");
+          return;
+        }
+      }
+
+      if (activeScope === "top-nav" && direction === "down") {
+        const movieContentCandidates = getVisibleTvFocusables("movie-content");
+        if (movieContentCandidates.length) {
+          focusPreferredTvElement("movie-content");
+          return;
+        }
+      }
+
+      if (activeScope === "top-nav" && direction === "up") {
+        return;
+      }
+
+      if (hasStructuredGridPosition && (direction === "left" || direction === "right")) {
+        return;
+      }
+
+      const activeRect = active.getBoundingClientRect();
+      let next = null;
+      let nextScore = Number.POSITIVE_INFINITY;
+
+      for (const candidate of scopedCandidates) {
+        if (candidate === active) continue;
+        const score = getTvDistanceScore(activeRect, candidate.getBoundingClientRect(), direction);
+        if (score < nextScore) {
+          next = candidate;
+          nextScore = score;
+        }
+      }
+
+      if (!next && scopedCandidates !== candidates) {
+        for (const candidate of candidates) {
+          if (candidate === active) continue;
+          const score = getTvDistanceScore(activeRect, candidate.getBoundingClientRect(), direction);
+          if (score < nextScore) {
+            next = candidate;
+            nextScore = score;
+          }
+        }
+      }
+
+      if (!next) {
+        if (activeScope === "movie-content" && direction === "up") return;
+        if (activeScope === "top-nav" && direction === "up") return;
+        scrollViewportForDirection(direction, activeRect);
+        return;
+      }
+      focusTvElement(next);
+    };
+
+    const onLeft = () => handleMove("left");
+    const onRight = () => handleMove("right");
+    const onUp = () => handleMove("up");
+    const onDown = () => handleMove("down");
+    const onSelect = () => {
+      const active = document.activeElement;
+      if (active instanceof HTMLElement && active.matches(TV_FOCUS_SELECTOR)) {
+        active.click();
+      }
+    };
+    const onBack = () => {
+      if (showRightPanel) {
+        setShowRightPanel(false);
+        return;
+      }
+      if (showLeftSidebar) {
+        setShowLeftSidebar(false);
+      }
+    };
+
+    window.addEventListener("tv-nav-left", onLeft);
+    window.addEventListener("tv-nav-right", onRight);
+    window.addEventListener("tv-nav-up", onUp);
+    window.addEventListener("tv-nav-down", onDown);
+    window.addEventListener("tv-select", onSelect);
+    window.addEventListener("tv-back", onBack);
+
+    return () => {
+      window.removeEventListener("tv-nav-left", onLeft);
+      window.removeEventListener("tv-nav-right", onRight);
+      window.removeEventListener("tv-nav-up", onUp);
+      window.removeEventListener("tv-nav-down", onDown);
+      window.removeEventListener("tv-select", onSelect);
+      window.removeEventListener("tv-back", onBack);
+    };
+  }, [focusPreferredTvElement, focusTvElement, getVisibleTvFocusables, isTvMode, showLeftSidebar, showRightPanel]);
 
   const allChannels = Array.isArray(initialChannels) ? initialChannels : [];
   const allCategories = Array.isArray(initialCategories) ? initialCategories : [];
@@ -1408,7 +1871,7 @@ export default function IptvHomeClient({
   );
 
   return (
-    <main className={`${styles.pageWrap} ${isDark ? styles.pageDark : styles.pageLight}`}>
+    <main ref={shellRef} className={`${styles.pageWrap} ${isDark ? styles.pageDark : styles.pageLight} ${isTvMode ? styles.pageTvMode : ""}`} data-tv-mode={isTvMode ? "true" : "false"}>
       <TopNavbar
         isDark={isDark}
         isTvMode={isTvMode}
@@ -1448,6 +1911,7 @@ export default function IptvHomeClient({
             movieFilterView={movieFilterView}
             movieStats={movieStats}
             homeMode={homeMode}
+            isTvMode={isTvMode}
             onSelectHomeMode={(nextMode) => {
               const normalized = nextMode === "movies" ? "movies" : "tv";
               setHomeMode(normalized);
@@ -1548,6 +2012,7 @@ export default function IptvHomeClient({
             ) : (
               <MoviesView
                 variant={movieViewMode}
+                isTvMode={isTvMode}
                 externalFilterResetToken={movieSidebarResetToken}
                 initialMovies={movieCatalog.movies}
                 movieCategories={movieCatalog.categories}
@@ -1690,6 +2155,7 @@ export default function IptvHomeClient({
               search={channelSearch}
               onSearch={setChannelSearch}
               isDark={isDark}
+              isTvMode={isTvMode}
               onClose={() => setShowRightPanel(false)}
               favorites={favorites}
               onToggleFavorite={toggleFavorite}

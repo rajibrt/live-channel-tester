@@ -15,6 +15,7 @@ export default function RightPanel({
   search,
   onSearch,
   isDark,
+  isTvMode = false,
   onClose,
   favorites,
   onToggleFavorite,
@@ -46,7 +47,16 @@ export default function RightPanel({
       <div className={styles.rightHeader}>
         <div className={styles.sidebarHeaderMobile}>
           <h2>Channels</h2>
-          <Button type="button" variant="ghost" size="icon" className={styles.closeBtn} onClick={onClose}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={styles.closeBtn}
+            onClick={onClose}
+            data-tv-focusable={isTvMode ? "true" : undefined}
+            data-tv-focus-scope={isTvMode ? "right-panel" : undefined}
+            data-tv-focus-id={isTvMode ? "rightpanel-close" : undefined}
+          >
             <Icon name="X" size={18} />
           </Button>
         </div>
@@ -59,6 +69,10 @@ export default function RightPanel({
             onChange={(event) => onSearch(event.target.value)}
             placeholder="Search channels..."
             className={styles.searchInput}
+            data-tv-focusable={isTvMode ? "true" : undefined}
+            data-tv-focus-scope={isTvMode ? "right-panel" : undefined}
+            data-tv-focus-id={isTvMode ? "rightpanel-search" : undefined}
+            data-tv-default-focus={isTvMode ? "true" : undefined}
           />
         </div>
       </div>
@@ -83,6 +97,9 @@ export default function RightPanel({
                   isFavorite={favorites.includes(String(channel.id))}
                   onToggleFavorite={onToggleFavorite}
                   onClick={() => onChannelSelect(channel)}
+                  tvFocusId={isTvMode ? `rightpanel-channel-${channel.id}` : ""}
+                  tvFocusScope={isTvMode ? "right-panel" : ""}
+                  tvActive={Boolean(isTvMode && selectedChannel?.id === channel.id)}
                 />
               </div>
             ))}

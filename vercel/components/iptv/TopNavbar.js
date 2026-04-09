@@ -409,6 +409,28 @@ export default function TopNavbar({
   }, [pushReady, pushEnabled, showPushCta])
 
   useEffect(() => {
+    if (!isTvMode || !notificationMenuOpen) return
+    const frame = window.requestAnimationFrame(() => {
+      const firstAction = notificationMenuRef.current?.querySelector(
+        "[data-tv-menu-default='true']",
+      )
+      if (firstAction instanceof HTMLElement) firstAction.focus()
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [isTvMode, notificationMenuOpen])
+
+  useEffect(() => {
+    if (!isTvMode || !userMenuOpen) return
+    const frame = window.requestAnimationFrame(() => {
+      const firstAction = userMenuRef.current?.querySelector(
+        "[data-tv-menu-default='true']",
+      )
+      if (firstAction instanceof HTMLElement) firstAction.focus()
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [isTvMode, userMenuOpen])
+
+  useEffect(() => {
     let active = true
     const loadPinned = async () => {
       try {
@@ -884,10 +906,20 @@ export default function TopNavbar({
           size='icon'
           onClick={onToggleLeftSidebar}
           className={`${styles.iconBtn} ${styles.mobileOnly}`}
+          data-tv-focusable='true'
+          data-tv-focus-scope='top-nav'
+          data-tv-focus-id='topnav-menu'
+          data-tv-default-focus='true'
         >
           <Icon name='Menu' size={18} />
         </Button>
-        <Link href='/' className={styles.brandWrap}>
+        <Link
+          href='/'
+          className={styles.brandWrap}
+          data-tv-focusable='true'
+          data-tv-focus-scope='top-nav'
+          data-tv-focus-id='topnav-home'
+        >
           <div className={styles.brandLogo}>
             <img
               src='/favicon-32x32.png'
@@ -924,6 +956,9 @@ export default function TopNavbar({
             size='icon'
             onClick={onToggleRightPanel}
             className={`${styles.iconBtn} ${styles.mobileOnly}`}
+            data-tv-focusable='true'
+            data-tv-focus-scope='top-nav'
+            data-tv-focus-id='topnav-channels'
           >
             <Icon name='Grid3x3' size={18} />
           </Button>
@@ -936,6 +971,10 @@ export default function TopNavbar({
           className={`${styles.iconBtn} ${styles.tvControl} ${isTvMode ? styles.tvBtnActive : ''}`}
           title='Toggle TV Remote Mode'
           aria-label='Toggle TV Remote Mode'
+          data-tv-focusable='true'
+          data-tv-focus-scope='top-nav'
+          data-tv-focus-id='topnav-tv-mode'
+          data-tv-active={isTvMode ? 'true' : 'false'}
         >
           <Icon name='MonitorPlay' size={18} />
         </Button>
@@ -950,6 +989,9 @@ export default function TopNavbar({
             className={styles.iconBtn}
             title='Install App'
             aria-label='Install App'
+            data-tv-focusable='true'
+            data-tv-focus-scope='top-nav'
+            data-tv-focus-id='topnav-install'
           >
             <Icon name='Download' size={18} />
           </Button>
@@ -969,6 +1011,10 @@ export default function TopNavbar({
               setNotificationMenuOpen(nextOpen)
               if (nextOpen) loadNotifications()
             }}
+            data-tv-focusable='true'
+            data-tv-focus-scope='top-nav'
+            data-tv-focus-id='topnav-notifications'
+            data-tv-active={notificationMenuOpen ? 'true' : 'false'}
           >
             <Icon name='Bell' size={18} />
             {unreadCount > 0 ? (
@@ -1006,6 +1052,10 @@ export default function TopNavbar({
                           : 'Push notification is OFF. Click to enable.'
                       }
                       disabled={pushBusy}
+                      data-tv-focusable='true'
+                      data-tv-focus-scope='top-nav'
+                      data-tv-focus-id='topnav-menu-push-toggle'
+                      data-tv-menu-default='true'
                     >
                       <Icon
                         name={pushEnabled ? 'BellRing' : 'BellOff'}
@@ -1030,6 +1080,9 @@ export default function TopNavbar({
                     className={styles.notificationMarkAllBtn}
                     disabled={!notifications.length || unreadCount <= 0}
                     onClick={() => markNotificationsRead({ markAll: true })}
+                    data-tv-focusable='true'
+                    data-tv-focus-scope='top-nav'
+                    data-tv-focus-id='topnav-menu-mark-read'
                   >
                     Mark all read
                   </button>
@@ -1078,6 +1131,9 @@ export default function TopNavbar({
                             content_html: item.content_html || '',
                           })
                         }}
+                        data-tv-focusable='true'
+                        data-tv-focus-scope='top-nav'
+                        data-tv-focus-id={`topnav-notification-${item.id}`}
                       >
                         <div className={styles.notificationItemTop}>
                           <span className={styles.notificationItemTitle}>
@@ -1242,6 +1298,10 @@ export default function TopNavbar({
               setNotificationMenuOpen(false)
               setUserMenuOpen((prev) => !prev)
             }}
+            data-tv-focusable='true'
+            data-tv-focus-scope='top-nav'
+            data-tv-focus-id='topnav-profile'
+            data-tv-active={userMenuOpen ? 'true' : 'false'}
           >
             <Icon name='User' size={18} />
           </Button>
@@ -1265,6 +1325,10 @@ export default function TopNavbar({
                   setOpen(true)
                   setUserMenuOpen(false)
                 }}
+                data-tv-focusable='true'
+                data-tv-focus-scope='top-nav'
+                data-tv-focus-id='topnav-user-edit'
+                data-tv-menu-default='true'
               >
                 <Icon name='Settings' size={16} />
                 Edit Profile
@@ -1274,6 +1338,9 @@ export default function TopNavbar({
                   type='submit'
                   className={`${styles.userMenuItem} ${styles.userMenuItemDanger}`}
                   role='menuitem'
+                  data-tv-focusable='true'
+                  data-tv-focus-scope='top-nav'
+                  data-tv-focus-id='topnav-user-logout'
                 >
                   <Icon name='LogOut' size={16} />
                   Logout
