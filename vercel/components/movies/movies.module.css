@@ -1295,7 +1295,7 @@
 
 .videoShell {
   position: relative;
-  margin: 0 8px;
+  margin: 8px 8px 0;
 }
 
 .moviePlayerControlsRow {
@@ -2136,7 +2136,7 @@
 }
 
 .videoShellTv {
-  margin: 0 14px;
+  margin: 14px 14px 0;
 }
 
 .videoShellTv .video {

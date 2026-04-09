@@ -102,11 +102,9 @@ export default async function RootLayout({ children }) {
     <html lang={initialLocale} suppressHydrationWarning>
       <head>
         <meta name="google-adsense-account" content={ADSENSE_CLIENT} />
-        <Script
-          id="adsense-loader"
-          src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_CLIENT}`}
-          strategy="beforeInteractive"
+        <script
           async
+          src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_CLIENT}`}
           crossOrigin="anonymous"
         />
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
