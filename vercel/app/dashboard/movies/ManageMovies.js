@@ -396,6 +396,9 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
   const [metadataSearchCandidates, setMetadataSearchCandidates] = useState([]);
   const [selectedMetadataCandidateId, setSelectedMetadataCandidateId] = useState("");
   const [importingMovies, setImportingMovies] = useState(false);
+  const [scanSessionId, setScanSessionId] = useState("");
+  const [scanPaused, setScanPaused] = useState(false);
+  const [scanStopping, setScanStopping] = useState(false);
   const [importingPrepared, setImportingPrepared] = useState(false);
   const [importSummary, setImportSummary] = useState(null);
   const [preparedItems, setPreparedItems] = useState([]);
@@ -1077,6 +1080,9 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
       category_ids: [],
     });
     setImportingMovies(true);
+    setScanSessionId("");
+    setScanPaused(false);
+    setScanStopping(false);
     try {
       const parsedRangeStart = clampPositiveInteger(scanForm.range_start, 1);
       const parsedRangeEndRaw = clampNonNegativeInteger(scanForm.range_end, 0);
@@ -1120,6 +1126,11 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
             evt = JSON.parse(raw);
           } catch {
             continue;
+          }
+          if (evt?.type === "start") {
+            setScanSessionId(String(evt.session_id || ""));
+            setScanPaused(false);
+            setScanStopping(false);
           }
           if (evt?.type === "raw_found") {
             setScanRawCount(Number(evt.raw_count || 0));
@@ -1191,7 +1202,11 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
         range_start: String(Number(finalSummary?.range_start || parsedRangeStart) || parsedRangeStart),
         range_end: String(Number(finalSummary?.range_end || parsedRangeEndRaw) || parsedRangeEndRaw || 0),
       }));
-      setMessage("Scan complete. এই range review করে Import দিন।");
+      setMessage(
+        finalSummary?.stopped
+          ? "Scan stopped. এখন পর্যন্ত পাওয়া items review করে Import দিতে পারবেন।"
+          : "Scan complete. এই range review করে Import দিন।"
+      );
       return {
         summary: finalSummary,
         items,
@@ -1205,8 +1220,41 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
       return null;
     } finally {
       setImportingMovies(false);
+      setScanSessionId("");
+      setScanPaused(false);
+      setScanStopping(false);
     }
   };
+
+  const handleScanControl = useCallback(async (action) => {
+    const sessionId = String(scanSessionId || "");
+    if (!sessionId) return;
+    setError("");
+    try {
+      const res = await fetch("/api/admin/movies/import/scan-control", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          session_id: sessionId,
+          action,
+        }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload?.error || "Failed to update scan state");
+      if (action === "pause") {
+        setScanPaused(true);
+        setMessage("Scan paused.");
+      } else if (action === "resume") {
+        setScanPaused(false);
+        setMessage("Scan resumed.");
+      } else if (action === "stop") {
+        setScanStopping(true);
+        setMessage("Stopping scan...");
+      }
+    } catch (err) {
+      setError(err?.message || "Failed to update scan state");
+    }
+  }, [scanSessionId]);
 
   const handleImportMovies = async (event) => {
     event.preventDefault();
@@ -2913,6 +2961,30 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
             </label>
             <button type="submit" className={styles.primaryBtn} disabled={importingMovies}>
               {importingMovies ? "Scanning..." : "Start Scan"}
+            </button>
+            <button
+              type="button"
+              className={styles.ghostBtn}
+              disabled={!importingMovies || scanPaused || scanStopping || !scanSessionId}
+              onClick={() => handleScanControl("pause")}
+            >
+              Pause Scan
+            </button>
+            <button
+              type="button"
+              className={styles.ghostBtn}
+              disabled={!importingMovies || !scanPaused || scanStopping || !scanSessionId}
+              onClick={() => handleScanControl("resume")}
+            >
+              Resume Scan
+            </button>
+            <button
+              type="button"
+              className={styles.ghostBtn}
+              disabled={!importingMovies || scanStopping || !scanSessionId}
+              onClick={() => handleScanControl("stop")}
+            >
+              {scanStopping ? "Stopping..." : "Stop Scan"}
             </button>
             <button
               type="button"

@@ -1,6 +1,11 @@
 import { requireAdminApi } from "../../../../../../lib/adminApi";
 import { getSupabaseAdmin } from "../../../../../../lib/supabaseAdmin";
 import { prepareMoviesFromApache } from "../../../../../../lib/movieImporter";
+import {
+  createMovieImportScanSession,
+  finishMovieImportScanSession,
+  waitForMovieImportScanResume,
+} from "../../../../../../lib/movieImportScanSessions";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -37,12 +42,13 @@ export async function POST(request) {
   const rangeEnd = Math.max(0, Number(body?.range_end || 0));
 
   const encoder = new TextEncoder();
+  const session = createMovieImportScanSession();
 
   const stream = new ReadableStream({
     async start(controller) {
       const send = (evt) => controller.enqueue(encoder.encode(encodeEvent(evt)));
       try {
-        send({ type: "start", message: "scan started" });
+        send({ type: "start", message: "scan started", session_id: session.id });
 
         const admin = getSupabaseAdmin();
         let rawCount = 0;
@@ -59,6 +65,8 @@ export async function POST(request) {
           rangeEnd,
           providers: providers.length ? providers : ["imdb", "omdb", "tmdb"],
           logger: console,
+          waitIfPaused: () => waitForMovieImportScanResume(session),
+          isStopped: () => Boolean(session.stopped),
           onFoundRaw: async (raw) => {
             rawCount += 1;
             send({
@@ -83,6 +91,7 @@ export async function POST(request) {
       } catch (error) {
         send({ type: "error", error: error?.message || "scan failed" });
       } finally {
+        finishMovieImportScanSession(session.id);
         controller.close();
       }
     },

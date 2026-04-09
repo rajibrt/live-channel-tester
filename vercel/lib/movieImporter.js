@@ -526,6 +526,17 @@ export async function crawlMoviesFromApache(baseUrl, options = {}) {
   const logger = options.logger || console;
   const onFoundRaw = typeof options.onFoundRaw === "function" ? options.onFoundRaw : null;
   const stopAfter = Math.max(0, Number(options.stopAfter || 0));
+  const waitIfPaused = typeof options.waitIfPaused === "function" ? options.waitIfPaused : null;
+  const isStopped = typeof options.isStopped === "function" ? options.isStopped : null;
+
+  const checkControl = async () => {
+    if (waitIfPaused) {
+      const canContinue = await waitIfPaused();
+      if (canContinue === false) return false;
+    }
+    if (isStopped?.()) return false;
+    return true;
+  };
 
   const visited = new Set();
   const movies = [];
@@ -533,6 +544,7 @@ export async function crawlMoviesFromApache(baseUrl, options = {}) {
   const queue = [{ url: baseUrl, depth: 0 }];
 
   while (queue.length) {
+    if (!(await checkControl())) break;
     if (stopAfter > 0 && unique.size >= stopAfter) break;
     const current = queue.shift();
     if (!current) continue;
@@ -596,6 +608,7 @@ export async function crawlMoviesFromApache(baseUrl, options = {}) {
       if (onFoundRaw) {
         await onFoundRaw(candidate);
       }
+      if (!(await checkControl())) break;
       continue;
     }
 
@@ -605,7 +618,7 @@ export async function crawlMoviesFromApache(baseUrl, options = {}) {
     }
   }
 
-  return [...unique.values()];
+  return { items: [...unique.values()], stopped: Boolean(isStopped?.()) };
 }
 
 export async function prepareMoviesFromApache(admin, input = {}) {
@@ -630,18 +643,23 @@ export async function prepareMoviesFromApache(admin, input = {}) {
     logger: input.logger || console,
     onFoundRaw: typeof input.onFoundRaw === "function" ? input.onFoundRaw : null,
     onPrepared: typeof input.onPrepared === "function" ? input.onPrepared : null,
+    waitIfPaused: typeof input.waitIfPaused === "function" ? input.waitIfPaused : null,
+    isStopped: typeof input.isStopped === "function" ? input.isStopped : null,
   };
 
   const stopAfter = options.rangeEnd > 0 ? options.rangeEnd : options.limit;
 
-  const scanned = await crawlMoviesFromApache(baseUrl, {
+  const crawled = await crawlMoviesFromApache(baseUrl, {
     maxDepth: options.maxDepth,
     includeRegexes,
     excludeRegexes,
     logger: options.logger,
     onFoundRaw: options.onFoundRaw,
     stopAfter,
+    waitIfPaused: options.waitIfPaused,
+    isStopped: options.isStopped,
   });
+  const scanned = Array.isArray(crawled) ? crawled : Array.isArray(crawled?.items) ? crawled.items : [];
   const limited = options.limit > 0 ? scanned.slice(0, options.limit) : scanned;
   const effectiveRangeEnd = options.rangeEnd > 0 ? Math.min(options.rangeEnd, limited.length) : limited.length;
   const effectiveRangeStart = Math.min(options.rangeStart, Math.max(1, effectiveRangeEnd || 1));
@@ -652,6 +670,11 @@ export async function prepareMoviesFromApache(admin, input = {}) {
 
   const preparedItems = [];
   for (let i = 0; i < candidates.length; i += 1) {
+    if (options.waitIfPaused) {
+      const canContinue = await options.waitIfPaused();
+      if (canContinue === false) break;
+    }
+    if (options.isStopped?.()) break;
     const item = candidates[i];
     let meta = null;
     try {
@@ -710,11 +733,12 @@ export async function prepareMoviesFromApache(admin, input = {}) {
 
   return {
     scanned_count: limited.length,
-    candidate_count: candidates.length,
+    candidate_count: preparedItems.length,
     duplicates_count: preparedItems.filter((x) => x.duplicate?.is_duplicate).length,
     unique_count: preparedItems.filter((x) => !x.duplicate?.is_duplicate).length,
     range_start: effectiveRangeStart,
     range_end: effectiveRangeEnd,
+    stopped: Boolean(crawled?.stopped) || Boolean(options.isStopped?.()),
     items: preparedItems,
   };
 }

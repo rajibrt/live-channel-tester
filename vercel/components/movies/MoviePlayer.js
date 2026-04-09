@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  AudioLines,
   ArrowLeft,
   CheckCircle2,
   Heart,
@@ -15,11 +14,7 @@ import {
   VolumeX,
 } from 'lucide-react'
 import styles from './movies.module.css'
-import {
-  resolveBrowserPlaybackUrl,
-  shouldForceVideoTranscode,
-  toStreamTranscodeUrl,
-} from '../../lib/streamUrl'
+import { resolveBrowserPlaybackUrl } from '../../lib/streamUrl'
 
 function toSeconds(value) {
   const n = Number(value)
@@ -94,17 +89,6 @@ async function tryStartPlayback(video, { allowMutedFallback = false } = {}) {
   }
 }
 
-function isTranscodePlaybackUrl(value) {
-  const raw = String(value || '')
-  return /stream-transcode/i.test(raw)
-}
-
-function hasLikelyUnsupportedAudioInUrl(value) {
-  const raw = String(value || '').toLowerCase()
-  if (!raw) return false
-  return /(ac-?3|eac-?3|dts|truehd|dd[\d.]+|ddp[\d.]*)/i.test(raw)
-}
-
 function isPrivateLanUrl(value) {
   try {
     const host = new URL(String(value || '')).hostname
@@ -125,14 +109,6 @@ function shouldAvoidServerTranscode(rawUrl) {
   const host = String(window.location.hostname || '').toLowerCase()
   // Hosted domain/server usually cannot reach user's private LAN source.
   return host !== 'localhost' && host !== '127.0.0.1' && host !== '::1'
-}
-
-function resolveCompatibilityPlaybackUrl(rawSourceUrl) {
-  const raw = String(rawSourceUrl || '').trim()
-  if (!raw) return ''
-  return toStreamTranscodeUrl(raw, {
-    video: shouldForceVideoTranscode(raw) ? 'transcode' : '',
-  })
 }
 
 function extractDirectStreamTarget(value) {
@@ -172,52 +148,6 @@ function getPreferredRawMovieUrl(movie) {
     if (normalized) return normalized
   }
   return ''
-}
-
-function withTranscodeStart(value, seconds) {
-  const raw = String(value || '').trim()
-  if (!raw) return ''
-  if (!isTranscodePlaybackUrl(raw)) return raw
-  try {
-    const u = new URL(
-      raw,
-      typeof window === 'undefined'
-        ? 'http://localhost'
-        : window.location.origin,
-    )
-    u.searchParams.set('start', String(Math.max(0, toSeconds(seconds))))
-    if (u.origin === 'http://localhost' && raw.startsWith('/')) {
-      return `${u.pathname}${u.search}`
-    }
-    return u.toString()
-  } catch {
-    const sep = raw.includes('?') ? '&' : '?'
-    return `${raw}${sep}start=${encodeURIComponent(String(Math.max(0, toSeconds(seconds))))}`
-  }
-}
-
-async function diagnoseTranscodeFailure(playbackUrl) {
-  const url = String(playbackUrl || '').trim()
-  if (!isTranscodePlaybackUrl(url)) return ''
-  try {
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 8000)
-    const res = await fetch(url, {
-      method: 'GET',
-      credentials: 'include',
-      headers: { Range: 'bytes=0-' },
-      cache: 'no-store',
-      signal: controller.signal,
-    })
-    clearTimeout(timer)
-    if (res.ok) return ''
-    const body = await res.json().catch(() => ({}))
-    const reason = String(body?.reason || body?.error || '').trim()
-    const details = String(body?.details || '').trim()
-    return [reason, details].filter(Boolean).join(' | ').slice(0, 220)
-  } catch {
-    return ''
-  }
 }
 
 function getFullscreenElement() {
@@ -319,9 +249,6 @@ export default function MoviePlayer({
   const [playbackSeconds, setPlaybackSeconds] = useState(0)
   const [mediaDurationSeconds, setMediaDurationSeconds] = useState(0)
   const [probedDurationSeconds, setProbedDurationSeconds] = useState(0)
-  const [fallbackPlaybackUrl, setFallbackPlaybackUrl] = useState('')
-  const [compatModeRequested, setCompatModeRequested] = useState(false)
-  const [compatibilityDisabled, setCompatibilityDisabled] = useState(false)
   const [scrubValue, setScrubValue] = useState(null)
   const [isPlayerFullscreen, setIsPlayerFullscreen] = useState(false)
   const [volumeIndicator, setVolumeIndicator] = useState(null)
@@ -339,9 +266,6 @@ export default function MoviePlayer({
   }, [onTrackActivity])
 
   useEffect(() => {
-    setFallbackPlaybackUrl('')
-    setCompatModeRequested(false)
-    setCompatibilityDisabled(false)
     seekStartFromRef.current = null
     setSeekNonce(0)
     setScrubValue(null)
@@ -484,11 +408,6 @@ export default function MoviePlayer({
     }
   }, [movie?.id])
 
-  const queueTranscodeSeek = useCallback((seconds) => {
-    seekStartFromRef.current = Math.max(0, toSeconds(seconds))
-    setSeekNonce((prev) => prev + 1)
-  }, [])
-
   useEffect(() => {
     const video = videoRef.current
     if (!video) return undefined
@@ -503,24 +422,17 @@ export default function MoviePlayer({
     video.load()
 
     const rawMovieUrl = getPreferredRawMovieUrl(movie)
-    const compatibilityUrl = resolveCompatibilityPlaybackUrl(rawMovieUrl)
     const directPlaybackUrl = resolveBrowserPlaybackUrl(
       rawMovieUrl,
       typeof window !== 'undefined' ? window.location?.protocol : '',
     )
-    const playbackUrl = String(
-      fallbackPlaybackUrl ||
-        directPlaybackUrl ||
-        movie?.playbackUrl ||
-        '',
-    )
+    const playbackUrl = String(directPlaybackUrl || movie?.playbackUrl || '')
     if (!playbackUrl) {
       setStatusText('Select a movie with a playable source.')
       return undefined
     }
 
     setStatusText('Loading...')
-    const isTranscoded = isTranscodePlaybackUrl(playbackUrl)
     const fallbackStart = toSeconds(movie?.progress?.positionSeconds)
     const requestedSeek = seekStartFromRef.current
     const requestedStart =
@@ -530,13 +442,10 @@ export default function MoviePlayer({
           : toSeconds(startFrom)
         : toSeconds(requestedSeek)
     const desiredStart = Math.max(0, requestedStart)
-    transcodeOffsetRef.current = isTranscoded ? desiredStart : 0
-    const sourceForPlayback = isTranscoded
-      ? withTranscodeStart(playbackUrl, desiredStart)
-      : playbackUrl
+    transcodeOffsetRef.current = 0
+    const sourceForPlayback = playbackUrl
     let initialSeekApplied = false
     let initialSeekTimer = null
-    let startupFallbackTimer = null
 
     const applyNativeSource = (source) => {
       video.src = source
@@ -544,7 +453,7 @@ export default function MoviePlayer({
     }
 
     const applyInitialSeek = () => {
-      if (initialSeekApplied || isTranscoded || desiredStart <= 0) return
+      if (initialSeekApplied || desiredStart <= 0) return
       if (!Number.isFinite(Number(video.duration))) return
       try {
         video.currentTime = Math.min(
@@ -571,29 +480,8 @@ export default function MoviePlayer({
       setStatusText('Ready')
     }
 
-    const armStartupFallback = (message) => {
-      if (
-        isTranscoded ||
-        compatibilityDisabled ||
-        !shouldForceVideoTranscode(rawMovieUrl)
-      ) {
-        return
-      }
-      if (startupFallbackTimer) clearTimeout(startupFallbackTimer)
-      startupFallbackTimer = setTimeout(() => {
-        if (cancelled) return
-        if (!video.paused && toSeconds(video.currentTime) <= 0) {
-          switchToCompatibilityPlayback(message)
-        }
-      }, 2200)
-    }
-
     const handlePlaying = () => {
-      if (startupFallbackTimer) {
-        clearTimeout(startupFallbackTimer)
-        startupFallbackTimer = null
-      }
-      if (!initialSeekApplied && !isTranscoded && desiredStart > 0) {
+      if (!initialSeekApplied && desiredStart > 0) {
         if (initialSeekTimer) clearTimeout(initialSeekTimer)
         initialSeekTimer = setTimeout(() => {
           applyInitialSeek()
@@ -624,16 +512,9 @@ export default function MoviePlayer({
 
     const handlePlay = () => {
       setIsPaused(false)
-      armStartupFallback(
-        'Native playback stalled after Play. Switching to compatibility mode...',
-      )
     }
 
     const handleTimeUpdate = () => {
-      if (startupFallbackTimer && video.currentTime > 0) {
-        clearTimeout(startupFallbackTimer)
-        startupFallbackTimer = null
-      }
       setPlaybackSeconds(
         toSeconds(video.currentTime) + toSeconds(transcodeOffsetRef.current),
       )
@@ -660,81 +541,13 @@ export default function MoviePlayer({
       postComplete()
     }
 
-    let compatibilityFallbackTriggered = false
-    const switchToCompatibilityPlayback = (statusMessage) => {
-      if (
-        compatibilityFallbackTriggered ||
-        isTranscoded ||
-        !compatibilityUrl ||
-        compatibilityDisabled ||
-        !shouldForceVideoTranscode(rawMovieUrl)
-      ) {
-        return false
-      }
-      compatibilityFallbackTriggered = true
-      const currentAbs =
-        toSeconds(video.currentTime) + toSeconds(transcodeOffsetRef.current)
-      seekStartFromRef.current = currentAbs
-      setCompatModeRequested(true)
-      setFallbackPlaybackUrl(compatibilityUrl)
-      setStatusText(statusMessage || 'Switching to compatibility mode...')
-      return true
-    }
-
     const handleError = () => {
-      const rawUrl = getPreferredRawMovieUrl(movie)
-      const compatibilityUrl = resolveCompatibilityPlaybackUrl(rawUrl)
-      if (
-        switchToCompatibilityPlayback(
-          'Native playback failed. Switching to compatibility mode...',
-        )
-      ) {
-        return
-      }
-      if (
-        !isTranscoded &&
-        shouldAvoidServerTranscode(rawUrl) &&
-        !compatModeRequested
-      ) {
+      if (shouldAvoidServerTranscode(rawMovieUrl)) {
         setStatusText(
-          'Playback failed (server cannot access private source; using direct LAN playback only)',
-        )
-      } else if (
-        !isTranscoded &&
-        shouldAvoidServerTranscode(rawUrl) &&
-        compatModeRequested
-      ) {
-        setStatusText(
-          'Playback failed (compatibility mode needs LAN-reachable transcode server)',
+          'Playback failed (server cannot access private source; using direct playback only)',
         )
       } else {
-        setStatusText(
-          compatibilityUrl
-            ? 'Playback failed. Try Compatibility Mode if this source has unsupported audio.'
-            : 'Playback failed',
-        )
-      }
-      if (isTranscoded) {
-        diagnoseTranscodeFailure(playbackUrl).then((info) => {
-          if (!info) return
-          const lower = info.toLowerCase()
-          const networkBlocked =
-            lower.includes('operation timed out') ||
-            lower.includes('connection to tcp') ||
-            lower.includes('error opening input file')
-          if (networkBlocked) {
-            // Domain cannot reach LAN source for server-side transcode.
-            // Fall back to normal mode and stop auto-retrying compat.
-            setCompatibilityDisabled(true)
-            setCompatModeRequested(false)
-            setFallbackPlaybackUrl('')
-            setStatusText(
-              'Compatibility mode unavailable on domain (LAN source unreachable). Switched to normal mode.',
-            )
-            return
-          }
-          setStatusText(`Playback failed (${info})`)
-        })
+        setStatusText('Playback failed')
       }
       onTrackActivityRef.current?.('movie_playback_failed', {
         movie_id: String(movie?.id || ''),
@@ -758,19 +571,10 @@ export default function MoviePlayer({
       video.muted = false
       video.volume = 1
       applyNativeSource(sourceForPlayback)
-      if (!isTranscoded && !compatModeRequested && !autoStartPlayback) {
+      if (!autoStartPlayback) {
         setIsPaused(true)
         setStatusText('Ready. Press Play to start normal mode.')
         return
-      }
-      if (
-        !isTranscoded &&
-        !compatibilityDisabled &&
-        shouldForceVideoTranscode(rawMovieUrl)
-      ) {
-        armStartupFallback(
-          'Native playback stalled. Switching to compatibility mode...',
-        )
       }
       tryStartPlayback(video)
         .then((started) => {
@@ -783,7 +587,7 @@ export default function MoviePlayer({
     }
 
     const startPlayback = async () => {
-      if (!isTranscoded && isHlsUrl(sourceForPlayback)) {
+      if (isHlsUrl(sourceForPlayback)) {
         try {
           const Hls = await loadHlsScript()
           if (cancelled) return
@@ -848,7 +652,6 @@ export default function MoviePlayer({
     return () => {
       cancelled = true
       if (initialSeekTimer) clearTimeout(initialSeekTimer)
-      if (startupFallbackTimer) clearTimeout(startupFallbackTimer)
       clearInterval(intervalRef.current)
       intervalRef.current = null
       postProgress('unmount')
@@ -873,7 +676,6 @@ export default function MoviePlayer({
     }
   }, [
     autoStartPlayback,
-    fallbackPlaybackUrl,
     movie?.id,
     movie?.playbackUrl,
     movie?.rawPlaybackUrl,
@@ -891,21 +693,10 @@ export default function MoviePlayer({
     getPreferredRawMovieUrl(movie),
     typeof window !== 'undefined' ? window.location?.protocol : '',
   )
-  const hasPlayableMovie = Boolean(
-    fallbackPlaybackUrl || browserResolvedPlaybackUrl || movie?.playbackUrl,
-  )
-  const isTranscodedPlayback = isTranscodePlaybackUrl(
-    fallbackPlaybackUrl || browserResolvedPlaybackUrl || movie?.playbackUrl,
-  )
+  const hasPlayableMovie = Boolean(browserResolvedPlaybackUrl || movie?.playbackUrl)
   const rawSourceUrl = getPreferredRawMovieUrl(movie)
-  const privateHostedMode = shouldAvoidServerTranscode(rawSourceUrl)
-  const likelyUnsupportedAudio =
-    hasLikelyUnsupportedAudioInUrl(rawSourceUrl) ||
-    hasLikelyUnsupportedAudioInUrl(
-      fallbackPlaybackUrl || browserResolvedPlaybackUrl || movie?.playbackUrl,
-    )
   const showPlayAction = isPaused || !hasPlayableMovie
-  const videoElementKey = `${movie?.id || 'movie'}:${fallbackPlaybackUrl || rawSourceUrl || movie?.playbackUrl || ''}`
+  const videoElementKey = `${movie?.id || 'movie'}:${rawSourceUrl || movie?.playbackUrl || ''}`
   const watchedSeconds = Number(
     playbackSeconds || movie?.progress?.positionSeconds || 0,
   )
@@ -932,12 +723,6 @@ export default function MoviePlayer({
     watchedPercent > 0
       ? `${Math.round(watchedPercent)}% watched`
       : 'Not started'
-  const nativeDurationBroken = Boolean(
-    !isTranscodedPlayback &&
-      durationSeconds > 60 &&
-      mediaDurationSeconds > 0 &&
-      mediaDurationSeconds < Math.max(15, Math.floor(durationSeconds * 0.25)),
-  )
   const scrubDuration = Math.max(
     0,
     toSeconds(durationSeconds || movie?.runtimeSeconds || 0),
@@ -1023,26 +808,13 @@ export default function MoviePlayer({
       const base =
         toSeconds(video.currentTime) + toSeconds(transcodeOffsetRef.current)
       const target = Math.max(0, base + toSignedSeconds(delta))
-      if (isTranscodedPlayback) {
-        queueTranscodeSeek(target)
-        return
-      }
-      const compatibilityUrl = resolveCompatibilityPlaybackUrl(rawSourceUrl)
-      if (nativeDurationBroken && compatibilityUrl) {
-        seekStartFromRef.current = target
-        setCompatibilityDisabled(false)
-        setCompatModeRequested(true)
-        setFallbackPlaybackUrl(compatibilityUrl)
-        setStatusText('Switching to compatibility seek...')
-        return
-      }
       try {
         video.currentTime = target
       } catch {
         // ignore seek failures
       }
     },
-    [isTranscodedPlayback, nativeDurationBroken, queueTranscodeSeek, rawSourceUrl],
+    [],
   )
 
   const jumpToSeconds = useCallback(
@@ -1050,21 +822,6 @@ export default function MoviePlayer({
       const target = Math.max(0, toSeconds(targetSeconds))
       const video = videoRef.current
       if (!video) return
-      if (isTranscodedPlayback) {
-        queueTranscodeSeek(target)
-        setScrubValue(null)
-        return
-      }
-      const compatibilityUrl = resolveCompatibilityPlaybackUrl(rawSourceUrl)
-      if (nativeDurationBroken && compatibilityUrl) {
-        seekStartFromRef.current = target
-        setCompatibilityDisabled(false)
-        setCompatModeRequested(true)
-        setFallbackPlaybackUrl(compatibilityUrl)
-        setStatusText('Switching to compatibility seek...')
-        setScrubValue(null)
-        return
-      }
       try {
         video.currentTime = target
       } catch {
@@ -1072,51 +829,8 @@ export default function MoviePlayer({
       }
       setScrubValue(null)
     },
-    [isTranscodedPlayback, nativeDurationBroken, queueTranscodeSeek, rawSourceUrl],
+    [],
   )
-
-  const toggleCompatibilityMode = useCallback(() => {
-    const rawUrl = getPreferredRawMovieUrl(movie)
-    if (!rawUrl) return
-    const compatibilityUrl = resolveCompatibilityPlaybackUrl(rawUrl)
-    const video = videoRef.current
-    const currentAbs = video
-      ? toSeconds(video.currentTime) + toSeconds(transcodeOffsetRef.current)
-      : toSeconds(playbackSeconds || movie?.progress?.positionSeconds || 0)
-    seekStartFromRef.current = currentAbs
-    if (isTranscodedPlayback) {
-      setCompatibilityDisabled(true)
-      setCompatModeRequested(false)
-      setFallbackPlaybackUrl('')
-      setStatusText('Switched to normal mode')
-      return
-    }
-    if (!compatibilityUrl) {
-      setStatusText(
-        'Compatibility mode unavailable (gateway not configured for private source)',
-      )
-      return
-    }
-    setCompatibilityDisabled(false)
-    setCompatModeRequested(true)
-    setFallbackPlaybackUrl(compatibilityUrl)
-    if (privateHostedMode) {
-      setStatusText(
-        'Trying compatibility mode (requires transcode server access to LAN source)...',
-      )
-    } else {
-      setStatusText('Switching to compatibility mode...')
-    }
-  }, [
-    isTranscodedPlayback,
-    movie?.progress?.positionSeconds,
-    movie?.playbackUrl,
-    movie?.rawPlaybackUrl,
-    movie?.source?.playbackUrl,
-    movie?.source?.rawUrl,
-    playbackSeconds,
-    privateHostedMode,
-  ])
 
   useEffect(() => {
     if (!isTvMode || typeof window === 'undefined') return undefined
@@ -1396,31 +1110,6 @@ export default function MoviePlayer({
             </button>
             <button
               type='button'
-              className={`${styles.movieNavBtn} ${styles.movieNavBtnInactive} ${styles.movieNavBtnLabelled}`}
-              onClick={toggleCompatibilityMode}
-              disabled={!rawSourceUrl}
-              aria-label={
-                isTranscodedPlayback ? 'Normal Mode' : 'Compatibility Mode'
-              }
-              title={
-                isTranscodedPlayback
-                  ? 'Switch to normal mode'
-                  : 'Switch to compatibility mode'
-              }
-              data-tv-focusable={isTvMode ? 'true' : undefined}
-              data-tv-focus-scope={isTvMode ? 'movie-content' : undefined}
-              data-tv-focus-id={isTvMode ? 'movie-watch-compatibility' : undefined}
-            >
-              <AudioLines size={15} className={styles.movieBtnIcon} />
-              <span className={styles.movieBtnText}>
-                {isTranscodedPlayback ? 'Normal Mode' : 'Compatibility Mode'}
-              </span>
-              <span className={styles.movieBtnTextMobileHint}>
-                {isTranscodedPlayback ? 'Normal Mode' : 'Compatibility Mode'}
-              </span>
-            </button>
-            <button
-              type='button'
               className={`${styles.movieFavoriteBtn} ${favoriteActive ? styles.movieFavoriteBtnActive : styles.movieFavoriteBtnInactive}`}
               onClick={() => onToggleFavorite?.(movie)}
               aria-label={favoriteActive ? 'Favorited' : 'Add Favorite'}
@@ -1477,20 +1166,6 @@ export default function MoviePlayer({
         <p className={styles.playerHintText}>
           Resume starts when progress is at least 30s. Watched is 95%+.
         </p>
-        {isTranscodedPlayback ? (
-          <p className={styles.playerHintText}>
-            Compatibility mode active (AAC fallback). Use -10s/+10s for reliable
-            seeking.
-          </p>
-        ) : null}
-        {!isTranscodedPlayback &&
-        privateHostedMode &&
-        likelyUnsupportedAudio ? (
-          <p className={styles.playerHintText}>
-            This source likely has unsupported browser audio codec. Try
-            Compatibility Mode.
-          </p>
-        ) : null}
       </div>
       ) : null}
     </section>

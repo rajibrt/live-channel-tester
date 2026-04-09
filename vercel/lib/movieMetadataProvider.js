@@ -636,5 +636,28 @@ export async function fetchMovieMetadataByTitle({ title, year = null, providers 
     }
   }
 
+  for (const variant of titleVariants) {
+    try {
+      const fallbackCandidates = await searchMovieMetadataCandidatesByTitle({
+        title: variant,
+        year: normalizedYear,
+        limit: 1,
+      });
+      const candidate = Array.isArray(fallbackCandidates) ? fallbackCandidates[0] : null;
+      const score = Number(candidate?.score || candidate?.item?.confidence || 0);
+      const item = candidate?.item && typeof candidate.item === "object" ? candidate.item : null;
+      if (item?.imdb_id && score >= 0.42) {
+        return normalizeMovieMeta({
+          ...item,
+          provider: text(item?.provider || candidate?.source || "imdb_search"),
+          confidence: Math.max(0.42, Math.min(1, score)),
+        });
+      }
+    } catch (error) {
+      const suffix = variant === q ? "" : ` [variant: ${variant}]`;
+      failures.push(`imdb_search${suffix}: ${error?.message || "failed"}`);
+    }
+  }
+
   throw new Error(`metadata lookup failed for "${q}" (${failures.join("; ")})`);
 }
