@@ -1,7 +1,6 @@
 import "./globals.css";
 import Script from "next/script";
 import { cookies } from "next/headers";
-import PublicAdSenseScript from "../components/ads/PublicAdSenseScript";
 import { LanguageProvider } from "../components/i18n/LanguageProvider";
 import PublicSmoothScroll from "../components/site/PublicSmoothScroll";
 import SiteChrome from "../components/site/SiteChrome";
@@ -13,6 +12,7 @@ import { getBaseUrl } from "../lib/siteUrl";
 
 const baseUrl = getBaseUrl();
 const buildVersion = String(process.env.NEXT_PUBLIC_BUILD_VERSION || "dev").trim() || "dev";
+const ADSENSE_CLIENT = "ca-pub-3010934061489506";
 const PUBLIC_LOCALE_COOKIE = "site_lang";
 export const metadata = {
   title: "WEBTVBD || TV Beyond Borders",
@@ -101,13 +101,20 @@ export default async function RootLayout({ children }) {
   return (
     <html lang={initialLocale} suppressHydrationWarning>
       <head>
+        <meta name="google-adsense-account" content={ADSENSE_CLIENT} />
+        <Script
+          id="adsense-loader"
+          src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_CLIENT}`}
+          strategy="beforeInteractive"
+          async
+          crossOrigin="anonymous"
+        />
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
         <script dangerouslySetInnerHTML={{ __html: pwaInstallBridgeScript }} />
       </head>
       <body>
         <LanguageProvider initialLocale={initialLocale}>
           <PublicSmoothScroll hasClientSession={hasApprovedClientSession} />
-          <PublicAdSenseScript />
           <SiteChrome hasClientSession={hasApprovedClientSession} viewerEntryHref={viewerEntryHref}>
             {children}
           </SiteChrome>
