@@ -1298,6 +1298,24 @@
   margin: 8px 8px 0;
 }
 
+.volumeIndicator {
+  position: absolute;
+  right: 72px;
+  bottom: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: color-mix(in oklab, black 74%, transparent);
+  color: white;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: var(--shadow-lg);
+  pointer-events: none;
+}
+
 .moviePlayerControlsRow {
   border-radius: 16px;
   border: 1px solid var(--border);
@@ -1451,6 +1469,26 @@
   border-radius: 10px;
   border: 1px solid var(--border);
   background: black;
+}
+
+.playerWrap:fullscreen,
+.playerWrap:-webkit-full-screen {
+  background: black;
+}
+
+.playerWrap:fullscreen .videoShell,
+.playerWrap:-webkit-full-screen .videoShell {
+  margin: 0;
+}
+
+.playerWrap:fullscreen .video,
+.playerWrap:-webkit-full-screen .video {
+  border: 0;
+  border-radius: 0;
+  width: 100vw;
+  height: 100vh;
+  aspect-ratio: auto;
+  object-fit: contain;
 }
 
 .playerMeta {
@@ -2137,6 +2175,14 @@
 
 .videoShellTv {
   margin: 14px 14px 0;
+}
+
+.volumeIndicatorTv {
+  right: 84px;
+  bottom: 54px;
+  gap: 10px;
+  padding: 10px 14px;
+  font-size: 18px;
 }
 
 .videoShellTv .video {

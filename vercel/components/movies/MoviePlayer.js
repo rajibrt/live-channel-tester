@@ -11,6 +11,8 @@ import {
   RotateCcw,
   Rewind,
   FastForward,
+  Volume2,
+  VolumeX,
 } from 'lucide-react'
 import styles from './movies.module.css'
 import {
@@ -274,6 +276,17 @@ async function exitDocumentFullscreen() {
   return false
 }
 
+function isTypingTarget(target) {
+  if (!target || typeof target !== 'object') return false
+  const tagName = String(target.tagName || '').toLowerCase()
+  return (
+    tagName === 'input' ||
+    tagName === 'textarea' ||
+    tagName === 'select' ||
+    target.isContentEditable
+  )
+}
+
 export default function MoviePlayer({
   movie,
   isTvMode = false,
@@ -299,6 +312,7 @@ export default function MoviePlayer({
   const onTrackActivityRef = useRef(onTrackActivity)
   const transcodeOffsetRef = useRef(0)
   const seekStartFromRef = useRef(null)
+  const volumeIndicatorTimerRef = useRef(null)
   const [statusText, setStatusText] = useState('Ready')
   const [isPaused, setIsPaused] = useState(false)
   const [seekNonce, setSeekNonce] = useState(0)
@@ -310,6 +324,7 @@ export default function MoviePlayer({
   const [compatibilityDisabled, setCompatibilityDisabled] = useState(false)
   const [scrubValue, setScrubValue] = useState(null)
   const [isPlayerFullscreen, setIsPlayerFullscreen] = useState(false)
+  const [volumeIndicator, setVolumeIndicator] = useState(null)
 
   useEffect(() => {
     onProgressSavedRef.current = onProgressSaved
@@ -932,6 +947,7 @@ export default function MoviePlayer({
     Math.max(0, toSeconds(scrubValue == null ? watchedSeconds : scrubValue)),
   )
   const hideTvFullscreenChrome = isTvMode && isPlayerFullscreen
+  const volumeIndicatorLevel = Math.round(Math.max(0, Math.min(1, Number(volumeIndicator?.volume || 0))) * 100)
   const handleTogglePlayPause = useCallback(() => {
     const video = videoRef.current
     if (!video) return
@@ -951,6 +967,54 @@ export default function MoviePlayer({
     }
     video.pause()
   }, [autoEnterFullscreen])
+
+  const showVolumeIndicator = useCallback((payload) => {
+    setVolumeIndicator(payload)
+    if (typeof window === 'undefined') return
+    if (volumeIndicatorTimerRef.current) {
+      window.clearTimeout(volumeIndicatorTimerRef.current)
+    }
+    volumeIndicatorTimerRef.current = window.setTimeout(() => {
+      setVolumeIndicator(null)
+      volumeIndicatorTimerRef.current = null
+    }, 850)
+  }, [])
+
+  const togglePlayerFullscreen = useCallback(async () => {
+    const playerWrap = playerWrapRef.current
+    const video = videoRef.current
+    if (!playerWrap || !video) return
+    const fullscreenElement = getFullscreenElement()
+    if (fullscreenElement === playerWrap) {
+      await exitDocumentFullscreen().catch(() => {})
+      return
+    }
+    await requestElementFullscreen(playerWrap, video).catch(() => {})
+  }, [])
+
+  const toggleMute = useCallback(() => {
+    const video = videoRef.current
+    if (!video) return
+    video.muted = !video.muted
+    showVolumeIndicator({
+      muted: video.muted,
+      volume: video.muted ? 0 : Number(video.volume || 0),
+    })
+  }, [showVolumeIndicator])
+
+  const adjustVolume = useCallback((delta) => {
+    const video = videoRef.current
+    if (!video) return
+    const currentVolume = Number.isFinite(Number(video.volume)) ? Number(video.volume) : 1
+    const nextVolume = Math.max(0, Math.min(1, currentVolume + delta))
+    video.volume = nextVolume
+    if (nextVolume > 0 && video.muted) video.muted = false
+    if (nextVolume === 0) video.muted = true
+    showVolumeIndicator({
+      muted: video.muted,
+      volume: nextVolume,
+    })
+  }, [showVolumeIndicator])
 
   const jumpBySeconds = useCallback(
     (delta) => {
@@ -1104,6 +1168,58 @@ export default function MoviePlayer({
   useEffect(() => {
     if (typeof window === 'undefined') return undefined
 
+    const onKeyDown = (event) => {
+      if (event.defaultPrevented || isTypingTarget(event.target)) return
+
+      const key = String(event.key || '')
+      if (key === 'f' || key === 'F') {
+        event.preventDefault()
+        togglePlayerFullscreen()
+        return
+      }
+      if (key === 'm' || key === 'M') {
+        event.preventDefault()
+        toggleMute()
+        return
+      }
+      if (key === 'ArrowLeft') {
+        event.preventDefault()
+        jumpBySeconds(-10)
+        return
+      }
+      if (key === 'ArrowRight') {
+        event.preventDefault()
+        jumpBySeconds(10)
+        return
+      }
+      if (key === 'ArrowUp') {
+        event.preventDefault()
+        adjustVolume(0.1)
+        return
+      }
+      if (key === 'ArrowDown') {
+        event.preventDefault()
+        adjustVolume(-0.1)
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [adjustVolume, jumpBySeconds, toggleMute, togglePlayerFullscreen])
+
+  useEffect(() => {
+    return () => {
+      if (typeof window !== 'undefined' && volumeIndicatorTimerRef.current) {
+        window.clearTimeout(volumeIndicatorTimerRef.current)
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined
+
     const syncLandscapeFullscreen = async () => {
       const playerWrap = playerWrapRef.current
       const video = videoRef.current
@@ -1177,6 +1293,12 @@ export default function MoviePlayer({
           playsInline
           preload='metadata'
         />
+        {volumeIndicator ? (
+          <div className={`${styles.volumeIndicator} ${isTvMode ? styles.volumeIndicatorTv : ''}`} aria-hidden='true'>
+            {volumeIndicator.muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+            <span>{volumeIndicatorLevel}%</span>
+          </div>
+        ) : null}
       </div>
       {!hideTvFullscreenChrome ? (
       <div className={`${styles.moviePlayerControlsRow} ${isTvMode ? styles.moviePlayerControlsRowTv : ""}`}>
