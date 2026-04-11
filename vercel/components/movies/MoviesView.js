@@ -1,7 +1,7 @@
 "use client";
 
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Play, RotateCcw, Search, SlidersHorizontal, X } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, Heart, Play, RotateCcw, Search, SlidersHorizontal, X } from "lucide-react";
 import MovieDetail from "./MovieDetail";
 import MovieCard from "./MovieCard";
 import MovieGrid from "./MovieGrid";
@@ -259,6 +259,8 @@ export default function MoviesView({
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
   const [desktopSearchOpen, setDesktopSearchOpen] = useState(false);
+  const [desktopSearchClosing, setDesktopSearchClosing] = useState(false);
+  const [desktopSearchOrigin, setDesktopSearchOrigin] = useState({ x: 0, y: 0 });
   const [tvSearchOpen, setTvSearchOpen] = useState(false);
   const [tvFilterOpen, setTvFilterOpen] = useState(false);
   const [tvRecentSearches, setTvRecentSearches] = useState([]);
@@ -266,14 +268,20 @@ export default function MoviesView({
   const [mobileEdgeBottom, setMobileEdgeBottom] = useState(88);
   const [heroMovies, setHeroMovies] = useState([]);
   const [heroIndex, setHeroIndex] = useState(0);
+  const heroSectionRef = useRef(null);
   const moviesSectionRef = useRef(null);
   const watchPlayerColRef = useRef(null);
   const tvSearchInputRef = useRef(null);
   const desktopSearchInputRef = useRef(null);
+  const desktopSearchTriggerRef = useRef(null);
+  const desktopSearchCloseTimerRef = useRef(0);
+  const heroTouchStartXRef = useRef(0);
+  const heroTouchStartYRef = useRef(0);
   const tvSearchTriggerFocusIdRef = useRef("movie-tv-open-search");
   const tvFilterTriggerFocusIdRef = useRef("movie-tv-open-filters");
   const hasFilterScrollMountedRef = useRef(false);
   const pendingPageScrollRef = useRef(false);
+  const initialBrowseHeroScrollDoneRef = useRef(false);
   const [categorySlug, setCategorySlug] = useState("all");
   const [selectedMovieId, setSelectedMovieId] = useState(() => {
     const normalizedSelectedSlug = text(initialSelectedMovieSlug).toLowerCase();
@@ -294,6 +302,44 @@ export default function MoviesView({
   const [playerStartFrom, setPlayerStartFrom] = useState(null);
   const [playerReplayToken, setPlayerReplayToken] = useState(0);
   const selectedMovieSlug = text(initialSelectedMovieSlug).toLowerCase();
+
+  const captureDesktopSearchOrigin = useCallback(() => {
+    if (typeof window === "undefined") return { x: 0, y: 0 };
+    const trigger = desktopSearchTriggerRef.current;
+    if (!(trigger instanceof HTMLElement)) {
+      return { x: window.innerWidth - 56, y: Math.round(window.innerHeight * 0.5) };
+    }
+    const rect = trigger.getBoundingClientRect();
+    return {
+      x: Math.round(rect.left + rect.width / 2),
+      y: Math.round(rect.top + rect.height / 2),
+    };
+  }, []);
+
+  const closeDesktopSearch = useCallback(() => {
+    if (!desktopSearchOpen || desktopSearchClosing) return;
+    if (typeof window === "undefined") {
+      setDesktopSearchOpen(false);
+      setDesktopSearchClosing(false);
+      return;
+    }
+    window.clearTimeout(desktopSearchCloseTimerRef.current);
+    setDesktopSearchClosing(true);
+    desktopSearchCloseTimerRef.current = window.setTimeout(() => {
+      setDesktopSearchOpen(false);
+      setDesktopSearchClosing(false);
+    }, 240);
+  }, [desktopSearchClosing, desktopSearchOpen]);
+
+  const openDesktopSearch = useCallback(() => {
+    const origin = captureDesktopSearchOrigin();
+    setDesktopSearchOrigin(origin);
+    if (typeof window !== "undefined") {
+      window.clearTimeout(desktopSearchCloseTimerRef.current);
+    }
+    setDesktopSearchClosing(false);
+    setDesktopSearchOpen(true);
+  }, [captureDesktopSearchOrigin]);
 
   useEffect(() => {
     setMovies(Array.isArray(initialMovies) ? initialMovies : []);
@@ -467,6 +513,8 @@ export default function MoviesView({
   const search = String(searchValue || "");
   const isSearchSyncing = String(searchDraft || "") !== search;
   const isSearchLoading = Boolean(String(search || "").trim()) && Boolean(isPageLoading);
+  const isSearchBusy = isSearchSyncing || isSearchLoading;
+  const searchPendingText = isSearchSyncing ? "Typing..." : "Searching...";
   const normalizedMode = String(filterMode || "all").toLowerCase();
   const inlineCategory = String(categorySlug || "").trim().toLowerCase();
   const normalizedCategory = showInlineFilters
@@ -622,6 +670,12 @@ export default function MoviesView({
         return;
       }
 
+      // Show slider controls immediately on first paint, then refine with verified posters.
+      if (!cancelled) {
+        setHeroMovies(candidates);
+        setHeroIndex(0);
+      }
+
       const verified = [];
       for (const movie of candidates) {
         const posterUrl = text(movie?.posterUrl);
@@ -633,7 +687,7 @@ export default function MoviesView({
       }
 
       if (!cancelled) {
-        setHeroMovies(verified);
+        setHeroMovies(verified.length >= 2 ? verified : candidates);
         setHeroIndex(0);
       }
     };
@@ -982,15 +1036,71 @@ export default function MoviesView({
       hasFilterScrollMountedRef.current = true;
       return;
     }
+    if (isMobileFilterUi) return;
     scrollToMoviesSection();
-  }, [filterMode, filterCategorySlug, filterGenreSlug, filterLanguageSlug, filterYear, categorySlug, showInlineFilters, scrollToMoviesSection]);
+  }, [
+    filterMode,
+    filterCategorySlug,
+    filterGenreSlug,
+    filterLanguageSlug,
+    filterYear,
+    categorySlug,
+    isMobileFilterUi,
+    showInlineFilters,
+    scrollToMoviesSection,
+  ]);
 
   useEffect(() => {
     if (!pendingPageScrollRef.current) return;
+    if (isMobileFilterUi) {
+      pendingPageScrollRef.current = false;
+      return;
+    }
     if (isPageLoading) return;
     pendingPageScrollRef.current = false;
     scrollToMoviesSection("smooth");
-  }, [currentPage, isPageLoading, pagedMovies.length, scrollToMoviesSection]);
+  }, [currentPage, isMobileFilterUi, isPageLoading, pagedMovies.length, scrollToMoviesSection]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    if (variant !== "browse" || isTvMode) return undefined;
+    if (!activeHeroMovie) return undefined;
+    if (initialBrowseHeroScrollDoneRef.current) return undefined;
+    initialBrowseHeroScrollDoneRef.current = true;
+
+    const previousRestoration =
+      typeof window.history?.scrollRestoration === "string" ? window.history.scrollRestoration : "";
+    if (typeof window.history?.scrollRestoration === "string") {
+      window.history.scrollRestoration = "manual";
+    }
+
+    let rafId = 0;
+    let timerA = 0;
+    let timerB = 0;
+
+    const snapToHeroTop = () => {
+      const heroNode = heroSectionRef.current;
+      if (heroNode && typeof heroNode.scrollIntoView === "function") {
+        heroNode.scrollIntoView({ block: "start", inline: "nearest", behavior: "auto" });
+      }
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    };
+
+    rafId = window.requestAnimationFrame(() => {
+      snapToHeroTop();
+      timerA = window.setTimeout(snapToHeroTop, 120);
+      timerB = window.setTimeout(snapToHeroTop, 300);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(rafId);
+      window.clearTimeout(timerA);
+      window.clearTimeout(timerB);
+      if (typeof window.history?.scrollRestoration === "string") {
+        window.history.scrollRestoration = previousRestoration || "auto";
+      }
+    };
+  }, [activeHeroMovie, isTvMode, variant]);
 
   const activeFilterTags = useMemo(() => {
     const tags = [];
@@ -1113,9 +1223,9 @@ export default function MoviesView({
           data-tv-focus-scope={isTvMode ? "movie-content" : undefined}
           data-tv-focus-id={isTvMode ? "movie-search-input" : undefined}
         />
-        {isSearchSyncing || isSearchLoading ? (
+        {isSearchBusy ? (
           <span className={styles.searchStatusBadge}>
-            {isSearchSyncing ? "Waiting..." : "Searching..."}
+            {searchPendingText}
           </span>
         ) : null}
       </div>
@@ -1524,6 +1634,11 @@ export default function MoviesView({
                   </span>
                 </button>
               ))
+            ) : isSearchBusy ? (
+              <div className={styles.tvSearchLoadingState}>
+                <span className={styles.loadingSpinner} aria-hidden="true" />
+                <p className={styles.empty}>{searchPendingText}</p>
+              </div>
             ) : (
               <div className={styles.tvSearchEmptyState}>
                 <p className={styles.empty}>No movies matched this search.</p>
@@ -1809,26 +1924,38 @@ export default function MoviesView({
 
   useEffect(() => {
     if (isMobileFilterUi) {
+      if (typeof window !== "undefined") {
+        window.clearTimeout(desktopSearchCloseTimerRef.current);
+      }
+      setDesktopSearchClosing(false);
       setDesktopSearchOpen(false);
     }
   }, [isMobileFilterUi]);
 
   useEffect(() => {
-    if (!desktopSearchOpen || typeof window === "undefined") return undefined;
+    if (!desktopSearchOpen || desktopSearchClosing || typeof window === "undefined") return undefined;
     const focusInput = window.requestAnimationFrame(() => {
       if (desktopSearchInputRef.current instanceof HTMLElement) {
         desktopSearchInputRef.current.focus();
       }
     });
     const handleKeyDown = (event) => {
-      if (event.key === "Escape") setDesktopSearchOpen(false);
+      if (event.key === "Escape") closeDesktopSearch();
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => {
       window.cancelAnimationFrame(focusInput);
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [desktopSearchOpen]);
+  }, [closeDesktopSearch, desktopSearchClosing, desktopSearchOpen]);
+
+  useEffect(() => {
+    return () => {
+      if (typeof window !== "undefined") {
+        window.clearTimeout(desktopSearchCloseTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (variant === "browse" && isTvMode) return;
@@ -1916,6 +2043,7 @@ export default function MoviesView({
           setMobileFilterOpen(true);
         }}
         aria-label="Open movie filter"
+        title="Open movie filter"
       >
         <SlidersHorizontal size={16} strokeWidth={2.2} />
         <span>Movie Filter</span>
@@ -1928,6 +2056,7 @@ export default function MoviesView({
           setMobileSearchOpen(true);
         }}
         aria-label="Open movie search"
+        title="Open movie search"
       >
         <Search size={16} strokeWidth={2.2} />
         <span>Search Movie</span>
@@ -1936,16 +2065,31 @@ export default function MoviesView({
   ) : null;
 
   const desktopSearchOverlay =
-    !isTvMode && !isMobileFilterUi && desktopSearchOpen ? (
+    !isTvMode && !isMobileFilterUi && (desktopSearchOpen || desktopSearchClosing) ? (
       <>
         <button
           type="button"
           aria-label="Close movie search"
-          className={styles.desktopSearchBackdrop}
-          onClick={() => setDesktopSearchOpen(false)}
+          className={`${styles.desktopSearchBackdrop} ${
+            desktopSearchClosing ? styles.desktopSearchBackdropClosing : styles.desktopSearchBackdropOpen
+          }`}
+          onClick={closeDesktopSearch}
         />
-        <div className={styles.desktopSearchOverlay} role="dialog" aria-modal="true" aria-label="Movie search">
-          <div className={styles.desktopSearchPanel}>
+        <div
+          className={styles.desktopSearchOverlay}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Movie search"
+          style={{
+            "--desktop-search-origin-x": `${desktopSearchOrigin.x}px`,
+            "--desktop-search-origin-y": `${desktopSearchOrigin.y}px`,
+          }}
+        >
+          <div
+            className={`${styles.desktopSearchPanel} ${
+              desktopSearchClosing ? styles.desktopSearchPanelClosing : styles.desktopSearchPanelOpen
+            }`}
+          >
             <div className={styles.desktopSearchHead}>
               <div className={styles.desktopSearchTitleWrap}>
                 <Search size={18} strokeWidth={2.2} />
@@ -1954,7 +2098,7 @@ export default function MoviesView({
               <button
                 type="button"
                 className={styles.desktopSearchClose}
-                onClick={() => setDesktopSearchOpen(false)}
+                onClick={closeDesktopSearch}
                 aria-label="Close search panel"
               >
                 <X size={18} strokeWidth={2.2} />
@@ -1969,16 +2113,18 @@ export default function MoviesView({
                   placeholder="Search movies..."
                   className={`${styles.searchInput} ${styles.desktopSearchInput}`}
                 />
-                {isSearchSyncing || isSearchLoading ? (
+                {isSearchBusy ? (
                   <span className={styles.searchStatusBadge}>
-                    {isSearchSyncing ? "Waiting..." : "Searching..."}
+                    {searchPendingText}
                   </span>
                 ) : null}
               </div>
               <div className={styles.desktopSearchMeta}>
                 <span className={styles.mobileSearchCount}>
                   {String(searchDraft || "").trim()
-                    ? `${mobileSearchResults.length} result${mobileSearchResults.length === 1 ? "" : "s"}`
+                    ? isSearchBusy
+                      ? searchPendingText
+                      : `${mobileSearchResults.length} result${mobileSearchResults.length === 1 ? "" : "s"}`
                     : "Browse suggestions"}
                 </span>
                 <button type="button" className={styles.mobileSearchClearBtn} onClick={clearSearchOnly}>
@@ -1986,17 +2132,22 @@ export default function MoviesView({
                 </button>
               </div>
               <div className={styles.desktopSearchResults}>
-                {mobileSearchResults.length ? (
+                {isSearchBusy ? (
+                  <div className={styles.searchLoadingState}>
+                    <span className={styles.loadingSpinner} aria-hidden="true" />
+                    <p className={styles.mobileSearchEmpty}>{searchPendingText}</p>
+                  </div>
+                ) : mobileSearchResults.length ? (
                   mobileSearchResults.map((movie) => (
                     <button
                       key={`desktop-search-${String(movie?.id || movie?.slug || "")}`}
                       type="button"
                       className={styles.mobileSearchResultItem}
-                      onClick={() => {
-                        handleSelectMovie(movie);
-                        setDesktopSearchOpen(false);
-                      }}
-                    >
+                    onClick={() => {
+                      handleSelectMovie(movie);
+                      closeDesktopSearch();
+                    }}
+                  >
                       {movie?.posterUrl ? (
                         <img src={movie.posterUrl} alt="" className={styles.mobileSearchResultPoster} />
                       ) : (
@@ -2025,15 +2176,41 @@ export default function MoviesView({
     !isTvMode && !isMobileFilterUi && activeHeroMovie ? (
       <div className={styles.desktopHeroUtility} aria-label="Featured movie controls">
         <button
+          ref={desktopSearchTriggerRef}
           type="button"
           className={styles.heroIconBtn}
-          onClick={() => setDesktopSearchOpen(true)}
+          onClick={openDesktopSearch}
           aria-label="Open movie search"
         >
           <Search size={18} strokeWidth={2.1} />
         </button>
       </div>
     ) : null;
+
+  const handleHeroTouchStart = useCallback((event) => {
+    const touch = event?.touches?.[0];
+    if (!touch) return;
+    heroTouchStartXRef.current = Number(touch.clientX || 0);
+    heroTouchStartYRef.current = Number(touch.clientY || 0);
+  }, []);
+
+  const handleHeroTouchEnd = useCallback(
+    (event) => {
+      if (heroMovies.length <= 1) return;
+      const touch = event?.changedTouches?.[0];
+      if (!touch) return;
+      const endX = Number(touch.clientX || 0);
+      const endY = Number(touch.clientY || 0);
+      const dx = endX - heroTouchStartXRef.current;
+      const dy = endY - heroTouchStartYRef.current;
+      if (Math.abs(dx) < 34 || Math.abs(dx) <= Math.abs(dy)) return;
+      setHeroIndex((prev) => {
+        if (dx < 0) return (prev + 1) % heroMovies.length;
+        return (prev - 1 + heroMovies.length) % heroMovies.length;
+      });
+    },
+    [heroMovies.length]
+  );
 
   const upsertMovieProgress = useCallback((movieId, progress) => {
     const id = String(movieId || "");
@@ -2343,7 +2520,9 @@ export default function MoviesView({
                 <div className={styles.mobileSearchMeta}>
                   <span className={styles.mobileSearchCount}>
                     {String(searchDraft || "").trim()
-                      ? `${mobileSearchResults.length} result${mobileSearchResults.length === 1 ? "" : "s"}`
+                      ? isSearchBusy
+                        ? searchPendingText
+                        : `${mobileSearchResults.length} result${mobileSearchResults.length === 1 ? "" : "s"}`
                       : "All movies"}
                   </span>
                   <button type="button" className={styles.mobileSearchClearBtn} onClick={clearSearchOnly}>
@@ -2351,7 +2530,12 @@ export default function MoviesView({
                   </button>
                 </div>
                 <div className={styles.mobileSearchResults}>
-                  {mobileSearchResults.length ? (
+                  {isSearchBusy ? (
+                    <div className={styles.searchLoadingState}>
+                      <span className={styles.loadingSpinner} aria-hidden="true" />
+                      <p className={styles.mobileSearchEmpty}>{searchPendingText}</p>
+                    </div>
+                  ) : mobileSearchResults.length ? (
                     mobileSearchResults.map((movie) => (
                       <button
                         key={String(movie?.id || movie?.slug || "")}
@@ -2435,7 +2619,7 @@ export default function MoviesView({
                   data-tv-nav-row="0"
                   data-tv-nav-col="0"
                 >
-                  Open Movie
+                  Play Movie
                 </button>
                 <button
                   type="button"
@@ -2579,12 +2763,17 @@ export default function MoviesView({
     <section className={`${styles.wrap} ${styles.wrapBrowse} ${isTvMode ? styles.wrapTvBrowse : ""}`}>
       <div className={styles.leftCol}>
         {!isTvMode && activeHeroMovie ? (
-          <section className={`${styles.sectionCard} ${styles.heroSection}`}>
+          <section
+            ref={heroSectionRef}
+            className={`${styles.sectionCard} ${styles.heroSection}`}
+            onTouchStart={handleHeroTouchStart}
+            onTouchEnd={handleHeroTouchEnd}
+          >
             <div className={styles.heroBackdrop} aria-hidden="true">
               <img
                 key={`hero-backdrop-${activeHeroMovie.id}`}
                 className={styles.heroBackdropImage}
-                src={activeHeroMovie.posterUrl}
+                src={activeHeroMovie.backdropUrl || activeHeroMovie.posterUrl}
                 alt=""
               />
             </div>
@@ -2602,7 +2791,7 @@ export default function MoviesView({
                   <img
                     key={`hero-content-backdrop-${activeHeroMovie.id}`}
                     className={styles.heroContentBackdropImage}
-                    src={activeHeroMovie.posterUrl}
+                    src={activeHeroMovie.backdropUrl || activeHeroMovie.posterUrl}
                     alt=""
                   />
                 </div>
@@ -2629,16 +2818,21 @@ export default function MoviesView({
                       type="button"
                       className={styles.primaryBtn}
                       onClick={() => handleSelectMovie(activeHeroMovie)}
+                      aria-label="Play Movie"
                     >
                       <Play size={18} />
-                      Open Movie
+                      <span className={styles.heroActionText}>Play Movie</span>
                     </button>
                     <button
                       type="button"
                       className={styles.secondaryBtn}
                       onClick={() => handleToggleFavorite(activeHeroMovie)}
+                      aria-label={activeHeroMovie?.isFavorite ? "Favorited" : "Add Favorite"}
                     >
-                      {activeHeroMovie?.isFavorite ? "Favorited" : "Add Favorite"}
+                      <Heart size={18} />
+                      <span className={styles.heroActionText}>
+                        {activeHeroMovie?.isFavorite ? "Favorited" : "Add Favorite"}
+                      </span>
                     </button>
                   </div>
                 </div>
@@ -2653,6 +2847,26 @@ export default function MoviesView({
                         aria-label={`Show ${movie.title || "movie"}`}
                       />
                     ))}
+                  </div>
+                ) : null}
+                {heroMovies.length > 1 ? (
+                  <div className={styles.heroSlideNavDesktop} aria-label="Featured movie navigation">
+                    <button
+                      type="button"
+                      className={styles.heroIconBtn}
+                      onClick={() => setHeroIndex((prev) => (prev - 1 + heroMovies.length) % heroMovies.length)}
+                      aria-label="Previous featured movie"
+                    >
+                      <ChevronLeft size={18} strokeWidth={2.2} />
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.heroIconBtn}
+                      onClick={() => setHeroIndex((prev) => (prev + 1) % heroMovies.length)}
+                      aria-label="Next featured movie"
+                    >
+                      <ChevronRight size={18} strokeWidth={2.2} />
+                    </button>
                   </div>
                 ) : null}
               </div>
@@ -2895,7 +3109,9 @@ export default function MoviesView({
               <div className={styles.mobileSearchMeta}>
                 <span className={styles.mobileSearchCount}>
                   {String(searchDraft || "").trim()
-                    ? `${mobileSearchResults.length} result${mobileSearchResults.length === 1 ? "" : "s"}`
+                    ? isSearchBusy
+                      ? searchPendingText
+                      : `${mobileSearchResults.length} result${mobileSearchResults.length === 1 ? "" : "s"}`
                     : "All movies"}
                 </span>
                 <button type="button" className={styles.mobileSearchClearBtn} onClick={clearSearchOnly}>
@@ -2903,7 +3119,12 @@ export default function MoviesView({
                 </button>
               </div>
               <div className={styles.mobileSearchResults}>
-                {mobileSearchResults.length ? (
+                {isSearchBusy ? (
+                  <div className={styles.searchLoadingState}>
+                    <span className={styles.loadingSpinner} aria-hidden="true" />
+                    <p className={styles.mobileSearchEmpty}>{searchPendingText}</p>
+                  </div>
+                ) : mobileSearchResults.length ? (
                   mobileSearchResults.map((movie) => (
                     <button
                       key={String(movie?.id || movie?.slug || "")}

@@ -42,6 +42,28 @@ export default function MovieDetail({ movie, isTvMode = false, mode = "full" }) 
 
   return (
     <section className={`${styles.detailWrap} ${isTvMode ? styles.detailWrapTv : ""}`}>
+      {showPoster ? (
+        <div className={`${styles.detailPosterCol} ${isTvMode ? styles.detailPosterColTv : ""}`}>
+          <div
+            className={`${styles.detailPosterWrap} ${isTvMode ? styles.detailPosterWrapTv : ""}`}
+            tabIndex={isTvMode ? 0 : undefined}
+            data-tv-focusable={isTvMode ? "true" : undefined}
+            data-tv-focus-scope={isTvMode ? "movie-content" : undefined}
+            data-tv-focus-id={isTvMode ? "movie-detail-poster" : undefined}
+            data-tv-nav-row={isTvMode ? "1" : undefined}
+            data-tv-nav-col={isTvMode ? "1" : undefined}
+          >
+            {movie.posterUrl ? (
+              <img className={styles.detailPoster} src={movie.posterUrl} alt={`${movie.title} poster`} loading="lazy" />
+            ) : movie.backdropUrl ? (
+              <img className={styles.detailPoster} src={movie.backdropUrl} alt={`${movie.title} artwork`} loading="lazy" />
+            ) : (
+              <div className={styles.detailPosterFallback} aria-hidden="true" />
+            )}
+          </div>
+        </div>
+      ) : null}
+
       <div className={`${styles.detailContentCol} ${isTvMode ? styles.detailContentColTv : ""}`}>
         {showHeaderContent ? (
           <>
@@ -116,28 +138,6 @@ export default function MovieDetail({ movie, isTvMode = false, mode = "full" }) 
           ) : null}
         </div>
       </div>
-
-      {showPoster ? (
-        <div className={`${styles.detailPosterCol} ${isTvMode ? styles.detailPosterColTv : ""}`}>
-          <div
-            className={`${styles.detailPosterWrap} ${isTvMode ? styles.detailPosterWrapTv : ""}`}
-            tabIndex={isTvMode ? 0 : undefined}
-            data-tv-focusable={isTvMode ? "true" : undefined}
-            data-tv-focus-scope={isTvMode ? "movie-content" : undefined}
-            data-tv-focus-id={isTvMode ? "movie-detail-poster" : undefined}
-            data-tv-nav-row={isTvMode ? "1" : undefined}
-            data-tv-nav-col={isTvMode ? "1" : undefined}
-          >
-            {movie.posterUrl ? (
-              <img className={styles.detailPoster} src={movie.posterUrl} alt={`${movie.title} poster`} loading="lazy" />
-            ) : movie.backdropUrl ? (
-              <img className={styles.detailPoster} src={movie.backdropUrl} alt={`${movie.title} artwork`} loading="lazy" />
-            ) : (
-              <div className={styles.detailPosterFallback} aria-hidden="true" />
-            )}
-          </div>
-        </div>
-      ) : null}
     </section>
   );
 }

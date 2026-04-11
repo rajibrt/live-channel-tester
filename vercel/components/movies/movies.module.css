@@ -48,24 +48,23 @@
 
 .sectionContinue {
   border-color: color-mix(in oklab, var(--chart-2) 26%, var(--border));
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in oklab, var(--chart-2) 9%, var(--card)) 0%,
-      color-mix(in oklab, var(--card) 94%, transparent) 100%
-    );
-  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--chart-2) 14%, transparent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--chart-2) 9%, var(--card)) 0%,
+    color-mix(in oklab, var(--card) 94%, transparent) 100%
+  );
+  box-shadow: inset 0 0 0 1px
+    color-mix(in oklab, var(--chart-2) 14%, transparent);
 }
 
 .sectionControls {
   border-color: color-mix(in oklab, var(--primary) 28%, var(--border));
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in oklab, var(--primary) 12%, var(--card)) 0%,
-      color-mix(in oklab, var(--accent) 8%, var(--card)) 46%,
-      color-mix(in oklab, var(--card) 95%, transparent) 100%
-    );
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--primary) 12%, var(--card)) 0%,
+    color-mix(in oklab, var(--accent) 8%, var(--card)) 46%,
+    color-mix(in oklab, var(--card) 95%, transparent) 100%
+  );
   box-shadow:
     inset 0 0 0 1px color-mix(in oklab, var(--primary) 18%, transparent),
     var(--shadow-sm);
@@ -73,12 +72,11 @@
 
 .sectionMovies {
   border-color: color-mix(in oklab, var(--ring) 16%, var(--border));
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in oklab, var(--ring) 6%, var(--card)) 0%,
-      color-mix(in oklab, var(--card) 95%, transparent) 100%
-    );
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--ring) 6%, var(--card)) 0%,
+    color-mix(in oklab, var(--card) 95%, transparent) 100%
+  );
   box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--ring) 10%, transparent);
 }
 
@@ -86,9 +84,14 @@
   position: relative;
   isolation: isolate;
   overflow: hidden;
+  overflow-anchor: none;
   border-color: color-mix(in oklab, var(--primary) 28%, var(--border));
   background:
-    radial-gradient(circle at top right, color-mix(in oklab, var(--primary) 16%, transparent), transparent 34%),
+    radial-gradient(
+      circle at top right,
+      color-mix(in oklab, var(--primary) 16%, transparent),
+      transparent 34%
+    ),
     linear-gradient(
       135deg,
       color-mix(in oklab, var(--card) 95%, transparent) 0%,
@@ -109,12 +112,22 @@
 }
 
 .heroBackdrop::after {
-  content: "";
+  content: '';
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(90deg, color-mix(in oklab, var(--background) 82%, transparent) 0%, color-mix(in oklab, var(--background) 48%, transparent) 22%, color-mix(in oklab, var(--background) 82%, transparent) 100%),
-    linear-gradient(180deg, color-mix(in oklab, black 8%, transparent) 0%, color-mix(in oklab, var(--background) 16%, transparent) 36%, color-mix(in oklab, var(--background) 80%, transparent) 100%);
+    linear-gradient(
+      90deg,
+      color-mix(in oklab, var(--background) 82%, transparent) 0%,
+      color-mix(in oklab, var(--background) 48%, transparent) 22%,
+      color-mix(in oklab, var(--background) 82%, transparent) 100%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in oklab, black 8%, transparent) 0%,
+      color-mix(in oklab, var(--background) 16%, transparent) 36%,
+      color-mix(in oklab, var(--background) 80%, transparent) 100%
+    );
 }
 
 .heroBackdropImage {
@@ -141,17 +154,29 @@
   position: relative;
   overflow: hidden;
   background:
-    radial-gradient(circle at top left, color-mix(in oklab, var(--primary) 26%, transparent), transparent 42%),
+    radial-gradient(
+      circle at top left,
+      color-mix(in oklab, var(--primary) 26%, transparent),
+      transparent 42%
+    ),
     color-mix(in oklab, var(--background) 80%, var(--card));
 }
 
 .heroPosterCol::after {
-  content: "";
+  content: '';
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(180deg, color-mix(in oklab, black 4%, transparent) 0%, transparent 20%),
-    linear-gradient(90deg, transparent 0%, color-mix(in oklab, black 26%, transparent) 100%);
+    linear-gradient(
+      180deg,
+      color-mix(in oklab, black 4%, transparent) 0%,
+      transparent 20%
+    ),
+    linear-gradient(
+      90deg,
+      transparent 0%,
+      color-mix(in oklab, black 26%, transparent) 100%
+    );
   pointer-events: none;
 }
 
@@ -182,12 +207,22 @@
 }
 
 .heroContentBackdrop::after {
-  content: "";
+  content: '';
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(90deg, color-mix(in oklab, var(--background) 78%, transparent) 0%, color-mix(in oklab, var(--background) 54%, transparent) 26%, color-mix(in oklab, var(--background) 88%, transparent) 100%),
-    linear-gradient(180deg, color-mix(in oklab, black 10%, transparent) 0%, color-mix(in oklab, var(--background) 28%, transparent) 44%, color-mix(in oklab, var(--background) 88%, transparent) 100%);
+    linear-gradient(
+      90deg,
+      color-mix(in oklab, var(--background) 32%, transparent) 0%,
+      color-mix(in oklab, var(--background) 10%, transparent) 30%,
+      color-mix(in oklab, var(--background) 36%, transparent) 100%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in oklab, black 2%, transparent) 0%,
+      color-mix(in oklab, var(--background) 4%, transparent) 46%,
+      color-mix(in oklab, var(--background) 40%, transparent) 100%
+    );
 }
 
 .heroContentBackdropImage {
@@ -195,9 +230,9 @@
   height: 100%;
   object-fit: cover;
   object-position: center;
-  transform: scale(1.12);
-  filter: blur(30px) saturate(1.06) brightness(0.54);
-  opacity: 0.42;
+  transform: scale(1.01);
+  filter: blur(2px) saturate(1.12) brightness(1.02);
+  opacity: 0.94;
   animation: hero-backdrop-in 900ms ease both;
 }
 
@@ -224,7 +259,10 @@
   color: color-mix(in oklab, var(--foreground) 96%, transparent);
   box-shadow: inset 0 0 0 1px color-mix(in oklab, white 4%, transparent);
   cursor: pointer;
-  transition: transform 0.18s ease, background-color 0.18s ease, border-color 0.18s ease;
+  transition:
+    transform 0.18s ease,
+    background-color 0.18s ease,
+    border-color 0.18s ease;
 }
 
 .heroIconBtn:hover {
@@ -262,6 +300,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 10px;
 }
 
 .heroCopy {
@@ -318,6 +357,10 @@
   animation: hero-actions-in 860ms ease both;
 }
 
+.heroActionText {
+  display: inline;
+}
+
 .heroActionRow .primaryBtn,
 .heroActionRow .secondaryBtn {
   min-height: 48px;
@@ -336,6 +379,16 @@
   animation: hero-dots-in 940ms ease both;
 }
 
+.heroSlideNavDesktop {
+  position: absolute;
+  right: 20px;
+  bottom: 20px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .desktopSearchBackdrop {
   position: fixed;
   inset: 0;
@@ -346,6 +399,15 @@
   backdrop-filter: blur(8px);
   appearance: none;
   cursor: pointer;
+  opacity: 0;
+}
+
+.desktopSearchBackdropOpen {
+  animation: desktop-search-backdrop-in 220ms ease forwards;
+}
+
+.desktopSearchBackdropClosing {
+  animation: desktop-search-backdrop-out 220ms ease forwards;
 }
 
 .desktopSearchOverlay {
@@ -364,12 +426,24 @@
   max-height: calc(100svh - 120px);
   border: 1px solid color-mix(in oklab, var(--primary) 22%, var(--border));
   border-radius: 24px;
-  background:
-    linear-gradient(180deg, color-mix(in oklab, var(--background) 42%, transparent) 0%, color-mix(in oklab, var(--background) 58%, transparent) 100%);
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--background) 42%, transparent) 0%,
+    color-mix(in oklab, var(--background) 58%, transparent) 100%
+  );
   box-shadow: var(--shadow-lg);
   overflow: hidden;
   pointer-events: auto;
-  animation: hero-copy-in 280ms ease both;
+  transform-origin: var(--desktop-search-origin-x, 90vw) var(--desktop-search-origin-y, 50vh);
+  opacity: 0;
+}
+
+.desktopSearchPanelOpen {
+  animation: desktop-search-panel-in 280ms cubic-bezier(0.2, 0.85, 0.25, 1) forwards;
+}
+
+.desktopSearchPanelClosing {
+  animation: desktop-search-panel-out 220ms cubic-bezier(0.4, 0, 1, 1) forwards;
 }
 
 .desktopSearchHead {
@@ -431,6 +505,58 @@
   padding-right: 4px;
 }
 
+.searchLoadingState {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 72px;
+  padding: 8px 2px;
+}
+
+@keyframes desktop-search-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes desktop-search-backdrop-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes desktop-search-panel-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 0, 0) scale(0.12);
+    filter: blur(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes desktop-search-panel-out {
+  from {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+    filter: blur(0);
+  }
+  to {
+    opacity: 0;
+    transform: translate3d(0, 0, 0) scale(0.12);
+    filter: blur(7px);
+  }
+}
+
 .heroDot {
   width: 11px;
   height: 11px;
@@ -439,7 +565,10 @@
   padding: 0;
   background: color-mix(in oklab, var(--foreground) 18%, transparent);
   cursor: pointer;
-  transition: transform 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease;
+  transition:
+    transform 0.18s ease,
+    background-color 0.18s ease,
+    box-shadow 0.18s ease;
 }
 
 .heroDot:hover {
@@ -669,6 +798,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 8px;
   min-width: 96px;
   padding: 6px 10px;
   border-radius: 999px;
@@ -679,6 +809,17 @@
   font-weight: 700;
   letter-spacing: 0.02em;
   pointer-events: none;
+}
+
+.searchStatusBadge::before {
+  content: "";
+  width: 11px;
+  height: 11px;
+  border-radius: 999px;
+  border: 2px solid color-mix(in oklab, var(--foreground) 28%, transparent);
+  border-top-color: var(--primary);
+  animation: movie-spin 0.75s linear infinite;
+  flex: 0 0 auto;
 }
 
 .filterSections {
@@ -865,12 +1006,11 @@
   bottom: 0;
   z-index: 67;
   border: 1px solid color-mix(in oklab, var(--ring) 28%, var(--border));
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in oklab, var(--card) 96%, transparent) 0%,
-      color-mix(in oklab, var(--background) 92%, transparent) 100%
-    );
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--card) 96%, transparent) 0%,
+    color-mix(in oklab, var(--background) 92%, transparent) 100%
+  );
   color: var(--foreground);
   border-radius: 16px 16px 0 0;
   padding: 10px 7px;
@@ -922,12 +1062,11 @@
   z-index: 68;
   width: min(86vw, 360px);
   border: 1px solid color-mix(in oklab, var(--border) 86%, transparent);
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in oklab, var(--card) 96%, transparent) 0%,
-      color-mix(in oklab, var(--background) 92%, transparent) 100%
-    );
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--card) 96%, transparent) 0%,
+    color-mix(in oklab, var(--background) 92%, transparent) 100%
+  );
   box-shadow: var(--shadow-lg);
   display: flex;
   flex-direction: column;
@@ -1156,12 +1295,11 @@
   justify-content: center;
   border-radius: 999px;
   padding: 16px 24px;
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in oklab, var(--card) 94%, transparent) 0%,
-      color-mix(in oklab, var(--background) 90%, transparent) 100%
-    );
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--card) 94%, transparent) 0%,
+    color-mix(in oklab, var(--background) 90%, transparent) 100%
+  );
   box-shadow:
     0 18px 48px color-mix(in oklab, black 35%, transparent),
     inset 0 0 0 1px color-mix(in oklab, white 10%, transparent);
@@ -1237,7 +1375,9 @@
   justify-content: space-between;
   gap: 8px;
   pointer-events: none;
-  transition: transform 0.28s ease-in, opacity 0.28s ease-in;
+  transition:
+    transform 0.28s ease-in,
+    opacity 0.28s ease-in;
 }
 
 .ratingChip,
@@ -1245,12 +1385,18 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: 0 0 auto;
   border-radius: 999px;
   font-size: 11px;
   font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  word-break: keep-all;
   padding: 5px 10px;
   backdrop-filter: blur(4px);
-  transition: transform 0.32s ease-in, opacity 0.3s ease-in;
+  transition:
+    transform 0.32s ease-in,
+    opacity 0.3s ease-in;
 }
 
 .ratingChip {
@@ -1274,16 +1420,17 @@
   justify-content: center;
   gap: 14px;
   padding: 20px 14px;
-  background:
-    linear-gradient(
-      to top,
-      color-mix(in oklab, black 66%, transparent) 0%,
-      color-mix(in oklab, black 30%, transparent) 46%,
-      color-mix(in oklab, black 10%, transparent) 100%
-    );
+  background: linear-gradient(
+    to top,
+    color-mix(in oklab, black 66%, transparent) 0%,
+    color-mix(in oklab, black 30%, transparent) 46%,
+    color-mix(in oklab, black 10%, transparent) 100%
+  );
   opacity: 0;
   transform: translateY(6px);
-  transition: opacity 0.24s ease-in, transform 0.24s ease-in;
+  transition:
+    opacity 0.24s ease-in,
+    transform 0.24s ease-in;
   pointer-events: none;
 }
 
@@ -1344,7 +1491,9 @@
   text-shadow: 0 1px 2px color-mix(in oklab, black 62%, transparent);
   opacity: 0;
   transform: translateY(20px);
-  transition: transform 0.34s ease-in, opacity 0.28s ease-in;
+  transition:
+    transform 0.34s ease-in,
+    opacity 0.28s ease-in;
 }
 
 .card:hover .playCircle,
@@ -1610,7 +1759,9 @@
   font-size: 13px;
   font-weight: 600;
   font-family: inherit;
-  transition: border-color 0.18s ease, background-color 0.18s ease;
+  transition:
+    border-color 0.18s ease,
+    background-color 0.18s ease;
 }
 
 .backToListBtn:hover {
@@ -1722,7 +1873,10 @@
   gap: 7px;
   font: inherit;
   font-weight: 600;
-  transition: border-color 0.18s ease, background-color 0.18s ease, color 0.18s ease;
+  transition:
+    border-color 0.18s ease,
+    background-color 0.18s ease,
+    color 0.18s ease;
 }
 
 .primaryBtn {
@@ -2047,7 +2201,11 @@
 
 .tvHeroImageFallback {
   background:
-    radial-gradient(circle at top left, color-mix(in oklab, var(--primary) 22%, transparent), transparent 42%),
+    radial-gradient(
+      circle at top left,
+      color-mix(in oklab, var(--primary) 22%, transparent),
+      transparent 42%
+    ),
     linear-gradient(
       135deg,
       color-mix(in oklab, var(--accent) 18%, var(--card)) 0%,
@@ -2178,8 +2336,16 @@
   border: 1px solid color-mix(in oklab, var(--border) 92%, transparent);
   border-radius: 28px;
   background:
-    radial-gradient(circle at top left, color-mix(in oklab, var(--primary) 12%, transparent), transparent 36%),
-    linear-gradient(180deg, color-mix(in oklab, var(--card) 98%, transparent), color-mix(in oklab, var(--background) 92%, var(--card)));
+    radial-gradient(
+      circle at top left,
+      color-mix(in oklab, var(--primary) 12%, transparent),
+      transparent 36%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in oklab, var(--card) 98%, transparent),
+      color-mix(in oklab, var(--background) 92%, var(--card))
+    );
   box-shadow:
     0 28px 90px color-mix(in oklab, black 42%, transparent),
     inset 0 0 0 1px color-mix(in oklab, white 5%, transparent);
@@ -2209,8 +2375,11 @@
   position: sticky;
   top: 0;
   z-index: 1;
-  background:
-    linear-gradient(180deg, color-mix(in oklab, var(--card) 98%, transparent), color-mix(in oklab, var(--card) 94%, transparent));
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--card) 98%, transparent),
+    color-mix(in oklab, var(--card) 94%, transparent)
+  );
 }
 
 .tvSearchOverlayTitle {
@@ -2361,7 +2530,7 @@
 
 .tvSearchResultItem:hover,
 .tvSearchResultItem:focus-visible,
-.tvSearchResultItem[data-tv-active="true"] {
+.tvSearchResultItem[data-tv-active='true'] {
   border-color: color-mix(in oklab, var(--primary) 62%, var(--border));
   background: color-mix(in oklab, var(--primary) 10%, var(--card));
   transform: translateX(4px);
@@ -2416,6 +2585,14 @@
   gap: 14px;
   min-height: 220px;
   padding: 24px 6px 6px;
+}
+
+.tvSearchLoadingState {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 180px;
+  padding: 24px 8px;
 }
 
 .tvFilterOverlay {
@@ -2544,12 +2721,11 @@
 
 .cardTv {
   border-radius: 22px;
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in oklab, var(--card) 94%, transparent) 0%,
-      color-mix(in oklab, var(--background) 90%, var(--card)) 100%
-    );
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--card) 94%, transparent) 0%,
+    color-mix(in oklab, var(--background) 90%, var(--card)) 100%
+  );
   min-height: 100%;
 }
 
@@ -2855,7 +3031,6 @@
     padding-left: 12px;
     padding-right: 12px;
   }
-
 }
 
 @media (max-width: 640px) {
@@ -2863,50 +3038,166 @@
     gap: 8px;
   }
 
+  .cardTopChips {
+    left: 8px;
+    right: 8px;
+    top: 8px;
+    gap: 6px;
+  }
+
+  .ratingChip,
+  .qualityChip {
+    font-size: 10px;
+    padding: 4px 8px;
+  }
+
   .heroSection {
-    min-height: calc(100svh - 96px);
+    min-height: calc(100dvh - 96px);
+    height: calc(100dvh - 96px);
   }
 
   .heroStage {
-    grid-template-columns: 1fr;
-    min-height: 0;
+    position: relative;
+    display: block;
+    min-height: 100%;
+    height: 100%;
   }
 
   .heroPosterCol {
-    max-height: 360px;
+    position: absolute;
+    inset: 0;
+    min-height: 100%;
+    max-height: none;
+    height: 100%;
+    z-index: 0;
   }
 
   .heroPoster {
-    min-height: min(44svh, 360px);
-    max-height: 360px;
+    min-height: 100%;
+    max-height: none;
+    height: 100%;
+    object-position: center 28%;
   }
 
   .heroBody {
-    padding: 18px 16px 20px;
+    position: absolute;
+    inset: auto 0 0;
+    z-index: 1;
+    min-height: 0;
+    overflow: visible;
+    padding: 14px 12px 56px;
+    align-content: end;
+    gap: 10px;
+  }
+
+  .heroBody::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    background: linear-gradient(
+      180deg,
+      color-mix(in oklab, transparent 100%, transparent) 0%,
+      color-mix(in oklab, black 32%, transparent) 14%,
+      color-mix(in oklab, var(--background) 84%, transparent) 100%
+    );
+    backdrop-filter: blur(8px) saturate(1.05);
+    border-top: 1px solid color-mix(in oklab, var(--primary) 24%, transparent);
+  }
+
+  .heroContentBackdrop {
+    display: none;
+  }
+
+  .heroKickerRow,
+  .heroCopy,
+  .heroDotRow {
+    position: relative;
+    z-index: 1;
   }
 
   .heroTitle {
-    font-size: clamp(1.6rem, 8vw, 2.25rem);
+    font-size: clamp(1.45rem, 7vw, 2.05rem);
     max-width: none;
+    line-height: 1.08;
   }
 
   .heroSynopsis {
-    font-size: 14px;
-    line-height: 1.6;
+    font-size: 13px;
+    line-height: 1.5;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
 
   .heroActionRow {
-    gap: 10px;
+    gap: 8px;
+  }
+
+  .heroActionRow .primaryBtn,
+  .heroActionRow .secondaryBtn {
+    width: calc(50% - 4px);
+    justify-content: center;
+    min-height: 42px;
+    padding: 8px 12px;
+  }
+
+  .heroActionRow {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
   }
 
   .heroActionRow .primaryBtn,
   .heroActionRow .secondaryBtn {
     width: 100%;
-    justify-content: center;
+    border-radius: 14px;
+    padding: 8px;
+    gap: 0;
+  }
+
+  .heroActionRow .primaryBtn svg,
+  .heroActionRow .secondaryBtn svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .heroActionText {
+    display: none;
   }
 
   .heroDotRow {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
+    transform: none;
+    z-index: 4;
+    min-height: 30px;
+    height: 30px;
+    width: 100%;
     justify-content: center;
+    align-items: center;
+    padding-top: 0;
+    padding-left: 64px;
+    padding-right: 64px;
+    box-sizing: border-box;
+    margin: 0;
+    pointer-events: auto;
+  }
+
+  .heroSlideNavDesktop {
+    display: none;
+  }
+
+  .heroMeta {
+    gap: 7px;
+  }
+
+  .heroChip {
+    padding: 4px 8px;
+    font-size: 10px;
   }
 
   .sectionControls {
@@ -3076,8 +3367,8 @@
     width: 28px;
   }
 
-  .paginationNav :global(button[aria-label="Go to previous page"] span),
-  .paginationNav :global(button[aria-label="Go to next page"] span) {
+  .paginationNav :global(button[aria-label='Go to previous page'] span),
+  .paginationNav :global(button[aria-label='Go to next page'] span) {
     display: none;
   }
 
@@ -3122,13 +3413,12 @@
     align-items: center;
     gap: 8px;
     padding: 12px;
-    background:
-      linear-gradient(
-        to top,
-        color-mix(in oklab, black 68%, transparent) 0%,
-        color-mix(in oklab, black 28%, transparent) 50%,
-        color-mix(in oklab, black 0%, transparent) 100%
-      );
+    background: linear-gradient(
+      to top,
+      color-mix(in oklab, black 68%, transparent) 0%,
+      color-mix(in oklab, black 28%, transparent) 50%,
+      color-mix(in oklab, black 0%, transparent) 100%
+    );
   }
 
   .playCircle {
@@ -3237,25 +3527,50 @@
 
 @media (max-width: 420px) {
   .heroSection {
-    min-height: calc(100svh - 90px);
+    min-height: calc(100dvh - 90px);
+    height: calc(100dvh - 90px);
+  }
+
+  .heroStage {
+    display: block;
   }
 
   .heroPosterCol {
-    max-height: 300px;
+    min-height: 100%;
+    height: 100%;
   }
 
   .heroPoster {
-    min-height: min(36svh, 260px);
-    max-height: 300px;
+    min-height: 100%;
+    height: 100%;
   }
 
   .heroMeta {
-    gap: 8px;
+    gap: 6px;
   }
 
   .heroChip {
-    padding: 5px 9px;
-    font-size: 11px;
+    padding: 4px 7px;
+    font-size: 10px;
+  }
+
+  .heroTitle {
+    font-size: clamp(1.35rem, 7.5vw, 1.8rem);
+  }
+
+  .heroBody {
+    inset: auto 0 0;
+    padding: 12px 10px 52px;
+  }
+
+  .heroSynopsis {
+    -webkit-line-clamp: 2;
+  }
+
+  .heroDotRow {
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
+    padding-left: 60px;
+    padding-right: 60px;
   }
 
   .grid {
