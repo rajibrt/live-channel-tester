@@ -217,6 +217,28 @@ function isTypingTarget(target) {
   )
 }
 
+function getSeekUpperBound(video, fallbackSeconds = 0) {
+  if (!video) return Math.max(0, toSeconds(fallbackSeconds))
+
+  if (video.seekable?.length) {
+    try {
+      const seekableEnd = Number(video.seekable.end(video.seekable.length - 1))
+      if (Number.isFinite(seekableEnd) && seekableEnd > 0) {
+        return Math.max(0, toSeconds(seekableEnd))
+      }
+    } catch {
+      // ignore seekable range read failures
+    }
+  }
+
+  const duration = Number(video.duration)
+  if (Number.isFinite(duration) && duration > 0) {
+    return Math.max(0, toSeconds(duration))
+  }
+
+  return Math.max(0, toSeconds(fallbackSeconds))
+}
+
 export default function MoviePlayer({
   movie,
   isTvMode = false,
@@ -445,7 +467,6 @@ export default function MoviePlayer({
     transcodeOffsetRef.current = 0
     const sourceForPlayback = playbackUrl
     let initialSeekApplied = false
-    let initialSeekTimer = null
 
     const applyNativeSource = (source) => {
       video.src = source
@@ -454,13 +475,17 @@ export default function MoviePlayer({
 
     const applyInitialSeek = () => {
       if (initialSeekApplied || desiredStart <= 0) return
-      if (!Number.isFinite(Number(video.duration))) return
+      const seekUpperBound = getSeekUpperBound(video, desiredStart)
+      const nextTarget =
+        seekUpperBound > 0
+          ? Math.min(desiredStart, Math.max(0, seekUpperBound - 1))
+          : desiredStart
       try {
-        video.currentTime = Math.min(
-          desiredStart,
-          Math.max(0, Math.floor(video.duration) - 1),
-        )
+        video.currentTime = nextTarget
         initialSeekApplied = true
+        setPlaybackSeconds(
+          toSeconds(nextTarget) + toSeconds(transcodeOffsetRef.current),
+        )
       } catch {
         // ignore initial seek failures
       }
@@ -474,18 +499,17 @@ export default function MoviePlayer({
         setMediaDurationSeconds((prev) => Math.max(prev, measuredDuration))
       }
       setPlaybackSeconds(transcodeOffsetRef.current)
+      applyInitialSeek()
     }
 
     const handleCanPlay = () => {
+      applyInitialSeek()
       setStatusText('Ready')
     }
 
     const handlePlaying = () => {
       if (!initialSeekApplied && desiredStart > 0) {
-        if (initialSeekTimer) clearTimeout(initialSeekTimer)
-        initialSeekTimer = setTimeout(() => {
-          applyInitialSeek()
-        }, 350)
+        applyInitialSeek()
       }
       setStatusText('Playing')
       setIsPaused(false)
@@ -493,7 +517,9 @@ export default function MoviePlayer({
         movie_id: String(movie?.id || ''),
         source_label: String(movie?.source?.label || ''),
       })
-      postProgress('start')
+      if (desiredStart <= 0 || initialSeekApplied) {
+        postProgress('start')
+      }
       seekStartFromRef.current = null
     }
 
@@ -534,6 +560,7 @@ export default function MoviePlayer({
       if (measuredDuration > 0) {
         setMediaDurationSeconds((prev) => Math.max(prev, measuredDuration))
       }
+      applyInitialSeek()
     }
 
     const handleEnded = () => {
@@ -651,7 +678,6 @@ export default function MoviePlayer({
 
     return () => {
       cancelled = true
-      if (initialSeekTimer) clearTimeout(initialSeekTimer)
       clearInterval(intervalRef.current)
       intervalRef.current = null
       postProgress('unmount')

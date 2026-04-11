@@ -243,7 +243,7 @@ export default async function WatchChannelPage({ params, searchParams }) {
     );
   }
 
-  const boot = await getClientHomeData(current.user.id);
+  const boot = await getClientHomeData(current.user.id, { includeMovies: true });
   return (
     <IptvHomeClient
       initialChannels={boot.channels}
