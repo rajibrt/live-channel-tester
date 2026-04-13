@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { permanentRedirect } from "next/navigation";
+import { permanentRedirect, redirect } from "next/navigation";
 import IptvHomeClient from "../../../components/iptv/IptvHomeClient";
 import PendingApprovalCard from "../../../components/client/PendingApprovalCard";
 import { getCurrentClient } from "../../../lib/clientAuth";
@@ -204,7 +204,8 @@ export default async function WatchChannelPage({ params, searchParams }) {
 
   const current = await getCurrentClient();
   if (!current) {
-    return <PublicChannelLanding channel={channel} locale={locale} />;
+    const nextPath = `/watch/${encodeURIComponent(String(expectedSlug || resolved?.channel || ""))}`;
+    redirect(`/client-login?next=${encodeURIComponent(nextPath)}`);
   }
 
   const approvalStatus = String(current?.client?.approval_status || "approved").toLowerCase();

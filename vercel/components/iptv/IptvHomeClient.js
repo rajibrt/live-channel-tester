@@ -659,6 +659,14 @@ export default function IptvHomeClient({
       return;
     }
 
+    if (path.startsWith("/watch/")) {
+      setHomeMode("tv");
+      setMovieViewMode("browse");
+      setActiveMovieSlug("");
+      setRouteStateReady(true);
+      return;
+    }
+
     try {
       const savedView = String(window.localStorage.getItem(LAST_MOVIE_VIEW_KEY) || "").trim().toLowerCase();
       const savedMode = String(window.localStorage.getItem(LAST_MODE_KEY) || "").trim().toLowerCase();
