@@ -9,6 +9,7 @@ const MOVIE_SELECT_COLUMNS =
 const DEFAULT_MOVIES_PAGE_SIZE = 24;
 const MAX_MOVIES_PAGE_SIZE = 60;
 const DB_SCAN_PAGE_SIZE = 500;
+const DB_IN_FILTER_CHUNK_SIZE = 120;
 
 function text(value) {
   return String(value || "").trim();
@@ -209,6 +210,16 @@ function parseMovieSearchQuery(rawSearch) {
   return { textQuery, genreQuery };
 }
 
+function chunkArray(values, chunkSize) {
+  const list = Array.isArray(values) ? values : [];
+  const size = Math.max(1, Math.floor(Number(chunkSize) || 1));
+  const chunks = [];
+  for (let i = 0; i < list.length; i += size) {
+    chunks.push(list.slice(i, i + size));
+  }
+  return chunks;
+}
+
 function matchesMovieSearch(movie, rawSearch) {
   const { textQuery, genreQuery } = parseMovieSearchQuery(rawSearch);
   if (!textQuery && !genreQuery) return true;
@@ -352,50 +363,65 @@ async function loadMovieCategoryMapRows(admin) {
 
 async function loadMovieSourceRows(admin, movieIds) {
   if (!Array.isArray(movieIds) || !movieIds.length) return [];
-  const { data, error } = await admin
-    .from("movie_sources")
-    .select("id,movie_id,label,source_url,is_active,sort_order")
-    .eq("is_active", true)
-    .in("movie_id", movieIds)
-    .order("movie_id", { ascending: true })
-    .order("sort_order", { ascending: true })
-    .order("id", { ascending: true });
-  if (error) throw new Error(error.message || "Failed to load movie sources");
-  return Array.isArray(data) ? data : [];
+  const rows = [];
+  const chunks = chunkArray(movieIds, DB_IN_FILTER_CHUNK_SIZE);
+  for (const chunk of chunks) {
+    const { data, error } = await admin
+      .from("movie_sources")
+      .select("id,movie_id,label,source_url,is_active,sort_order")
+      .eq("is_active", true)
+      .in("movie_id", chunk)
+      .order("movie_id", { ascending: true })
+      .order("sort_order", { ascending: true })
+      .order("id", { ascending: true });
+    if (error) throw new Error(error.message || "Failed to load movie sources");
+    if (Array.isArray(data)) rows.push(...data);
+  }
+  return rows;
 }
 
 async function loadMovieProgressRows(admin, userId, movieIds) {
   if (!userId || !Array.isArray(movieIds) || !movieIds.length) return [];
-  const { data, error } = await admin
-    .from("movie_watch_progress")
-    .select("movie_id,position_seconds,duration_seconds,progress_percent,is_completed,updated_at")
-    .eq("user_id", userId)
-    .in("movie_id", movieIds);
-  if (error) {
-    console.error("movie progress load failed", {
-      userId: String(userId || ""),
-      message: String(error.message || error),
-    });
-    return [];
+  const rows = [];
+  const chunks = chunkArray(movieIds, DB_IN_FILTER_CHUNK_SIZE);
+  for (const chunk of chunks) {
+    const { data, error } = await admin
+      .from("movie_watch_progress")
+      .select("movie_id,position_seconds,duration_seconds,progress_percent,is_completed,updated_at")
+      .eq("user_id", userId)
+      .in("movie_id", chunk);
+    if (error) {
+      console.error("movie progress load failed", {
+        userId: String(userId || ""),
+        message: String(error.message || error),
+      });
+      return [];
+    }
+    if (Array.isArray(data)) rows.push(...data);
   }
-  return Array.isArray(data) ? data : [];
+  return rows;
 }
 
 async function loadMovieFavoriteRows(admin, userId, movieIds) {
   if (!userId || !Array.isArray(movieIds) || !movieIds.length) return [];
-  const { data, error } = await admin
-    .from("movie_favorites")
-    .select("movie_id")
-    .eq("user_id", userId)
-    .in("movie_id", movieIds);
-  if (error) {
-    console.error("movie favorites load failed", {
-      userId: String(userId || ""),
-      message: String(error.message || error),
-    });
-    return [];
+  const rows = [];
+  const chunks = chunkArray(movieIds, DB_IN_FILTER_CHUNK_SIZE);
+  for (const chunk of chunks) {
+    const { data, error } = await admin
+      .from("movie_favorites")
+      .select("movie_id")
+      .eq("user_id", userId)
+      .in("movie_id", chunk);
+    if (error) {
+      console.error("movie favorites load failed", {
+        userId: String(userId || ""),
+        message: String(error.message || error),
+      });
+      return [];
+    }
+    if (Array.isArray(data)) rows.push(...data);
   }
-  return Array.isArray(data) ? data : [];
+  return rows;
 }
 
 async function hydrateMoviesForUser(admin, userId, movieRows, options = {}) {
