@@ -217,6 +217,17 @@ function isTypingTarget(target) {
   )
 }
 
+function isInteractiveShortcutTarget(target) {
+  if (!target || typeof target !== 'object') return false
+  if (String(target.tagName || '').toLowerCase() === 'video') return false
+  if (typeof target.closest !== 'function') return false
+  return Boolean(
+    target.closest(
+      'button, a, input, textarea, select, summary, [role="button"], [role="link"], [contenteditable="true"]',
+    ),
+  )
+}
+
 function getSeekUpperBound(video, fallbackSeconds = 0) {
   if (!video) return Math.max(0, toSeconds(fallbackSeconds))
 
@@ -265,6 +276,7 @@ export default function MoviePlayer({
   const transcodeOffsetRef = useRef(0)
   const seekStartFromRef = useRef(null)
   const volumeIndicatorTimerRef = useRef(null)
+  const suppressSpaceKeyUpRef = useRef(false)
   const [statusText, setStatusText] = useState('Ready')
   const [isPaused, setIsPaused] = useState(false)
   const [seekNonce, setSeekNonce] = useState(0)
@@ -796,12 +808,18 @@ export default function MoviePlayer({
     const video = videoRef.current
     if (!playerWrap || !video) return
     const fullscreenElement = getFullscreenElement()
-    if (fullscreenElement === playerWrap) {
+    if (fullscreenElement) {
       await exitDocumentFullscreen().catch(() => {})
       return
     }
     await requestElementFullscreen(playerWrap, video).catch(() => {})
   }, [])
+
+  const handlePlayerDoubleClick = useCallback((event) => {
+    event.preventDefault()
+    event.stopPropagation()
+    togglePlayerFullscreen()
+  }, [togglePlayerFullscreen])
 
   const toggleMute = useCallback(() => {
     const video = videoRef.current
@@ -912,12 +930,17 @@ export default function MoviePlayer({
       if (event.defaultPrevented || isTypingTarget(event.target)) return
 
       const key = String(event.key || '')
+      const code = String(event.code || '')
       if (key === ' ' || key === 'Spacebar' || key === 'Space') {
+        if (isInteractiveShortcutTarget(event.target)) return
         event.preventDefault()
+        event.stopPropagation()
+        suppressSpaceKeyUpRef.current = true
+        if (event.repeat) return
         handleTogglePlayPause()
         return
       }
-      if (key === 'f' || key === 'F') {
+      if (key === 'f' || key === 'F' || code === 'KeyF') {
         event.preventDefault()
         togglePlayerFullscreen()
         return
@@ -948,9 +971,20 @@ export default function MoviePlayer({
       }
     }
 
-    window.addEventListener('keydown', onKeyDown)
+    const onKeyUp = (event) => {
+      const key = String(event.key || '')
+      if (key !== ' ' && key !== 'Spacebar' && key !== 'Space') return
+      if (!suppressSpaceKeyUpRef.current) return
+      suppressSpaceKeyUpRef.current = false
+      event.preventDefault()
+      event.stopPropagation()
+    }
+
+    window.addEventListener('keydown', onKeyDown, true)
+    window.addEventListener('keyup', onKeyUp, true)
     return () => {
-      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keydown', onKeyDown, true)
+      window.removeEventListener('keyup', onKeyUp, true)
     }
   }, [adjustVolume, handleTogglePlayPause, jumpBySeconds, toggleMute, togglePlayerFullscreen])
 
@@ -1028,7 +1062,11 @@ export default function MoviePlayer({
   }, [movie?.id])
 
   return (
-    <section ref={playerWrapRef} className={`${styles.playerWrap} ${isTvMode ? styles.playerWrapTv : ""}`}>
+    <section
+      ref={playerWrapRef}
+      className={`${styles.playerWrap} ${isTvMode ? styles.playerWrapTv : ""}`}
+      onDoubleClickCapture={handlePlayerDoubleClick}
+    >
       <div className={`${styles.videoShell} ${isTvMode ? styles.videoShellTv : ""}`}>
         <video
           key={videoElementKey}
