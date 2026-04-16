@@ -129,15 +129,7 @@ export default function IptvHomeClient({
   const [isDark, setIsDark] = useState(() => {
     if (initialTheme === "dark") return true;
     if (initialTheme === "light") return false;
-    if (typeof window === "undefined") return true;
-    try {
-      const saved = window.localStorage.getItem("iptv:theme");
-      if (saved === "dark") return true;
-      if (saved === "light") return false;
-    } catch {
-      // ignore localStorage read issues
-    }
-    return document.documentElement.classList.contains("dark");
+    return true;
   });
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedChannel, setSelectedChannel] = useState(null);
@@ -150,89 +142,40 @@ export default function IptvHomeClient({
     if (forcedMode === "movies") return "movies";
     if (forcedMode === "tv") return "tv";
     if (String(initialSelectedChannelId || "").trim()) return "tv";
-    if (typeof window === "undefined") return "tv";
-    try {
-      const savedMode = String(window.localStorage.getItem(LAST_MODE_KEY) || "").trim().toLowerCase();
-      return savedMode === "movies" ? "movies" : "tv";
-    } catch {
-      return "tv";
-    }
+    return "tv";
   });
   const [mode, setMode] = useState("all");
   const [movieMode, setMovieMode] = useState(() => {
     const seededMode = String(initialMovieMode || "").trim().toLowerCase();
     if (seededMode === "favorites" || seededMode === "recent" || seededMode === "watched") return seededMode;
-    if (typeof window === "undefined") return "all";
-    try {
-      const raw = String(window.localStorage.getItem(LAST_MOVIE_FILTER_KEY) || "");
-      const parsed = raw ? JSON.parse(raw) : {};
-      const nextMode = String(parsed?.mode || "all").trim().toLowerCase();
-      return nextMode === "favorites" || nextMode === "recent" || nextMode === "watched" ? nextMode : "all";
-    } catch {
-      return "all";
-    }
+    return "all";
   });
   const [selectedMovieCategory, setSelectedMovieCategory] = useState(() => {
     const seededCategory = String(initialMovieCategory || "").trim().toLowerCase();
     if (seededCategory) return seededCategory;
-    if (typeof window === "undefined") return "";
-    try {
-      const raw = String(window.localStorage.getItem(LAST_MOVIE_FILTER_KEY) || "");
-      const parsed = raw ? JSON.parse(raw) : {};
-      return String(parsed?.category || "").trim().toLowerCase();
-    } catch {
-      return "";
-    }
+    return "";
   });
   const [selectedMovieGenre, setSelectedMovieGenre] = useState(() => {
     const seededGenre = String(initialMovieGenre || "").trim().toLowerCase();
     if (seededGenre) return seededGenre;
-    if (typeof window === "undefined") return "";
-    try {
-      const raw = String(window.localStorage.getItem(LAST_MOVIE_FILTER_KEY) || "");
-      const parsed = raw ? JSON.parse(raw) : {};
-      return String(parsed?.genre || "").trim().toLowerCase();
-    } catch {
-      return "";
-    }
+    return "";
   });
   const [selectedMovieLanguage, setSelectedMovieLanguage] = useState(() => {
     const seededLanguage = String(initialMovieLanguage || "").trim().toLowerCase();
     if (seededLanguage) return seededLanguage;
-    if (typeof window === "undefined") return "";
-    try {
-      const raw = String(window.localStorage.getItem(LAST_MOVIE_FILTER_KEY) || "");
-      const parsed = raw ? JSON.parse(raw) : {};
-      return String(parsed?.language || "").trim().toLowerCase();
-    } catch {
-      return "";
-    }
+    return "";
   });
   const [selectedMovieYear, setSelectedMovieYear] = useState(() => {
     const seededYear = String(initialMovieYear || "").trim();
     if (seededYear) return seededYear;
-    if (typeof window === "undefined") return "";
-    try {
-      const raw = String(window.localStorage.getItem(LAST_MOVIE_FILTER_KEY) || "");
-      const parsed = raw ? JSON.parse(raw) : {};
-      return String(parsed?.year || "").trim();
-    } catch {
-      return "";
-    }
+    return "";
   });
   const [movieSearchQuery, setMovieSearchQuery] = useState(() => String(initialMovieSearch || "").trim());
   const [movieFilterView, setMovieFilterView] = useState(() => {
     const seededFilterView = String(initialMovieFilterView || "").trim().toLowerCase();
     if (seededFilterView === "genres") return "genres";
     if (seededFilterView === "categories") return "categories";
-    if (typeof window === "undefined") return "categories";
-    try {
-      const raw = String(window.localStorage.getItem(LAST_MOVIE_FILTER_KEY) || "");
-      const parsed = raw ? JSON.parse(raw) : {};
-      return String(parsed?.filter_view || "").trim().toLowerCase() === "genres" ? "genres" : "categories";
-    } catch {
-      return "categories";
-    }
+    return "categories";
   });
   const [movieSnapshot, setMovieSnapshot] = useState(() => (Array.isArray(initialMovies) ? initialMovies : []));
   const [movieCatalog, setMovieCatalog] = useState(() => ({
@@ -256,7 +199,7 @@ export default function IptvHomeClient({
   const [movieSidebarResetToken, setMovieSidebarResetToken] = useState(0);
   const [movieViewMode, setMovieViewMode] = useState(() => (moviesViewVariant === "watch" ? "watch" : "browse"));
   const [activeMovieSlug, setActiveMovieSlug] = useState(() => String(initialSelectedMovieSlug || "").trim().toLowerCase());
-  const [movieListPage, setMovieListPage] = useState(() => Math.max(1, Number(initialMoviePage || readMoviePageFromUrl() || 1)));
+  const [movieListPage, setMovieListPage] = useState(() => Math.max(1, Number(initialMoviePage || 1)));
   const [cookieConsent, setCookieConsent] = useState(() => {
     const v = String(initialClientState?.cookiePrefs?.consent || "").toLowerCase();
     return v === "accepted" || v === "declined" ? v : "unknown";
@@ -280,14 +223,8 @@ export default function IptvHomeClient({
     { persist: cookieConsent === "accepted" }
   );
   const [isTvDevice, setIsTvDevice] = useState(false);
-  const [forceTvMode, setForceTvMode] = useState(() => {
-    if (typeof window === "undefined") return false;
-    try {
-      return String(window.localStorage.getItem(FORCE_TV_MODE_KEY) || "").trim() === "1";
-    } catch {
-      return false;
-    }
-  });
+  const [forceTvMode, setForceTvMode] = useState(false);
+  const [clientPrefsReady, setClientPrefsReady] = useState(false);
   const [hasRestoredChannel, setHasRestoredChannel] = useState(false);
   const movieCatalogRequestRef = useRef(false);
   const lastLoadedMovieQueryRef = useRef("");
@@ -784,6 +721,27 @@ export default function IptvHomeClient({
   };
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (initialTheme !== "dark" && initialTheme !== "light") {
+      try {
+        const saved = window.localStorage.getItem("iptv:theme");
+        if (saved === "dark") setIsDark(true);
+        else if (saved === "light") setIsDark(false);
+        else setIsDark(document.documentElement.classList.contains("dark"));
+      } catch {
+        setIsDark(document.documentElement.classList.contains("dark"));
+      }
+    }
+    try {
+      setForceTvMode(String(window.localStorage.getItem(FORCE_TV_MODE_KEY) || "").trim() === "1");
+    } catch {
+      setForceTvMode(false);
+    }
+    setClientPrefsReady(true);
+  }, [initialTheme]);
+
+  useEffect(() => {
+    if (!clientPrefsReady) return;
     const root = document.documentElement;
     if (isDark) root.classList.add("dark");
     else root.classList.remove("dark");
@@ -792,7 +750,7 @@ export default function IptvHomeClient({
     } catch {
       // ignore localStorage write issues
     }
-  }, [isDark]);
+  }, [clientPrefsReady, isDark]);
 
   useEffect(() => {
     const ua = typeof navigator === "undefined" ? "" : navigator.userAgent.toLowerCase();
@@ -849,13 +807,14 @@ export default function IptvHomeClient({
   );
 
   useEffect(() => {
+    if (!clientPrefsReady) return;
     if (typeof window === "undefined") return;
     try {
       window.localStorage.setItem(FORCE_TV_MODE_KEY, forceTvMode ? "1" : "0");
     } catch {
       // ignore localStorage write issues
     }
-  }, [forceTvMode]);
+  }, [clientPrefsReady, forceTvMode]);
 
   useEffect(() => {
     if (typeof document === "undefined") return;
