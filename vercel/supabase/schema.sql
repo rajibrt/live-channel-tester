@@ -178,6 +178,21 @@ create table if not exists public.client_push_subscriptions (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.signup_security_events (
+  id bigint generated always as identity primary key,
+  ip_hash text not null default '',
+  device_hash text not null default '',
+  email_hash text not null default '',
+  mobile_hash text not null default '',
+  status text not null default 'unknown',
+  reason text not null default '',
+  user_agent text not null default '',
+  accept_language text not null default '',
+  device_platform text not null default '',
+  details_json jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
 create table if not exists public.client_state (
   user_id uuid primary key references public.client_users(user_id) on delete cascade,
   favorites jsonb not null default '[]'::jsonb,
@@ -326,6 +341,9 @@ create index if not exists admin_notifications_created_idx on public.admin_notif
 create index if not exists admin_notifications_read_idx on public.admin_notifications(is_read, created_at desc);
 create index if not exists admin_push_subscriptions_admin_idx on public.admin_push_subscriptions(admin_user_id, is_active);
 create index if not exists client_push_subscriptions_user_idx on public.client_push_subscriptions(user_id, is_active);
+create index if not exists signup_security_events_ip_time_idx on public.signup_security_events(ip_hash, created_at desc);
+create index if not exists signup_security_events_device_time_idx on public.signup_security_events(device_hash, created_at desc);
+create index if not exists signup_security_events_status_time_idx on public.signup_security_events(status, created_at desc);
 
 alter table public.playlists enable row level security;
 alter table public.channels enable row level security;
@@ -345,6 +363,7 @@ alter table public.admin_settings enable row level security;
 alter table public.admin_notifications enable row level security;
 alter table public.admin_push_subscriptions enable row level security;
 alter table public.client_push_subscriptions enable row level security;
+alter table public.signup_security_events enable row level security;
 
 drop policy if exists deny_all_playlists on public.playlists;
 create policy deny_all_playlists on public.playlists for all using (false) with check (false);
@@ -382,6 +401,8 @@ drop policy if exists deny_all_admin_push_subscriptions on public.admin_push_sub
 create policy deny_all_admin_push_subscriptions on public.admin_push_subscriptions for all using (false) with check (false);
 drop policy if exists deny_all_client_push_subscriptions on public.client_push_subscriptions;
 create policy deny_all_client_push_subscriptions on public.client_push_subscriptions for all using (false) with check (false);
+drop policy if exists deny_all_signup_security_events on public.signup_security_events;
+create policy deny_all_signup_security_events on public.signup_security_events for all using (false) with check (false);
 
 create table if not exists public.movies (
   id bigint generated always as identity primary key,

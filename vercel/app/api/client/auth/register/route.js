@@ -1,6 +1,14 @@
 import { NextResponse } from "next/server";
 import { createAdminNotification } from "../../../../../lib/adminNotifications";
-import { loadEmailSettings, sendApprovalRequestAdminEmail, sendClientWelcomeEmail } from "../../../../../lib/emailDelivery";
+import {
+  buildSignupSecurityMeta,
+  checkSignupApprovalQueueLimit,
+  checkSignupRateLimit,
+  recordSignupSecurityEvent,
+  verifyTurnstileToken,
+} from "../../../../../lib/clientSignupProtection";
+import { loadEmailSettings, sendApprovalRequestAdminEmail } from "../../../../../lib/emailDelivery";
+import { buildClientMetaFromRequest } from "../../../../../lib/requestClientMeta";
 import { getSupabaseAdmin } from "../../../../../lib/supabaseAdmin";
 
 function normalizeEmail(value) {
@@ -28,17 +36,67 @@ export async function POST(request) {
   const mobile = normalizeMobile(form.get("mobile_number"));
   const password = String(form.get("password") || "");
   const confirmPassword = String(form.get("confirm_password") || "");
+  const honeypot = String(form.get("signup_extra_check") || "").trim();
+  const turnstileToken = String(form.get("cf-turnstile-response") || "").trim();
   const emailLooksValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  const admin = getSupabaseAdmin();
+  const requestMeta = buildClientMetaFromRequest(request);
+  const securityMeta = buildSignupSecurityMeta(request, requestMeta);
+
+  if (honeypot) {
+    await recordSignupSecurityEvent(admin, securityMeta, {
+      email,
+      mobile_key: mobile.key,
+      status: "blocked",
+      reason: "honeypot",
+    });
+    return redirectRelative("/client-login?tab=signup&register_error=blocked");
+  }
+
+  const rateLimit = await checkSignupRateLimit(admin, securityMeta);
+  if (!rateLimit.ok) {
+    await recordSignupSecurityEvent(admin, securityMeta, {
+      email,
+      mobile_key: mobile.key,
+      status: "blocked",
+      reason: "rate_limited",
+      details: { counts: rateLimit.counts, fallback: rateLimit.fallback },
+    });
+    return redirectRelative("/client-login?tab=signup&register_error=rate_limited");
+  }
+
+  const turnstile = await verifyTurnstileToken({ token: turnstileToken });
+  if (!turnstile.ok) {
+    await recordSignupSecurityEvent(admin, securityMeta, {
+      email,
+      mobile_key: mobile.key,
+      status: "blocked",
+      reason: "turnstile_failed",
+      details: { error_code: turnstile.errorCode, skipped: turnstile.skipped },
+    });
+    return redirectRelative("/client-login?tab=signup&register_error=robot_check");
+  }
 
   if (!fullName || !emailLooksValid || !mobile.key || password.length < 8) {
+    await recordSignupSecurityEvent(admin, securityMeta, {
+      email,
+      mobile_key: mobile.key,
+      status: "failed",
+      reason: "invalid_input",
+    });
     return redirectRelative("/client-login?tab=signup&register_error=invalid");
   }
 
   if (password !== confirmPassword) {
+    await recordSignupSecurityEvent(admin, securityMeta, {
+      email,
+      mobile_key: mobile.key,
+      status: "failed",
+      reason: "password_mismatch",
+    });
     return redirectRelative("/client-login?tab=signup&register_error=password_mismatch");
   }
 
-  const admin = getSupabaseAdmin();
   const now = new Date().toISOString();
 
   const { data: existingByMobile } = await admin
@@ -48,6 +106,12 @@ export async function POST(request) {
     .maybeSingle();
 
   if (existingByMobile?.user_id) {
+    await recordSignupSecurityEvent(admin, securityMeta, {
+      email,
+      mobile_key: mobile.key,
+      status: "failed",
+      reason: "mobile_exists",
+    });
     return redirectRelative("/client-login?tab=signup&register_error=mobile_exists");
   }
 
@@ -58,7 +122,25 @@ export async function POST(request) {
     .maybeSingle();
 
   if (existingByEmail?.user_id) {
+    await recordSignupSecurityEvent(admin, securityMeta, {
+      email,
+      mobile_key: mobile.key,
+      status: "failed",
+      reason: "email_exists",
+    });
     return redirectRelative("/client-login?tab=signup&register_error=email_exists");
+  }
+
+  const approvalQueueLimit = await checkSignupApprovalQueueLimit(admin, securityMeta);
+  if (!approvalQueueLimit.ok) {
+    await recordSignupSecurityEvent(admin, securityMeta, {
+      email,
+      mobile_key: mobile.key,
+      status: "blocked",
+      reason: approvalQueueLimit.reason || "pending_capacity",
+      details: { counts: approvalQueueLimit.counts, fallback: approvalQueueLimit.fallback },
+    });
+    return redirectRelative("/client-login?tab=signup&register_error=pending_limit");
   }
 
   const { data: created, error: createErr } = await admin.auth.admin.createUser({
@@ -71,6 +153,13 @@ export async function POST(request) {
   const userId = String(created?.user?.id || "").trim();
   if (createErr || !userId) {
     const lower = String(createErr?.message || "").toLowerCase();
+    await recordSignupSecurityEvent(admin, securityMeta, {
+      email,
+      mobile_key: mobile.key,
+      status: "failed",
+      reason: lower.includes("already") ? "email_exists" : "create_failed",
+      details: { auth_error: String(createErr?.message || "").slice(0, 180) },
+    });
     if (lower.includes("already")) {
       return redirectRelative("/client-login?tab=signup&register_error=email_exists");
     }
@@ -83,8 +172,8 @@ export async function POST(request) {
     full_name: fullName,
     mobile_number: mobile.raw,
     mobile_login_key: mobile.key,
-    approval_status: "approved",
-    approved_at: now,
+    approval_status: "pending",
+    approved_at: null,
     approved_by_admin: null,
     approval_note: "",
     auth_provider: "self_register",
@@ -102,6 +191,13 @@ export async function POST(request) {
 
   if (profileErr) {
     await admin.auth.admin.deleteUser(userId, false).catch(() => {});
+    await recordSignupSecurityEvent(admin, securityMeta, {
+      email,
+      mobile_key: mobile.key,
+      status: "failed",
+      reason: "profile_failed",
+      details: { profile_error: String(profileErr?.message || "").slice(0, 180) },
+    });
     return redirectRelative("/client-login?tab=signup&register_error=profile_failed");
   }
 
@@ -126,7 +222,14 @@ export async function POST(request) {
       full_name: fullName,
       mobile_number: mobile.raw,
       auth_provider: "self_register",
+      approval_status: "pending",
       created_at: now,
+      request_meta: requestMeta,
+      security: {
+        ip_hash: securityMeta.ip_hash,
+        device_hash: securityMeta.device_hash,
+        turnstile_skipped: turnstile.skipped,
+      },
     },
   }).catch(() => {});
 
@@ -140,6 +243,7 @@ export async function POST(request) {
         mobile_number: mobile.raw,
         auth_provider: "self_register",
         requested_at: now,
+        approval_status: "pending",
       },
       settings,
       forceSend: true,
@@ -148,25 +252,13 @@ export async function POST(request) {
     // best effort
   }
 
-  try {
-    const settings = await loadEmailSettings(admin);
-    await sendClientWelcomeEmail({
-      settings,
-      forceSend: true,
-      clientUser: {
-        user_id: userId,
-        email,
-        full_name: fullName,
-        mobile_number: mobile.raw,
-        approval_status: "approved",
-        approved_at: now,
-        auth_provider: "self_register",
-        created_at: now,
-      },
-    });
-  } catch {
-    // best effort
-  }
+  await recordSignupSecurityEvent(admin, securityMeta, {
+    email,
+    mobile_key: mobile.key,
+    status: "succeeded",
+    reason: "pending_approval",
+    details: { user_id: userId, turnstile_skipped: turnstile.skipped },
+  });
 
   return redirectRelative("/client-login?registered=1");
 }

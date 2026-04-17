@@ -12,11 +12,13 @@ export default function PasswordField({
   hideLabel = "Hide password",
   autoComplete = "current-password",
   required = true,
+  invalid = false,
+  helpText = "",
 }) {
   const [showPassword, setShowPassword] = useState(false);
 
   return (
-    <label className={styles.field}>
+    <label className={`${styles.field} ${invalid ? styles.fieldInvalid : ""}`}>
       <span>{label}</span>
       <div className={styles.passwordInputWrap}>
         <input
@@ -25,6 +27,7 @@ export default function PasswordField({
           required={required}
           placeholder={placeholder}
           autoComplete={autoComplete}
+          aria-invalid={invalid ? "true" : "false"}
         />
         <button
           type="button"
@@ -36,6 +39,7 @@ export default function PasswordField({
           {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
         </button>
       </div>
+      {helpText ? <span className={styles.fieldHelp}>{helpText}</span> : null}
     </label>
   );
 }

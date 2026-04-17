@@ -75,6 +75,14 @@ export default async function ClientLoginPage({ searchParams }) {
         ? t("settings.passwordMismatch")
       : registerErrorCode === "create_failed"
         ? t("auth.registerCreateFailed")
+      : registerErrorCode === "rate_limited"
+        ? t("auth.registerRateLimited")
+      : registerErrorCode === "pending_limit"
+        ? t("auth.registerPendingLimit")
+      : registerErrorCode === "robot_check"
+        ? t("auth.registerRobotCheckFailed")
+      : registerErrorCode === "blocked"
+        ? t("auth.registerBlocked")
         : registerErrorCode === "profile_failed"
           ? t("auth.registerProfileFailed")
           : t("auth.registerInvalid");
@@ -125,7 +133,9 @@ export default async function ClientLoginPage({ searchParams }) {
           resetMessage={resetMessage}
           resetInvalid={resetState === "invalid"}
           hasRegisterError={hasRegisterError}
+          registerErrorCode={registerErrorCode}
           registerErrorMessage={registerErrorMessage}
+          turnstileSiteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || ""}
         />
       </section>
     </main>
