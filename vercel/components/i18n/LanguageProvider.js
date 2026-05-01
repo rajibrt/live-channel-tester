@@ -6,6 +6,7 @@ import { DEFAULT_LOCALE, SUPPORTED_LOCALES, dictionaries } from "../../lib/i18n/
 
 const PUBLIC_LOCALE_COOKIE = "site_lang";
 const DASHBOARD_LOCALE_COOKIE = "dashboard_lang";
+const DASHBOARD_DEFAULT_LOCALE = "en";
 
 const I18nContext = createContext({
   locale: DEFAULT_LOCALE,
@@ -33,6 +34,11 @@ function getCookieNameForPath(pathname) {
   return path.startsWith("/dashboard") ? DASHBOARD_LOCALE_COOKIE : PUBLIC_LOCALE_COOKIE;
 }
 
+function getDefaultLocaleForPath(pathname) {
+  const path = String(pathname || "");
+  return path.startsWith("/dashboard") ? DASHBOARD_DEFAULT_LOCALE : DEFAULT_LOCALE;
+}
+
 function readLocaleCookie(name) {
   if (typeof document === "undefined") return "";
   const entries = String(document.cookie || "").split(";");
@@ -46,12 +52,12 @@ function readLocaleCookie(name) {
 
 export function LanguageProvider({ initialLocale = DEFAULT_LOCALE, children }) {
   const pathname = usePathname();
-  const [locale, setLocaleState] = useState(normalizeLocale(initialLocale));
+  const [locale, setLocaleState] = useState(() => normalizeLocale(getDefaultLocaleForPath(pathname) || initialLocale));
 
   useEffect(() => {
     const cookieName = getCookieNameForPath(pathname);
     const scopedLocale = readLocaleCookie(cookieName);
-    setLocaleState(scopedLocale || DEFAULT_LOCALE);
+    setLocaleState(scopedLocale || getDefaultLocaleForPath(pathname));
   }, [pathname]);
 
   function setLocale(nextLocale) {

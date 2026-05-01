@@ -312,6 +312,7 @@ export default function TopNavbar({
   clientLabel,
   clientProfile,
   language = 'bn',
+  isGuest = false,
 }) {
   const [open, setOpen] = useState(false)
   const [showNewPassword, setShowNewPassword] = useState(false)
@@ -483,6 +484,13 @@ export default function TopNavbar({
   }, [])
 
   const loadNotifications = useCallback(async () => {
+    if (isGuest) {
+      setNotifications([])
+      setUnreadCount(0)
+      setNotificationsLoading(false)
+      setNotificationsError('')
+      return
+    }
     setNotificationsLoading(true)
     setNotificationsError('')
     try {
@@ -500,13 +508,14 @@ export default function TopNavbar({
     } finally {
       setNotificationsLoading(false)
     }
-  }, [])
+  }, [isGuest])
 
   useEffect(() => {
+    if (isGuest) return undefined
     loadNotifications()
     const timer = setInterval(loadNotifications, 60000)
     return () => clearInterval(timer)
-  }, [loadNotifications])
+  }, [loadNotifications, isGuest])
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined
@@ -620,6 +629,7 @@ export default function TopNavbar({
 
   useEffect(() => {
     if (typeof window === 'undefined') return
+    if (isGuest) return
     const canPush =
       'serviceWorker' in navigator &&
       'PushManager' in window &&
@@ -650,9 +660,10 @@ export default function TopNavbar({
       }
     }
     initPush()
-  }, [])
+  }, [isGuest])
 
   const resolveVapidPublicKey = useCallback(async () => {
+    if (isGuest) return ''
     const existing = String(vapidPublicKeyRef.current || '').trim()
     if (existing) return existing
     try {
@@ -665,9 +676,10 @@ export default function TopNavbar({
     } catch {
       return ''
     }
-  }, [])
+  }, [isGuest])
 
   const enablePushNotifications = useCallback(async () => {
+    if (isGuest) return
     if (typeof window === 'undefined') return
     if (
       !('serviceWorker' in navigator) ||
@@ -719,9 +731,10 @@ export default function TopNavbar({
     } finally {
       setPushBusy(false)
     }
-  }, [resolveVapidPublicKey])
+  }, [resolveVapidPublicKey, isGuest])
 
   const disablePushNotifications = useCallback(async () => {
+    if (isGuest) return
     if (typeof window === 'undefined') return
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) return
 
@@ -779,6 +792,7 @@ export default function TopNavbar({
     announcementId = '',
     markAll = false,
   } = {}) {
+    if (isGuest) return false
     try {
       const res = await fetch('/api/client/notifications/read', {
         method: 'POST',
@@ -843,6 +857,7 @@ export default function TopNavbar({
 
   async function saveProfile(event) {
     event.preventDefault()
+    if (isGuest) return
     setError('')
     setMessage('')
 
@@ -1317,35 +1332,52 @@ export default function TopNavbar({
                 </strong>
                 <span title={readonlyEmail || '-'}>{readonlyEmail || '-'}</span>
               </div>
-              <button
-                type='button'
-                className={styles.userMenuItem}
-                role='menuitem'
-                onClick={() => {
-                  setOpen(true)
-                  setUserMenuOpen(false)
-                }}
-                data-tv-focusable='true'
-                data-tv-focus-scope='top-nav'
-                data-tv-focus-id='topnav-user-edit'
-                data-tv-menu-default='true'
-              >
-                <Icon name='Settings' size={16} />
-                Edit Profile
-              </button>
-              <form action='/api/client/auth/logout' method='post'>
-                <button
-                  type='submit'
-                  className={`${styles.userMenuItem} ${styles.userMenuItemDanger}`}
+              {isGuest ? (
+                <Link
+                  href='/client-login'
+                  className={styles.userMenuItem}
                   role='menuitem'
                   data-tv-focusable='true'
                   data-tv-focus-scope='top-nav'
-                  data-tv-focus-id='topnav-user-logout'
+                  data-tv-focus-id='topnav-user-login'
+                  data-tv-menu-default='true'
                 >
-                  <Icon name='LogOut' size={16} />
-                  Logout
-                </button>
-              </form>
+                  <Icon name='User' size={16} />
+                  Login
+                </Link>
+              ) : (
+                <>
+                  <button
+                    type='button'
+                    className={styles.userMenuItem}
+                    role='menuitem'
+                    onClick={() => {
+                      setOpen(true)
+                      setUserMenuOpen(false)
+                    }}
+                    data-tv-focusable='true'
+                    data-tv-focus-scope='top-nav'
+                    data-tv-focus-id='topnav-user-edit'
+                    data-tv-menu-default='true'
+                  >
+                    <Icon name='Settings' size={16} />
+                    Edit Profile
+                  </button>
+                  <form action='/api/client/auth/logout' method='post'>
+                    <button
+                      type='submit'
+                      className={`${styles.userMenuItem} ${styles.userMenuItemDanger}`}
+                      role='menuitem'
+                      data-tv-focusable='true'
+                      data-tv-focus-scope='top-nav'
+                      data-tv-focus-id='topnav-user-logout'
+                    >
+                      <Icon name='LogOut' size={16} />
+                      Logout
+                    </button>
+                  </form>
+                </>
+              )}
             </div>
           ) : null}
         </div>

@@ -160,7 +160,7 @@ export default async function ClientsPage() {
   const [items, activeViewers] = await Promise.all([getClientUsers(), getActiveViewerSnapshot()]);
 
   return (
-    <section className={styles.card}>
+    <section className={`${styles.card} ${styles.clientUsersCard}`}>
       <ManageClientUsers initialItems={items} initialActiveViewers={activeViewers?.viewers || []} />
     </section>
   );

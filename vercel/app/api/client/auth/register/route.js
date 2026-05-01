@@ -8,6 +8,7 @@ import {
   verifyTurnstileToken,
 } from "../../../../../lib/clientSignupProtection";
 import { loadEmailSettings, sendApprovalRequestAdminEmail } from "../../../../../lib/emailDelivery";
+import { loadClientAccessSettings } from "../../../../../lib/clientAccessSettings";
 import { buildClientMetaFromRequest } from "../../../../../lib/requestClientMeta";
 import { getSupabaseAdmin } from "../../../../../lib/supabaseAdmin";
 
@@ -98,6 +99,9 @@ export async function POST(request) {
   }
 
   const now = new Date().toISOString();
+  const accessSettings = await loadClientAccessSettings(admin).catch(() => null);
+  const autoApprove = accessSettings?.self_registration_auto_approve === true;
+  const approvalStatus = autoApprove ? "approved" : "pending";
 
   const { data: existingByMobile } = await admin
     .from("client_users")
@@ -131,16 +135,18 @@ export async function POST(request) {
     return redirectRelative("/client-login?tab=signup&register_error=email_exists");
   }
 
-  const approvalQueueLimit = await checkSignupApprovalQueueLimit(admin, securityMeta);
-  if (!approvalQueueLimit.ok) {
-    await recordSignupSecurityEvent(admin, securityMeta, {
-      email,
-      mobile_key: mobile.key,
-      status: "blocked",
-      reason: approvalQueueLimit.reason || "pending_capacity",
-      details: { counts: approvalQueueLimit.counts, fallback: approvalQueueLimit.fallback },
-    });
-    return redirectRelative("/client-login?tab=signup&register_error=pending_limit");
+  if (!autoApprove) {
+    const approvalQueueLimit = await checkSignupApprovalQueueLimit(admin, securityMeta);
+    if (!approvalQueueLimit.ok) {
+      await recordSignupSecurityEvent(admin, securityMeta, {
+        email,
+        mobile_key: mobile.key,
+        status: "blocked",
+        reason: approvalQueueLimit.reason || "pending_capacity",
+        details: { counts: approvalQueueLimit.counts, fallback: approvalQueueLimit.fallback },
+      });
+      return redirectRelative("/client-login?tab=signup&register_error=pending_limit");
+    }
   }
 
   const { data: created, error: createErr } = await admin.auth.admin.createUser({
@@ -172,10 +178,10 @@ export async function POST(request) {
     full_name: fullName,
     mobile_number: mobile.raw,
     mobile_login_key: mobile.key,
-    approval_status: "pending",
-    approved_at: null,
+    approval_status: approvalStatus,
+    approved_at: autoApprove ? now : null,
     approved_by_admin: null,
-    approval_note: "",
+    approval_note: autoApprove ? "Auto-approved by client access setting." : "",
     auth_provider: "self_register",
     provider_user_id: "",
     avatar_url: "",
@@ -215,14 +221,16 @@ export async function POST(request) {
 
   await createAdminNotification({
     type: "client_self_signup",
-    title: "New client self registration",
-    message: `${fullName} created a client account with mobile ${mobile.raw}.`,
+    title: autoApprove ? "New client self registration auto-approved" : "New client self registration",
+    message: autoApprove
+      ? `${fullName} created a client account with mobile ${mobile.raw} and was auto-approved.`
+      : `${fullName} created a client account with mobile ${mobile.raw}.`,
     payload: {
       user_id: userId,
       full_name: fullName,
       mobile_number: mobile.raw,
       auth_provider: "self_register",
-      approval_status: "pending",
+      approval_status: approvalStatus,
       created_at: now,
       request_meta: requestMeta,
       security: {
@@ -243,7 +251,7 @@ export async function POST(request) {
         mobile_number: mobile.raw,
         auth_provider: "self_register",
         requested_at: now,
-        approval_status: "pending",
+        approval_status: approvalStatus,
       },
       settings,
       forceSend: true,
@@ -256,9 +264,9 @@ export async function POST(request) {
     email,
     mobile_key: mobile.key,
     status: "succeeded",
-    reason: "pending_approval",
+    reason: autoApprove ? "auto_approved" : "pending_approval",
     details: { user_id: userId, turnstile_skipped: turnstile.skipped },
   });
 
-  return redirectRelative("/client-login?registered=1");
+  return redirectRelative(autoApprove ? "/client-login?registered=1&approved=1" : "/client-login?registered=1");
 }

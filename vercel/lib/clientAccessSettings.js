@@ -18,6 +18,8 @@ function toBool(value, fallback = false) {
 export function getDefaultClientAccessSettings() {
   return {
     facebook_first_login_requires_admin_approval: true,
+    self_registration_auto_approve: false,
+    public_guest_access_enabled: false,
   };
 }
 
@@ -29,7 +31,20 @@ export function normalizeClientAccessSettings(valueJson) {
       raw.facebook_first_login_requires_admin_approval,
       defaults.facebook_first_login_requires_admin_approval
     ),
+    self_registration_auto_approve: toBool(
+      raw.self_registration_auto_approve,
+      defaults.self_registration_auto_approve
+    ),
+    public_guest_access_enabled: toBool(
+      raw.public_guest_access_enabled,
+      defaults.public_guest_access_enabled
+    ),
   };
+}
+
+export async function isPublicGuestAccessEnabled(adminClient) {
+  const settings = await loadClientAccessSettings(adminClient);
+  return settings.public_guest_access_enabled === true;
 }
 
 export async function loadClientAccessSettings(adminClient) {

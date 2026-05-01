@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { NextResponse } from "next/server";
 import { getCurrentAdmin } from "../../../lib/auth";
 import { getCurrentClient } from "../../../lib/clientAuth";
+import { loadClientAccessSettingsCached } from "../../../lib/clientAccessSettings";
 import { normalizeStreamUrl } from "../../../lib/streamUrl";
 
 export const dynamic = "force-dynamic";
@@ -215,8 +216,13 @@ function buildFfmpegArgs(targetUrl, startSeconds = 0, forceVideoReencode = false
 }
 
 export async function GET(request) {
-  const [clientSession, adminSession] = await Promise.all([getCurrentClient(), getCurrentAdmin()]);
-  if (!clientSession && !adminSession) {
+  const [clientSession, adminSession, accessSettings] = await Promise.all([
+    getCurrentClient(),
+    getCurrentAdmin(),
+    loadClientAccessSettingsCached().catch(() => null),
+  ]);
+  const publicGuestAccessEnabled = accessSettings?.public_guest_access_enabled === true;
+  if (!clientSession && !adminSession && !publicGuestAccessEnabled) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   if (clientSession && String(clientSession?.client?.approval_status || "approved").toLowerCase() !== "approved") {

@@ -128,12 +128,22 @@ export default async function DashboardPage() {
   const pendingPct = toPercent(pendingApprovals, approvalTotal);
   const approvedPct = Math.max(0, 100 - pendingPct);
   const visitorTrend = reports?.visitor_trend || reports?.user_login_trend || {};
+  const guestVisitorTrend = reports?.guest_visitor_trend || {};
+  const clientViewerTrend = reports?.client_viewer_trend || {};
   const trendPanels = [
-    { key: "day", title: "Day (24h)", data: Array.isArray(visitorTrend.day) ? visitorTrend.day : [] },
-    { key: "week", title: "Week (7d)", data: Array.isArray(visitorTrend.week) ? visitorTrend.week : [] },
-    { key: "month", title: "Month (30d)", data: Array.isArray(visitorTrend.month) ? visitorTrend.month : [] },
-    { key: "year", title: "Year (12m)", data: Array.isArray(visitorTrend.year) ? visitorTrend.year : [] },
+    { key: "all-day", title: "All Viewers 24h", data: Array.isArray(visitorTrend.day) ? visitorTrend.day : [] },
+    { key: "all-week", title: "All Viewers 7d", data: Array.isArray(visitorTrend.week) ? visitorTrend.week : [] },
+    { key: "all-month", title: "All Viewers 30d", data: Array.isArray(visitorTrend.month) ? visitorTrend.month : [] },
+    { key: "all-year", title: "All Viewers 12m", data: Array.isArray(visitorTrend.year) ? visitorTrend.year : [] },
   ];
+  const guestTrendPanels = [
+    { key: "guest-day", title: "Guests 24h", data: Array.isArray(guestVisitorTrend.day) ? guestVisitorTrend.day : [] },
+    { key: "guest-week", title: "Guests 7d", data: Array.isArray(guestVisitorTrend.week) ? guestVisitorTrend.week : [] },
+    { key: "client-day", title: "Logged-in 24h", data: Array.isArray(clientViewerTrend.day) ? clientViewerTrend.day : [] },
+    { key: "client-week", title: "Logged-in 7d", data: Array.isArray(clientViewerTrend.week) ? clientViewerTrend.week : [] },
+  ];
+  const topViewerChannels7d = Array.isArray(reports?.top_viewer_channels_7d) ? reports.top_viewer_channels_7d : [];
+  const recentViewerEvents = Array.isArray(reports?.recent_viewer_events) ? reports.recent_viewer_events : [];
 
   return (
     <>
@@ -151,6 +161,29 @@ export default async function DashboardPage() {
           <strong>{playlists.reduce((sum, p) => sum + (Number(p.channel_count) || 0), 0)}</strong>
         </article>
         <ActiveViewersPanel title="Watching Now" viewers={activeViewers?.viewers || []} />
+      </section>
+
+      <section className={`${styles.stats} ${styles.statsCompact4}`}>
+        <article className={styles.statCard}>
+          <p>Guest Visitors (24h)</p>
+          <strong>{Number(reports?.guest_unique_24h || 0)}</strong>
+          <small className={styles.metaMuted}>7d unique: {Number(reports?.guest_unique_7d || 0)}</small>
+        </article>
+        <article className={styles.statCard}>
+          <p>Logged-in Viewers (24h)</p>
+          <strong>{Number(reports?.client_unique_24h || 0)}</strong>
+          <small className={styles.metaMuted}>7d unique: {Number(reports?.client_unique_7d || 0)}</small>
+        </article>
+        <article className={styles.statCard}>
+          <p>Total Viewers (24h)</p>
+          <strong>{Number(reports?.total_unique_viewers_24h || 0)}</strong>
+          <small className={styles.metaMuted}>Events: {Number(reports?.guest_events_24h || 0) + Number(reports?.client_viewer_events_24h || 0)}</small>
+        </article>
+        <article className={styles.statCard}>
+          <p>Guest Watch Time (24h)</p>
+          <strong>{formatDuration(reports?.guest_watch_seconds_24h)}</strong>
+          <small className={styles.metaMuted}>Tracked without login</small>
+        </article>
       </section>
 
       <section className={`${styles.stats} ${styles.statsCompact4}`}>
@@ -299,9 +332,17 @@ export default async function DashboardPage() {
 
       <section className={styles.lineTrendSection}>
         <article className={`${styles.card} ${styles.chartCard}`}>
-          <h2>Visitor Trend</h2>
-          <p className={styles.hint}>Unique visitors grouped by day, week, month, and year.</p>
+          <h2>Viewer Analytics</h2>
+          <p className={styles.hint}>Unique guest and logged-in viewers grouped by day, week, month, and year.</p>
           <UserArrivalTrendCharts trendPanels={trendPanels} />
+        </article>
+      </section>
+
+      <section className={styles.lineTrendSection}>
+        <article className={`${styles.card} ${styles.chartCard}`}>
+          <h2>Guest vs Logged-in</h2>
+          <p className={styles.hint}>Separate comparison for visitors without login and signed-in clients.</p>
+          <UserArrivalTrendCharts trendPanels={guestTrendPanels} />
         </article>
       </section>
 
@@ -470,6 +511,76 @@ export default async function DashboardPage() {
                 ) : (
                   <tr>
                     <td colSpan={6} className={styles.pending}>No failed playback data found for the last 7 days.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <h2 className={styles.tableTitleGap}>Top Viewer Channels (Guest + Logged-in, Last 7 Days)</h2>
+          <p className={styles.hint}>Channels ranked by unique tracked viewers across guest and client sessions.</p>
+          <div className={styles.tableWrap}>
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Channel</th>
+                  <th>Guest Viewers</th>
+                  <th>Logged-in Viewers</th>
+                  <th>Events</th>
+                  <th>Tracked Watch Time</th>
+                </tr>
+              </thead>
+              <tbody>
+                {topViewerChannels7d.length ? (
+                  topViewerChannels7d.map((row, index) => (
+                    <tr key={`${row.channel_id}-${index}`}>
+                      <td>{index + 1}</td>
+                      <td>{row.channel_name || row.channel_id || "-"}</td>
+                      <td>{Number(row.guest_viewers || 0)}</td>
+                      <td>{Number(row.client_viewers || 0)}</td>
+                      <td>{Number(row.events || 0)}</td>
+                      <td>{formatDuration(row.watch_seconds)}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={6} className={styles.pending}>No unified viewer channel data found yet.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <h2 className={styles.tableTitleGap}>Recent Viewer History</h2>
+          <p className={styles.hint}>Latest guest and logged-in viewer activity captured by the analytics table.</p>
+          <div className={styles.tableWrap}>
+            <table>
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Viewer</th>
+                  <th>Event</th>
+                  <th>Route</th>
+                  <th>Content</th>
+                  <th>Duration</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentViewerEvents.length ? (
+                  recentViewerEvents.map((row, index) => (
+                    <tr key={`${row.created_at}-${index}`}>
+                      <td>{row.created_at ? new Date(row.created_at).toLocaleString() : "-"}</td>
+                      <td>{row.viewer_type === "client" ? "Logged-in" : "Guest"} {row.viewer_key ? `(${row.viewer_key})` : ""}</td>
+                      <td>{row.event_type || "-"}</td>
+                      <td>{row.route || "-"}</td>
+                      <td>{row.channel_name || row.movie_title || "-"}</td>
+                      <td>{Number(row.watch_seconds || 0) > 0 ? formatDuration(row.watch_seconds) : "-"}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={6} className={styles.pending}>No viewer history found yet. Run the new SQL migration first if this stays empty.</td>
                   </tr>
                 )}
               </tbody>

@@ -2379,6 +2379,59 @@
   background: color-mix(in oklab, var(--destructive) 14%, var(--card));
 }
 
+.clientUsersMobileList {
+  display: none;
+}
+
+.clientUsersCard,
+.clientUsersPage {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: clip;
+}
+
+.clientUsersPage,
+.clientUsersPage * {
+  box-sizing: border-box;
+}
+
+.clientUsersPage > .controlRowEnd,
+.clientUsersPage > .formGrid,
+.clientUsersPage > .tableWrap,
+.clientUsersPage .paginationBar {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.clientStatsGrid {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: hidden;
+}
+
+.clientStatsGrid > .statCard,
+.clientStatsGrid > .statCardButton {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.clientStatsGrid .statLabelWithIcon,
+.clientStatsGrid .metaMuted {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.clientStatsGrid .statLabelWithIcon span,
+.clientStatsGrid .metaMuted {
+  overflow-wrap: anywhere;
+}
+
 .cellEllipsis {
   display: block;
   width: 100%;
@@ -2883,6 +2936,14 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .form > .stats:first-child {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .clientStatsGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .grid {
     grid-template-columns: 1fr;
   }
@@ -2903,6 +2964,10 @@
 
   .controlRowEnd {
     align-items: stretch;
+  }
+
+  .clientUsersPage > .controlRowEnd .controlRow {
+    width: 100%;
   }
 
   .primaryBtnCompact {
@@ -3008,6 +3073,41 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .clientUsersCard {
+    overflow-x: hidden;
+  }
+
+  .clientUsersPage {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .clientUsersPage > .clientStatsGrid,
+  .clientUsersPage > .formGrid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .clientUsersPage > .controlRowEnd,
+  .clientUsersPage > .controlRowEnd .controlRow {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .clientUsersPage .statCard,
+  .clientUsersPage .statCardButton,
+  .clientUsersPage .primaryBtnCompact,
+  .clientUsersPage .secondaryBtnCompact,
+  .clientUsersPage .field,
+  .clientUsersPage .field input,
+  .clientUsersPage .field select {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
   .settingsStatusGrid,
   .stats.settingsStatusGrid,
   .statsCompact4.settingsStatusGrid {
@@ -3021,6 +3121,11 @@
 
   .tableWrap table {
     min-width: 760px;
+  }
+
+  .tableWrap .clientUsersTable {
+    width: 1040px;
+    min-width: 1040px;
   }
 
   .tableWrap .adminUsersTable {
@@ -3089,6 +3194,51 @@
   .card {
     border-radius: 16px;
     padding: 12px;
+  }
+
+  .form > .stats:first-child {
+    grid-template-columns: 1fr;
+  }
+
+  .clientUsersPage > .clientStatsGrid,
+  .clientStatsGrid {
+    grid-template-columns: 1fr !important;
+    gap: 10px;
+  }
+
+  .clientUsersCard {
+    padding-inline: 10px;
+  }
+
+  .form > .stats:first-child .statCard,
+  .form > .stats:first-child .statCardButton,
+  .form > .stats:first-child .statCardButton > .statCard {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .form > .controlRowEnd {
+    align-items: stretch;
+  }
+
+  .form > .controlRowEnd .controlRow {
+    width: 100%;
+  }
+
+  .form > .controlRowEnd .primaryBtnCompact,
+  .form > .controlRowEnd .secondaryBtnCompact {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .tableWrap {
+    max-width: calc(100vw - 48px);
+    overflow-x: auto;
+  }
+
+  .tableWrap .clientUsersTable {
+    width: 980px;
+    min-width: 980px;
   }
 
   .settingsTabs {

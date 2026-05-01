@@ -203,7 +203,39 @@ export default async function WatchChannelPage({ params, searchParams }) {
   }
 
   const current = await getCurrentClient();
+  const accessSettings = await loadClientAccessSettingsCached().catch(() => null);
+  const publicGuestAccessEnabled = accessSettings?.public_guest_access_enabled === true;
   if (!current) {
+    if (publicGuestAccessEnabled) {
+      const boot = await getClientHomeData("", { includeMovies: true });
+      return (
+        <IptvHomeClient
+          initialChannels={boot.channels}
+          initialCategories={boot.categories}
+          initialMovies={boot.movies}
+          initialMovieCategories={boot.movieCategories}
+          initialMovieGenres={boot.movieGenres}
+          initialMovieLanguages={boot.movieLanguages}
+          initialMovieYears={boot.movieYears}
+          initialMovieStats={boot.movieStats}
+          initialContinueWatching={boot.continueWatching}
+          moviesViewVariant="browse"
+          initialHomeMode={String(query?.mode || "").trim().toLowerCase() === "movies" ? "movies" : ""}
+          initialMovieMode={String(query?.movie_mode || "").trim().toLowerCase()}
+          initialMovieCategory={String(query?.movie_category || "").trim().toLowerCase()}
+          initialMovieGenre={String(query?.movie_genre || "").trim().toLowerCase()}
+          initialMovieLanguage={String(query?.movie_language || "").trim().toLowerCase()}
+          initialMovieYear={String(query?.movie_year || "").trim()}
+          initialMovieSearch={String(query?.movie_search || "").trim()}
+          initialMovieFilterView={String(query?.movie_filter_view || "").trim().toLowerCase() === "genres" ? "genres" : "categories"}
+          initialMoviePage={Math.max(1, Number.parseInt(String(query?.movie_page || "1"), 10) || 1)}
+          initialClientState={boot.initialClientState}
+          currentClient={{ fullName: "Guest", email: "", mobileNumber: "", avatarUrl: "", isGuest: true }}
+          initialSelectedChannelId={String(channel.id)}
+          isGuest
+        />
+      );
+    }
     const nextPath = `/watch/${encodeURIComponent(String(expectedSlug || resolved?.channel || ""))}`;
     redirect(`/client-login?next=${encodeURIComponent(nextPath)}`);
   }
@@ -212,7 +244,6 @@ export default async function WatchChannelPage({ params, searchParams }) {
   const isApproved = approvalStatus === "approved";
   if (!isApproved) {
     const isRejected = approvalStatus === "rejected";
-    const accessSettings = await loadClientAccessSettingsCached().catch(() => null);
     return (
       <main
         style={{

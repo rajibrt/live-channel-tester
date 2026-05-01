@@ -67,6 +67,16 @@ function addToBucketMap(buckets, keyFn, rows) {
   }
 }
 
+function uniqueViewerCount(rows, type = "") {
+  const seen = new Set();
+  for (const row of Array.isArray(rows) ? rows : []) {
+    if (type && String(row?.viewer_type || "") !== type) continue;
+    const key = String(row?.viewer_key || row?.user_id || "").trim();
+    if (key) seen.add(key);
+  }
+  return seen.size;
+}
+
 export async function getDashboardReports() {
   const admin = getSupabaseAdmin();
   const now = new Date();
@@ -79,6 +89,7 @@ export async function getDashboardReports() {
     { data: events },
     { data: history },
     { data: users },
+    viewerActivityResult,
     { data: visitorEventsTrend },
     { data: visitorHistoryTrend },
     { count: totalSessionsCount },
@@ -101,6 +112,12 @@ export async function getDashboardReports() {
     admin
       .from("client_users")
       .select("user_id,approval_status,auth_provider,created_at,is_active"),
+    admin
+      .from("viewer_activity_events")
+      .select("viewer_type,viewer_key,user_id,event_type,event_data,created_at")
+      .gte("created_at", cutoff365d.toISOString())
+      .order("created_at", { ascending: true })
+      .limit(250000),
     admin
       .from("client_activity_events")
       .select("user_id,created_at,event_type")
@@ -134,6 +151,9 @@ export async function getDashboardReports() {
   const eventRows = Array.isArray(events) ? events : [];
   const historyRows = (Array.isArray(history) ? history : []).filter((row) => String(row?.source || "") !== "sync");
   const userRows = Array.isArray(users) ? users : [];
+  const viewerActivityRows = !viewerActivityResult?.error && Array.isArray(viewerActivityResult?.data)
+    ? viewerActivityResult.data
+    : [];
   const visitorTrendRows = Array.isArray(visitorEventsTrend) ? visitorEventsTrend : [];
   const visitorHistoryRows = (Array.isArray(visitorHistoryTrend) ? visitorHistoryTrend : []).filter(
     (row) => String(row?.source || "") !== "sync"
@@ -150,6 +170,86 @@ export async function getDashboardReports() {
     const at = safeDate(row?.created_at);
     return at && at >= cutoff24h;
   });
+
+  const viewerRows7d = viewerActivityRows.filter((row) => {
+    const at = safeDate(row?.created_at);
+    return at && at >= cutoff7d;
+  });
+  const viewerRows24h = viewerActivityRows.filter((row) => {
+    const at = safeDate(row?.created_at);
+    return at && at >= cutoff24h;
+  });
+  const guestRows24h = viewerRows24h.filter((row) => String(row?.viewer_type || "") === "guest");
+  const clientViewerRows24h = viewerRows24h.filter((row) => String(row?.viewer_type || "") === "client");
+  const guestRows7d = viewerRows7d.filter((row) => String(row?.viewer_type || "") === "guest");
+  const clientViewerRows7d = viewerRows7d.filter((row) => String(row?.viewer_type || "") === "client");
+  const guestWatch24h = guestRows24h.filter((row) => String(row?.event_type || "") === "watch_session");
+  const clientWatch24h = clientViewerRows24h.filter((row) => String(row?.event_type || "") === "watch_session");
+  const guestWatchSeconds24h = guestWatch24h.reduce((sum, row) => {
+    const data = row?.event_data && typeof row.event_data === "object" ? row.event_data : {};
+    return sum + Math.max(0, Number(data?.watch_seconds || 0));
+  }, 0);
+  const clientTrackedWatchSeconds24h = clientWatch24h.reduce((sum, row) => {
+    const data = row?.event_data && typeof row.event_data === "object" ? row.event_data : {};
+    return sum + Math.max(0, Number(data?.watch_seconds || 0));
+  }, 0);
+  const viewerChannelAgg = new Map();
+  for (const row of viewerRows7d) {
+    const type = String(row?.event_type || "");
+    if (!["channel_select", "presence_ping", "playback_attempt", "watch_session"].includes(type)) continue;
+    const data = row?.event_data && typeof row.event_data === "object" ? row.event_data : {};
+    const channelId = String(data?.channel_id || "").trim();
+    if (!channelId) continue;
+    if (!viewerChannelAgg.has(channelId)) {
+      viewerChannelAgg.set(channelId, {
+        channel_id: channelId,
+        channel_name: String(data?.channel_name || channelId),
+        guest_viewers: new Set(),
+        client_viewers: new Set(),
+        events: 0,
+        watch_seconds: 0,
+      });
+    }
+    const item = viewerChannelAgg.get(channelId);
+    const viewerKey = String(row?.viewer_key || row?.user_id || "").trim();
+    if (String(row?.viewer_type || "") === "guest" && viewerKey) item.guest_viewers.add(viewerKey);
+    if (String(row?.viewer_type || "") === "client" && viewerKey) item.client_viewers.add(viewerKey);
+    item.events += 1;
+    item.watch_seconds += Math.max(0, Number(data?.watch_seconds || 0));
+    if (!item.channel_name || item.channel_name === channelId) item.channel_name = String(data?.channel_name || item.channel_name || channelId);
+  }
+  const topViewerChannels7d = [...viewerChannelAgg.values()]
+    .map((item) => ({
+      channel_id: item.channel_id,
+      channel_name: item.channel_name,
+      guest_viewers: item.guest_viewers.size,
+      client_viewers: item.client_viewers.size,
+      total_viewers: item.guest_viewers.size + item.client_viewers.size,
+      events: item.events,
+      watch_seconds: item.watch_seconds,
+    }))
+    .sort((a, b) => {
+      if (b.total_viewers !== a.total_viewers) return b.total_viewers - a.total_viewers;
+      return b.events - a.events;
+    })
+    .slice(0, 10);
+  const recentViewerEvents = viewerActivityRows
+    .slice()
+    .sort((a, b) => new Date(b?.created_at || 0).getTime() - new Date(a?.created_at || 0).getTime())
+    .slice(0, 20)
+    .map((row) => {
+      const data = row?.event_data && typeof row.event_data === "object" ? row.event_data : {};
+      return {
+        viewer_type: String(row?.viewer_type || "guest"),
+        viewer_key: String(row?.viewer_key || "").slice(0, 12),
+        event_type: String(row?.event_type || ""),
+        route: String(data?.route || ""),
+        channel_name: String(data?.channel_name || ""),
+        movie_title: String(data?.movie_title || ""),
+        watch_seconds: Math.max(0, Number(data?.watch_seconds || 0)),
+        created_at: row?.created_at || "",
+      };
+    });
 
   const devices24 = new Set();
   const devicesBefore24 = new Set();
@@ -320,13 +420,19 @@ export async function getDashboardReports() {
     };
   });
 
-  const visitorEventTypes = new Set(["presence_ping", "channel_select", "playback_attempt", "client_login"]);
+  const visitorEventTypes = new Set(["page_view", "presence_ping", "channel_select", "playback_attempt", "movie_playback_attempt", "client_login"]);
   const relevantEventVisitors = visitorTrendRows.filter((row) => visitorEventTypes.has(String(row?.event_type || "")));
   const relevantHistoryVisitors = visitorHistoryRows.map((row) => ({
     user_id: row?.user_id,
     created_at: row?.watched_at,
   }));
   const relevantVisitors = [...relevantEventVisitors, ...relevantHistoryVisitors];
+  const relevantUnifiedViewers = viewerActivityRows
+    .filter((row) => visitorEventTypes.has(String(row?.event_type || "")) || String(row?.event_type || "") === "watch_session")
+    .map((row) => ({
+      ...row,
+      user_id: String(row?.viewer_key || row?.user_id || "").trim(),
+    }));
 
   const fillUniqueUserBuckets = (buckets, keyFn, rows) => {
     const bucketUsers = new Map(buckets.map((b) => [b.key, new Set()]));
@@ -348,6 +454,38 @@ export async function getDashboardReports() {
   fillUniqueUserBuckets(monthBuckets, (at) => startOfDay(at), relevantVisitors.filter((r) => safeDate(r?.created_at) >= cutoff30d));
   fillUniqueUserBuckets(yearBuckets, (at) => startOfMonth(at), relevantVisitors.filter((r) => safeDate(r?.created_at) >= cutoff365d));
 
+  const buildViewerBuckets = (sourceRows, filterType = "") => {
+    const cloneBuckets = (buckets) => buckets.map((bucket) => ({ ...bucket, value: 0 }));
+    const fill = (buckets, keyFn, rows) => {
+      const bucketViewers = new Map(buckets.map((b) => [b.key, new Set()]));
+      for (const row of rows) {
+        if (filterType && String(row?.viewer_type || "") !== filterType) continue;
+        const at = safeDate(row?.created_at);
+        const viewerKey = String(row?.viewer_key || row?.user_id || "").trim();
+        if (!at || !viewerKey) continue;
+        const key = keyFn(at).toISOString();
+        if (!bucketViewers.has(key)) continue;
+        bucketViewers.get(key).add(viewerKey);
+      }
+      for (const bucket of buckets) {
+        bucket.value = bucketViewers.get(bucket.key)?.size || 0;
+      }
+      return buckets;
+    };
+    return {
+      day: fill(cloneBuckets(dayBuckets), (at) => startOfHour(at), sourceRows.filter((r) => safeDate(r?.created_at) >= cutoff24h)),
+      week: fill(cloneBuckets(weekBuckets), (at) => startOfDay(at), sourceRows.filter((r) => safeDate(r?.created_at) >= cutoff7d)),
+      month: fill(cloneBuckets(monthBuckets), (at) => startOfDay(at), sourceRows.filter((r) => safeDate(r?.created_at) >= cutoff30d)),
+      year: fill(cloneBuckets(yearBuckets), (at) => startOfMonth(at), sourceRows.filter((r) => safeDate(r?.created_at) >= cutoff365d)),
+    };
+  };
+
+  const unifiedVisitorTrend = viewerActivityRows.length
+    ? buildViewerBuckets(relevantUnifiedViewers)
+    : { day: dayBuckets, week: weekBuckets, month: monthBuckets, year: yearBuckets };
+  const guestVisitorTrend = buildViewerBuckets(relevantUnifiedViewers, "guest");
+  const clientViewerTrend = buildViewerBuckets(relevantUnifiedViewers, "client");
+
   const newDeviceCount24 = [...devices24].filter((key) => !devicesBefore24.has(key)).length;
   const returningViewers7d = [...sessionsByUser7d.values()].filter((count) => count >= 2).length;
 
@@ -366,6 +504,22 @@ export async function getDashboardReports() {
     total_playback_failures: Math.max(0, Number(totalPlaybackFailuresCount || 0)),
     total_watch_sessions: Math.max(0, Number(totalWatchSessionsCount || 0)),
     total_users: userRows.length,
+    total_guest_events: viewerActivityRows.filter((row) => String(row?.viewer_type || "") === "guest").length,
+    total_client_viewer_events: viewerActivityRows.filter((row) => String(row?.viewer_type || "") === "client").length,
+    guest_unique_24h: uniqueViewerCount(guestRows24h, "guest"),
+    client_unique_24h: uniqueViewerCount(clientViewerRows24h, "client"),
+    total_unique_viewers_24h: uniqueViewerCount(viewerRows24h),
+    guest_unique_7d: uniqueViewerCount(guestRows7d, "guest"),
+    client_unique_7d: uniqueViewerCount(clientViewerRows7d, "client"),
+    total_unique_viewers_7d: uniqueViewerCount(viewerRows7d),
+    guest_events_24h: guestRows24h.length,
+    client_viewer_events_24h: clientViewerRows24h.length,
+    guest_watch_seconds_24h: guestWatchSeconds24h,
+    client_tracked_watch_seconds_24h: clientTrackedWatchSeconds24h,
+    top_viewer_channels_7d: topViewerChannels7d,
+    recent_viewer_events: recentViewerEvents,
+    analytics_table_ready: viewerActivityRows.length > 0 || !viewerActivityResult?.error,
+    analytics_table_error: viewerActivityResult?.error?.message || "",
     sessions_24h: sessions24.length,
     sessions_7d: sessionEvents.length,
     active_users_24h: activeUsers24Set.size,
@@ -386,12 +540,9 @@ export async function getDashboardReports() {
     top_playback_failures_7d: topPlaybackFailures7d,
     login_methods_24h: Object.fromEntries([...loginMethod24.entries()].sort((a, b) => b[1] - a[1])),
     top_channels_7d: topChannels7d,
-    visitor_trend: {
-      day: dayBuckets,
-      week: weekBuckets,
-      month: monthBuckets,
-      year: yearBuckets,
-    },
+    visitor_trend: unifiedVisitorTrend,
+    guest_visitor_trend: guestVisitorTrend,
+    client_viewer_trend: clientViewerTrend,
     user_login_trend: {
       day: dayBuckets,
       week: weekBuckets,

@@ -20,6 +20,8 @@ const LAST_MOVIE_FILTER_KEY = "iptv:v1:last-movie-filter";
 const LAST_MOVIE_VIEW_KEY = "iptv:v1:last-movie-view";
 const DEVICE_KEY_STORAGE = "iptv:v1:device-key";
 const FORCE_TV_MODE_KEY = "iptv:v1:force-tv-mode";
+const COOKIE_CONSENT_KEY = "iptv:v1:cookie-consent";
+const COOKIE_LANGUAGE_KEY = "iptv:v1:cookie-language";
 const DEFAULT_MOVIES_PAGE_SIZE = 24;
 
 function normalizeChannelId(value) {
@@ -42,6 +44,33 @@ function readMoviePageFromUrl() {
     return Math.max(1, Number.isFinite(page) ? page : 1);
   } catch {
     return 1;
+  }
+}
+
+function normalizeCookieConsent(value) {
+  const v = String(value || "").trim().toLowerCase();
+  return v === "accepted" || v === "declined" ? v : "unknown";
+}
+
+function readStoredValue(key) {
+  if (typeof window === "undefined") return "";
+  try {
+    return String(window.localStorage.getItem(key) || window.sessionStorage.getItem(key) || "");
+  } catch {
+    return "";
+  }
+}
+
+function writeStoredValue(key, value) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    try {
+      window.sessionStorage.setItem(key, value);
+    } catch {
+      // ignore storage errors
+    }
   }
 }
 
@@ -120,6 +149,7 @@ export default function IptvHomeClient({
   initialClientState = {},
   currentClient = {},
   initialSelectedChannelId = "",
+  isGuest = false,
 }) {
   const hasInitialMovieBootstrap =
     (Array.isArray(initialMovies) && initialMovies.length > 0) ||
@@ -201,13 +231,14 @@ export default function IptvHomeClient({
   const [activeMovieSlug, setActiveMovieSlug] = useState(() => String(initialSelectedMovieSlug || "").trim().toLowerCase());
   const [movieListPage, setMovieListPage] = useState(() => Math.max(1, Number(initialMoviePage || 1)));
   const [cookieConsent, setCookieConsent] = useState(() => {
-    const v = String(initialClientState?.cookiePrefs?.consent || "").toLowerCase();
-    return v === "accepted" || v === "declined" ? v : "unknown";
+    const serverConsent = normalizeCookieConsent(initialClientState?.cookiePrefs?.consent);
+    return serverConsent;
   });
   const [cookieLanguage, setCookieLanguage] = useState(() => {
     const v = String(initialClientState?.cookiePrefs?.language || "").toLowerCase();
     return v === "en" ? "en" : "bn";
   });
+  const [cookiePrefsReady, setCookiePrefsReady] = useState(false);
   const [favorites, setFavorites] = usePersistentArray(
     "favorites",
     Array.isArray(initialClientState?.favorites)
@@ -220,7 +251,7 @@ export default function IptvHomeClient({
     Array.isArray(initialClientState?.recent)
       ? initialClientState.recent.map((id) => normalizeChannelId(id)).filter(Boolean)
       : [],
-    { persist: cookieConsent === "accepted" }
+    { persist: cookieConsent === "accepted", clearOnDisable: cookiePrefsReady }
   );
   const [isTvDevice, setIsTvDevice] = useState(false);
   const [forceTvMode, setForceTvMode] = useState(false);
@@ -272,6 +303,30 @@ export default function IptvHomeClient({
       screen: w > 0 && h > 0 ? `${w}x${h}` : "",
     };
   }, []);
+
+  useEffect(() => {
+    const storedConsent = normalizeCookieConsent(readStoredValue(COOKIE_CONSENT_KEY));
+    const serverConsent = normalizeCookieConsent(initialClientState?.cookiePrefs?.consent);
+    if (serverConsent === "unknown" && storedConsent !== "unknown") {
+      setCookieConsent(storedConsent);
+    }
+    const storedLanguage = String(readStoredValue(COOKIE_LANGUAGE_KEY)).trim().toLowerCase();
+    if (!initialClientState?.cookiePrefs?.language && storedLanguage === "en") {
+      setCookieLanguage("en");
+    }
+    setCookiePrefsReady(true);
+  }, [initialClientState?.cookiePrefs?.consent, initialClientState?.cookiePrefs?.language]);
+
+  useEffect(() => {
+    if (!cookiePrefsReady) return;
+    if (cookieConsent !== "accepted" && cookieConsent !== "declined") return;
+    writeStoredValue(COOKIE_CONSENT_KEY, cookieConsent);
+  }, [cookieConsent, cookiePrefsReady]);
+
+  useEffect(() => {
+    if (!cookiePrefsReady) return;
+    writeStoredValue(COOKIE_LANGUAGE_KEY, cookieLanguage);
+  }, [cookieLanguage, cookiePrefsReady]);
 
   useEffect(() => {
     const seededPage = Math.max(1, Number(initialMoviePage || readMoviePageFromUrl() || 1));
@@ -604,6 +659,14 @@ export default function IptvHomeClient({
       return;
     }
 
+    if ((path === "/" || path === "") && queryMode !== "movies") {
+      setHomeMode("tv");
+      setMovieViewMode("browse");
+      setActiveMovieSlug("");
+      setRouteStateReady(true);
+      return;
+    }
+
     try {
       const savedView = String(window.localStorage.getItem(LAST_MOVIE_VIEW_KEY) || "").trim().toLowerCase();
       const savedMode = String(window.localStorage.getItem(LAST_MODE_KEY) || "").trim().toLowerCase();
@@ -697,6 +760,24 @@ export default function IptvHomeClient({
       startedAt: Date.now(),
     };
 
+    if (isGuest) {
+      fetch("/api/visitor/activity", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          event_type: "watch_session",
+          event_data: {
+            route: "home_tv",
+            channel_id: session.channelId,
+            channel_name: session.channelName,
+            watch_seconds: elapsedSeconds,
+          },
+        }),
+        keepalive: true,
+      }).catch(() => {});
+      return;
+    }
+
     fetch("/api/client/history", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -707,9 +788,19 @@ export default function IptvHomeClient({
       }),
       keepalive: true,
     }).catch(() => {});
-  }, []);
+  }, [isGuest]);
 
   const trackActivity = (eventType, eventData) => {
+    fetch("/api/visitor/activity", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        event_type: eventType,
+        event_data: { ...(eventData || {}), ...deviceMeta },
+      }),
+    }).catch(() => {});
+
+    if (isGuest) return;
     fetch("/api/client/activity", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -719,6 +810,15 @@ export default function IptvHomeClient({
       }),
     }).catch(() => {});
   };
+
+  useEffect(() => {
+    if (!routeStateReady) return;
+    trackActivity("page_view", {
+      route: homeMode === "movies" ? "home_movies" : "home_tv",
+      path: typeof window !== "undefined" ? window.location.pathname : "",
+      movie_slug: String(activeMovieSlug || initialSelectedMovieSlug || ""),
+    });
+  }, [routeStateReady]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -835,22 +935,18 @@ export default function IptvHomeClient({
   }, [isTvMode]);
 
   useEffect(() => {
-    if (homeMode !== "tv") {
-      flushWatchHistory(1);
-      return;
-    }
-
     const sendPing = () => {
       trackActivity("presence_ping", {
         route: homeMode === "movies" ? "home_movies" : "home_tv",
         channel_id: String(selectedChannel?.id || ""),
         channel_name: String(selectedChannel?.name || ""),
+        movie_slug: String(activeMovieSlug || initialSelectedMovieSlug || ""),
       });
     };
     sendPing();
     const timer = setInterval(sendPing, 30000);
     return () => clearInterval(timer);
-  }, [selectedChannel?.id, selectedChannel?.name, homeMode, flushWatchHistory]);
+  }, [selectedChannel?.id, selectedChannel?.name, homeMode, activeMovieSlug, initialSelectedMovieSlug]);
 
   useEffect(() => {
     const nextChannelId = String(selectedChannel?.id || "").trim();
@@ -1529,6 +1625,7 @@ export default function IptvHomeClient({
       },
     };
     const timer = setTimeout(() => {
+      if (isGuest) return;
       fetch("/api/client/state", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -1536,7 +1633,7 @@ export default function IptvHomeClient({
       }).catch(() => {});
     }, 550);
     return () => clearTimeout(timer);
-  }, [favorites, recent, selectedChannel?.id, isDark, hasRestoredChannel, cookieConsent, cookieLanguage]);
+  }, [favorites, recent, selectedChannel?.id, isDark, hasRestoredChannel, cookieConsent, cookieLanguage, isGuest]);
 
   const recentSet = useMemo(() => new Set(recent), [recent]);
   const liveCount = useMemo(() => allChannels.filter((item) => item.isLive).length, [allChannels]);
@@ -1855,9 +1952,10 @@ export default function IptvHomeClient({
           setShowRightPanel(false);
         }}
         debugStats={debugStats}
-        clientLabel={currentClient?.fullName || currentClient?.email || "Client"}
+        clientLabel={currentClient?.fullName || currentClient?.email || (isGuest ? "Guest" : "Client")}
         clientProfile={currentClient}
         language={cookieLanguage}
+        isGuest={isGuest}
       />
       <section className={styles.contentWrap}>
         <div className={`${styles.drawerLeft} ${showLeftSidebar ? styles.drawerLeftOpen : ""}`}>
@@ -2107,6 +2205,7 @@ export default function IptvHomeClient({
                 }}
                 onMoviesSnapshotChange={setMovieSnapshot}
                 onTrackActivity={trackActivity}
+                isGuest={isGuest}
               />
             )
           )}
@@ -2131,15 +2230,19 @@ export default function IptvHomeClient({
         ) : null}
       </section>
       <CookieConsentBanner
-        consent={cookieConsent}
+        consent={cookiePrefsReady ? cookieConsent : "accepted"}
         language={cookieLanguage}
         onToggleLanguage={() => setCookieLanguage((prev) => (prev === "en" ? "bn" : "en"))}
         onAllow={() => {
+          writeStoredValue(COOKIE_CONSENT_KEY, "accepted");
           setCookieConsent("accepted");
+          setCookiePrefsReady(true);
           trackActivity("cookie_consent", { consent: "accepted" });
         }}
         onDecline={() => {
+          writeStoredValue(COOKIE_CONSENT_KEY, "declined");
           setCookieConsent("declined");
+          setCookiePrefsReady(true);
           trackActivity("cookie_consent", { consent: "declined" });
         }}
       />

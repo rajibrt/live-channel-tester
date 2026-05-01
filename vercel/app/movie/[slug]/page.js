@@ -1,6 +1,7 @@
 import IptvHomeClient from "../../../components/iptv/IptvHomeClient";
 import PendingApprovalCard from "../../../components/client/PendingApprovalCard";
-import { requireClient } from "../../../lib/clientAuth";
+import { redirect } from "next/navigation";
+import { getCurrentClient } from "../../../lib/clientAuth";
 import { loadClientAccessSettingsCached } from "../../../lib/clientAccessSettings";
 import { getClientHomeData } from "../../../lib/clientHomeData";
 import { getMovieBySlugForUser, getMovieCatalogBootstrapForUser, getPublishedMovieSeoBySlug } from "../../../lib/moviesData";
@@ -67,12 +68,44 @@ export default async function MovieWatchPage({ params }) {
   const resolved = await params;
   const movieSlug = String(resolved?.slug || "").trim().toLowerCase();
 
-  const current = await requireClient();
+  const current = await getCurrentClient();
+  const accessSettings = await loadClientAccessSettingsCached().catch(() => null);
+  const publicGuestAccessEnabled = accessSettings?.public_guest_access_enabled === true;
+  if (!current && publicGuestAccessEnabled) {
+    const [boot, selectedMovie, movieBootstrap] = await Promise.all([
+      getClientHomeData(""),
+      getMovieBySlugForUser("", movieSlug),
+      getMovieCatalogBootstrapForUser("", { includePage: false }),
+    ]);
+
+    return (
+      <IptvHomeClient
+        initialChannels={boot.channels}
+        initialCategories={boot.categories}
+        initialMovies={selectedMovie ? [selectedMovie] : []}
+        initialMovieCategories={movieBootstrap.categories}
+        initialMovieGenres={movieBootstrap.genres}
+        initialMovieLanguages={movieBootstrap.languages}
+        initialMovieYears={movieBootstrap.years}
+        initialMovieStats={movieBootstrap.stats}
+        initialContinueWatching={movieBootstrap.continueWatching}
+        moviesViewVariant="watch"
+        initialHomeMode="movies"
+        initialSelectedMovieSlug={movieSlug}
+        initialClientState={boot.initialClientState}
+        currentClient={{ fullName: "Guest", email: "", mobileNumber: "", avatarUrl: "", isGuest: true }}
+        initialSelectedChannelId=""
+        isGuest
+      />
+    );
+  }
+  if (!current) {
+    redirect("/client-login");
+  }
   const approvalStatus = String(current?.client?.approval_status || "approved").toLowerCase();
   const isApproved = approvalStatus === "approved";
   if (!isApproved) {
     const isRejected = approvalStatus === "rejected";
-    const accessSettings = await loadClientAccessSettingsCached().catch(() => null);
     return (
       <main
         style={{

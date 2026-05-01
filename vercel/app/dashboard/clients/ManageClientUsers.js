@@ -643,52 +643,46 @@ export default function ManageClientUsers({ initialItems = [], initialActiveView
   }
 
   return (
-    <section className={styles.form}>
-      <div className={styles.stats}>
+    <section className={`${styles.form} ${styles.clientUsersPage}`}>
+      <div className={`${styles.stats} ${styles.clientStatsGrid}`}>
         <button
           type="button"
-          className={styles.statCardButton}
+          className={`${styles.statCard} ${styles.statCardButton}`}
           onClick={() => applyQuickFilter("watching")}
           aria-pressed={activeViewerFilter === "watching"}
         >
-          <article className={styles.statCard}>
-            <p>Watching Now</p>
-            <strong>{Array.isArray(initialActiveViewers) ? initialActiveViewers.length : 0}</strong>
-            <small className={styles.metaMuted}>
-              {activeViewerFilter === "watching" ? "Showing active viewers only" : "Click to filter active sessions"}
-            </small>
-          </article>
+          <p>Watching Now</p>
+          <strong>{Array.isArray(initialActiveViewers) ? initialActiveViewers.length : 0}</strong>
+          <small className={styles.metaMuted}>
+            {activeViewerFilter === "watching" ? "Showing active viewers only" : "Click to filter active sessions"}
+          </small>
         </button>
-        <article className={styles.statCard}>
-          <button type="button" className={styles.statCardButton} onClick={() => applyQuickFilter("all")}>
-            <p className={styles.statLabelWithIcon}>
-              <Users size={14} />
-              <span>Total Clients</span>
-            </p>
-            <strong>{items.length}</strong>
-            <small className={styles.metaMuted}>Click to reset table filters</small>
-          </button>
-        </article>
+        <button type="button" className={`${styles.statCard} ${styles.statCardButton}`} onClick={() => applyQuickFilter("all")}>
+          <p className={styles.statLabelWithIcon}>
+            <Users size={14} />
+            <span>Total Clients</span>
+          </p>
+          <strong>{items.length}</strong>
+          <small className={styles.metaMuted}>Click to reset table filters</small>
+        </button>
         <button
           type="button"
-          className={styles.statCardButton}
+          className={`${styles.statCard} ${styles.statCardButton}`}
           onClick={() => applyQuickFilter("active")}
           aria-pressed={statusFilter === "active"}
         >
-          <article className={styles.statCard}>
-            <p className={styles.statLabelWithIcon}>
-              <UserCheck size={14} />
-              <span>Active Clients</span>
-            </p>
-            <strong>{activeCount}</strong>
-            <small className={styles.metaMuted}>
-              {statusFilter === "active" ? "Showing active clients only" : "Click to filter active clients"}
-            </small>
-          </article>
+          <p className={styles.statLabelWithIcon}>
+            <UserCheck size={14} />
+            <span>Active Clients</span>
+          </p>
+          <strong>{activeCount}</strong>
+          <small className={styles.metaMuted}>
+            {statusFilter === "active" ? "Showing active clients only" : "Click to filter active clients"}
+          </small>
         </button>
         <button
           type="button"
-          className={styles.statCardButton}
+          className={`${styles.statCard} ${styles.statCardButton}`}
           onClick={() => applyQuickFilter("pending")}
           aria-pressed={approvalFilter === "pending"}
           title="Filter pending approvals"
@@ -704,37 +698,33 @@ export default function ManageClientUsers({ initialItems = [], initialActiveView
         </button>
         <button
           type="button"
-          className={styles.statCardButton}
+          className={`${styles.statCard} ${styles.statCardButton}`}
           onClick={() => applyQuickFilter("no_activity")}
           aria-pressed={activityFilter === "no_activity"}
         >
-          <article className={styles.statCard}>
-            <p className={styles.statLabelWithIcon}>
-              <Activity size={14} />
-              <span>No Activity</span>
-            </p>
-            <strong>{noActivityCount}</strong>
-            <small className={styles.metaMuted}>
-              {activityFilter === "no_activity" ? "Showing no-activity users only" : "Click to filter no activity"}
-            </small>
-          </article>
+          <p className={styles.statLabelWithIcon}>
+            <Activity size={14} />
+            <span>No Activity</span>
+          </p>
+          <strong>{noActivityCount}</strong>
+          <small className={styles.metaMuted}>
+            {activityFilter === "no_activity" ? "Showing no-activity users only" : "Click to filter no activity"}
+          </small>
         </button>
         <button
           type="button"
-          className={styles.statCardButton}
+          className={`${styles.statCard} ${styles.statCardButton}`}
           onClick={() => applyQuickFilter("push_enabled")}
           aria-pressed={pushFilter === "enabled"}
         >
-          <article className={styles.statCard}>
-            <p className={styles.statLabelWithIcon}>
-              <Bell size={14} />
-              <span>Push Enabled</span>
-            </p>
-            <strong>{pushEnabledCount}</strong>
-            <small className={styles.metaMuted}>
-              {pushFilter === "enabled" ? "Showing push-enabled clients only" : "Click to filter push-enabled clients"}
-            </small>
-          </article>
+          <p className={styles.statLabelWithIcon}>
+            <Bell size={14} />
+            <span>Push Enabled</span>
+          </p>
+          <strong>{pushEnabledCount}</strong>
+          <small className={styles.metaMuted}>
+            {pushFilter === "enabled" ? "Showing push-enabled clients only" : "Click to filter push-enabled clients"}
+          </small>
         </button>
       </div>
 

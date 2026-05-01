@@ -39,7 +39,7 @@ export default function ActiveViewersPanel({ title = "Watching Now", viewers = [
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription>
-            Logged-in clients active on website in the recent window.
+            Guest visitors and logged-in clients active on the website in the recent window.
           </AlertDialogDescription>
         </AlertDialogHeader>
 
@@ -58,7 +58,7 @@ export default function ActiveViewersPanel({ title = "Watching Now", viewers = [
               <tbody>
                 {viewers.map((row) => (
                   <tr key={row.user_id}>
-                    <td>{row.full_name || "Client"}</td>
+                    <td>{row.full_name || (row.viewer_type === "guest" ? "Guest visitor" : "Client")}</td>
                     <td>{row.email || row.mobile_number || "-"}</td>
                     <td>{row.current_channel_name || "-"}</td>
                     <td>{formatDuration(row.active_for_seconds)}</td>

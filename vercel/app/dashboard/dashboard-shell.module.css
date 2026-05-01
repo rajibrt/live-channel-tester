@@ -7,6 +7,7 @@
   color: var(--foreground);
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr);
+  overflow-x: clip;
 }
 
 .sidebar {
@@ -137,6 +138,8 @@
 
 .main {
   min-width: 0;
+  max-width: 100%;
+  overflow-x: clip;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
 }
@@ -370,9 +373,16 @@
 
 .content {
   min-width: 0;
+  max-width: 100%;
+  overflow-x: clip;
   padding: 16px 18px 24px;
   display: grid;
   gap: 14px;
+}
+
+.content > * {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .overlay {

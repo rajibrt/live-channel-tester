@@ -4,10 +4,13 @@ import { useEffect, useState } from "react";
 import { CheckCircle2, Save, ShieldCheck, Smartphone } from "lucide-react";
 import styles from "../page.module.css";
 import { Button } from "../../../components/ui/button";
+import { Switch } from "../../../components/ui/switch";
 import { useI18n } from "../../../components/i18n/LanguageProvider";
 
 const DEFAULT_FORM = {
   facebook_first_login_requires_admin_approval: true,
+  self_registration_auto_approve: false,
+  public_guest_access_enabled: false,
 };
 
 export default function ManageClientAccessSettings() {
@@ -52,6 +55,8 @@ export default function ManageClientAccessSettings() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           facebook_first_login_requires_admin_approval: !!form.facebook_first_login_requires_admin_approval,
+          self_registration_auto_approve: !!form.self_registration_auto_approve,
+          public_guest_access_enabled: !!form.public_guest_access_enabled,
         }),
       });
       const payload = await res.json().catch(() => ({}));
@@ -66,6 +71,8 @@ export default function ManageClientAccessSettings() {
   }
 
   const approvalEnabled = !!form.facebook_first_login_requires_admin_approval;
+  const selfRegistrationAutoApprove = !!form.self_registration_auto_approve;
+  const publicGuestAccessEnabled = !!form.public_guest_access_enabled;
 
   return (
     <section className={`${styles.form} ${styles.settingsLayout}`}>
@@ -84,6 +91,16 @@ export default function ManageClientAccessSettings() {
           <p className={styles.statLabelWithIcon}><CheckCircle2 size={14} /><span>Login Result</span></p>
           <strong>{approvalEnabled ? "Pending Until Review" : "Auto Login Continues"}</strong>
           <span className={styles.metaMuted}>{approvalEnabled ? "Playback stays locked" : "User enters the site immediately"}</span>
+        </article>
+        <article className={styles.statCard}>
+          <p className={styles.statLabelWithIcon}><ShieldCheck size={14} /><span>Self Signup</span></p>
+          <strong>{selfRegistrationAutoApprove ? "Auto Approved" : "Manual Review"}</strong>
+          <span className={styles.metaMuted}>{selfRegistrationAutoApprove ? "New form signups are approved instantly" : "New form signups stay pending"}</span>
+        </article>
+        <article className={styles.statCard}>
+          <p className={styles.statLabelWithIcon}><CheckCircle2 size={14} /><span>Visitor Access</span></p>
+          <strong>{publicGuestAccessEnabled ? "Public Browse" : "Login Required"}</strong>
+          <span className={styles.metaMuted}>{publicGuestAccessEnabled ? "Visitors can watch without login" : "Viewer pages stay protected"}</span>
         </article>
       </div>
 
@@ -109,13 +126,12 @@ export default function ManageClientAccessSettings() {
 
         <div className={styles.formGrid}>
           <label className={`${styles.checkRow} ${styles.settingsToggleRow} ${styles.full}`}>
-            <input
-              type="checkbox"
+            <Switch
               checked={approvalEnabled}
-              onChange={(e) =>
+              onCheckedChange={(checked) =>
                 setForm((prev) => ({
                   ...prev,
-                  facebook_first_login_requires_admin_approval: e.target.checked,
+                  facebook_first_login_requires_admin_approval: checked,
                 }))
               }
             />
@@ -127,6 +143,69 @@ export default function ManageClientAccessSettings() {
             <p className={styles.settingsHintText}>
               When this option is on, Facebook users submit their mobile number and stay pending until an admin approves them.
               When this option is off, the same submit action marks the account approved instantly and the user continues into the site without extra review.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section className={styles.settingsPanel}>
+        <header className={styles.settingsPanelHead}>
+          <h3 className={styles.settingsPanelTitle}><ShieldCheck size={17} /> Client Registration</h3>
+          <p className={styles.settingsPanelHint}>
+            Control whether normal email/mobile signups need manual approval from the clients page.
+          </p>
+        </header>
+
+        <div className={styles.formGrid}>
+          <label className={`${styles.checkRow} ${styles.settingsToggleRow} ${styles.full}`}>
+            <Switch
+              checked={selfRegistrationAutoApprove}
+              onCheckedChange={(checked) =>
+                setForm((prev) => ({
+                  ...prev,
+                  self_registration_auto_approve: checked,
+                }))
+              }
+            />
+            <span>Auto approve new client registrations from the signup form</span>
+          </label>
+
+          <div className={`${styles.settingsHintTile} ${styles.full}`}>
+            <p className={styles.settingsHintTitle}>How it works</p>
+            <p className={styles.settingsHintText}>
+              When this option is on, new client accounts created from the public signup form are saved as approved immediately.
+              When this option is off, they stay pending until an admin approves them manually.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section className={styles.settingsPanel}>
+        <header className={styles.settingsPanelHead}>
+          <h3 className={styles.settingsPanelTitle}><CheckCircle2 size={17} /> Visitor Access</h3>
+          <p className={styles.settingsPanelHint}>
+            Control whether visitors can browse and watch the client site without logging in.
+          </p>
+        </header>
+
+        <div className={styles.formGrid}>
+          <label className={`${styles.checkRow} ${styles.settingsToggleRow} ${styles.full}`}>
+            <Switch
+              checked={publicGuestAccessEnabled}
+              onCheckedChange={(checked) =>
+                setForm((prev) => ({
+                  ...prev,
+                  public_guest_access_enabled: checked,
+                }))
+              }
+            />
+            <span>Allow visitors to watch channels and movies without client login</span>
+          </label>
+
+          <div className={`${styles.settingsHintTile} ${styles.full}`}>
+            <p className={styles.settingsHintTitle}>Guest limitations</p>
+            <p className={styles.settingsHintText}>
+              Guests can browse and play public content, but profile, notifications, favorites, watch history, and movie progress remain login-only.
             </p>
           </div>
         </div>

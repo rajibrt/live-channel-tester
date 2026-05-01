@@ -264,6 +264,7 @@ export default function MoviePlayer({
   onProgressSaved,
   onMarkedComplete,
   onTrackActivity,
+  isGuest = false,
 }) {
   const playerWrapRef = useRef(null)
   const videoRef = useRef(null)
@@ -369,6 +370,7 @@ export default function MoviePlayer({
     async (source) => {
       const id = String(movie?.id || '')
       if (!id) return
+      if (isGuest) return
       const video = videoRef.current
       if (!video) return
 
@@ -415,6 +417,7 @@ export default function MoviePlayer({
       }
     },
     [
+      isGuest,
       movie?.id,
       movie?.runtimeSeconds,
       movie?.progress?.durationSeconds,
@@ -425,6 +428,7 @@ export default function MoviePlayer({
   const postComplete = useCallback(async () => {
     const id = String(movie?.id || '')
     if (!id) return
+    if (isGuest) return
     try {
       const res = await fetch(
         `/api/client/movies/${encodeURIComponent(id)}/complete`,

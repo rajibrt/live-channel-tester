@@ -243,6 +243,7 @@ export default function MoviesView({
   onBackToMovieList,
   onMoviesSnapshotChange,
   onTrackActivity,
+  isGuest = false,
 }) {
   const [movies, setMovies] = useState(() => (Array.isArray(initialMovies) ? initialMovies : []));
   const [continueItems, setContinueItems] = useState(() =>
@@ -2265,6 +2266,7 @@ export default function MoviesView({
   const handleToggleFavorite = async (movie) => {
     const id = String(movie?.id || "");
     if (!id) return;
+    if (isGuest) return;
     const nextFavorite = !Boolean(movie?.isFavorite);
 
     setMovies((prev) => prev.map((row) => (String(row?.id || "") === id ? { ...row, isFavorite: nextFavorite } : row)));
@@ -2303,6 +2305,7 @@ export default function MoviesView({
   const handleMarkComplete = async (movie) => {
     const id = String(movie?.id || "");
     if (!id) return;
+    if (isGuest) return;
     try {
       const res = await fetch(`/api/client/movies/${encodeURIComponent(id)}/complete`, {
         method: "POST",
@@ -2450,6 +2453,7 @@ export default function MoviesView({
               onProgressSaved={upsertMovieProgress}
               onMarkedComplete={handleMarkedComplete}
               onTrackActivity={onTrackActivity}
+              isGuest={isGuest}
             />
           </div>
           <aside className={`${styles.watchInfoCol} ${isTvMode ? styles.watchInfoColTv : ""}`}>

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 
 export function usePersistentArray(key, initial = [], options = {}) {
   const persist = options?.persist !== false;
+  const clearOnDisable = options?.clearOnDisable !== false;
   const storageKey = useMemo(() => `iptv:v1:${key}`, [key]);
   const [value, setValue] = useState(initial);
 
@@ -21,6 +22,7 @@ export function usePersistentArray(key, initial = [], options = {}) {
 
   useEffect(() => {
     if (!persist) {
+      if (!clearOnDisable) return;
       try {
         window.localStorage.removeItem(storageKey);
       } catch {

@@ -5,6 +5,7 @@ import { LanguageProvider } from "../components/i18n/LanguageProvider";
 import PublicSmoothScroll from "../components/site/PublicSmoothScroll";
 import SiteChrome from "../components/site/SiteChrome";
 import { getCurrentClient } from "../lib/clientAuth";
+import { loadClientAccessSettingsCached } from "../lib/clientAccessSettings";
 import { getHomeIptvData } from "../components/iptv/homeData";
 import { buildWatchPath } from "../lib/channelSlug";
 import { DEFAULT_LOCALE, SUPPORTED_LOCALES } from "../lib/i18n/dictionaries";
@@ -44,10 +45,13 @@ export default async function RootLayout({ children }) {
   const cookieLocale = String(cookieStore.get(PUBLIC_LOCALE_COOKIE)?.value || cookieStore.get("lang")?.value || "").trim().toLowerCase();
   const initialLocale = SUPPORTED_LOCALES.includes(cookieLocale) ? cookieLocale : DEFAULT_LOCALE;
   const currentClient = await getCurrentClient().catch(() => null);
+  const accessSettings = await loadClientAccessSettingsCached().catch(() => null);
   const approvalStatus = String(currentClient?.client?.approval_status || "").trim().toLowerCase();
   const hasApprovedClientSession = !!currentClient && approvalStatus === "approved";
+  const hasPublicGuestAccess = !currentClient && accessSettings?.public_guest_access_enabled === true;
+  const hasViewerAccess = hasApprovedClientSession || hasPublicGuestAccess;
   let viewerEntryHref = "/client-login";
-  if (hasApprovedClientSession) {
+  if (hasViewerAccess) {
     const homeData = await getHomeIptvData().catch(() => null);
     const firstChannel = Array.isArray(homeData?.channels) ? homeData.channels[0] : null;
     viewerEntryHref = firstChannel ? buildWatchPath(firstChannel) : "/client-login";
@@ -102,18 +106,13 @@ export default async function RootLayout({ children }) {
     <html lang={initialLocale} suppressHydrationWarning>
       <head>
         <meta name="google-adsense-account" content={ADSENSE_CLIENT} />
-        <script
-          async
-          src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_CLIENT}`}
-          crossOrigin="anonymous"
-        />
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
         <script dangerouslySetInnerHTML={{ __html: pwaInstallBridgeScript }} />
       </head>
       <body>
         <LanguageProvider initialLocale={initialLocale}>
-          <PublicSmoothScroll hasClientSession={hasApprovedClientSession} />
-          <SiteChrome hasClientSession={hasApprovedClientSession} viewerEntryHref={viewerEntryHref}>
+          <PublicSmoothScroll hasClientSession={hasViewerAccess} />
+          <SiteChrome hasClientSession={hasViewerAccess} viewerEntryHref={viewerEntryHref}>
             {children}
           </SiteChrome>
         </LanguageProvider>
@@ -124,6 +123,13 @@ export default async function RootLayout({ children }) {
             window.sc_security = "596c1a94";
           `}
         </Script>
+        <Script
+          id="adsense-loader"
+          strategy="afterInteractive"
+          async
+          crossOrigin="anonymous"
+          src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_CLIENT}`}
+        />
         <Script
           id="statcounter-loader"
           src="https://www.statcounter.com/counter/counter.js"
