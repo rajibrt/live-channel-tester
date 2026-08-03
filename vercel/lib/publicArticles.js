@@ -3,6 +3,7 @@ import { resolveObjectUrl, resolvePublicObjectUrl } from "./objectStorage";
 import { getSupabaseAdmin } from "./supabaseAdmin";
 import { toAbsoluteUrl } from "./siteUrl";
 import { getEditorialOverride } from "./editorialOverrides";
+import { STATIC_EDITORIAL_ARTICLES } from "./staticEditorialArticles";
 
 const TABLE = "admin_announcements";
 
@@ -171,8 +172,11 @@ async function loadPublishedAnnouncementArticles(limit = 24) {
 }
 
 export const getPublicArticles = cache(async () => {
-  const dbArticles = await loadPublishedAnnouncementArticles(32);
-  const merged = [...dbArticles].sort((a, b) => {
+  const [dbArticles, staticArticles] = await Promise.all([
+    loadPublishedAnnouncementArticles(32),
+    Promise.all(STATIC_EDITORIAL_ARTICLES.map(normalizeArticle)),
+  ]);
+  const merged = [...staticArticles, ...dbArticles].sort((a, b) => {
     return new Date(b.updatedAt || b.publishedAt || 0).getTime() - new Date(a.updatedAt || a.publishedAt || 0).getTime();
   });
   return merged;
