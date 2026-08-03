@@ -1,8 +1,7 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import { getLocaleFromRequest } from "../../../lib/i18n/server";
 import { getPublicArticleBySlug, getPublicArticles } from "../../../lib/publicArticles";
-import { localizeArticle, localizeArticles } from "../../../lib/articleLocalization";
 import styles from "../../../components/site/public-pages.module.css";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +14,9 @@ const COPY = {
     readingTime: "min read",
     related: "More from WEBTVBD",
     readArticle: "Read article",
+    byline: "By WEBTVBD Editorial Desk",
+    reviewed: "Read our editorial standards",
+    correction: "Report a correction",
   },
   bn: {
     eyebrow: "WEBTVBD আর্টিকেল",
@@ -23,6 +25,9 @@ const COPY = {
     readingTime: "মিনিট পড়া",
     related: "WEBTVBD থেকে আরও পড়ুন",
     readArticle: "আর্টিকেল পড়ুন",
+    byline: "WEBTVBD সম্পাদকীয় ডেস্ক",
+    reviewed: "আমাদের সম্পাদনা নীতিমালা পড়ুন",
+    correction: "সংশোধনের অনুরোধ করুন",
   },
 };
 
@@ -92,14 +97,28 @@ export async function generateMetadata({ params }) {
 
 export default async function ArticleDetailPage({ params }) {
   const resolved = await params;
-  const locale = await getLocaleFromRequest();
+  const [locale, article, allArticles] = await Promise.all([
+    getLocaleFromRequest(),
+    getPublicArticleBySlug(resolved?.article),
+    getPublicArticles(),
+  ]);
   const copy = COPY[locale] || COPY.en;
-  const article = await localizeArticle(await getPublicArticleBySlug(resolved?.article), locale);
   if (!article) notFound();
 
-  const allArticles = await localizeArticles(await getPublicArticles(), locale);
   const related = allArticles.filter((item) => item.slug !== article.slug).slice(0, 3);
-  const jsonLd = {
+  let requestedSlug = String(resolved?.article || "");
+  try {
+    requestedSlug = decodeURIComponent(requestedSlug);
+  } catch {
+    // Keep the original route value when it is already decoded or malformed.
+  }
+  requestedSlug = requestedSlug.normalize("NFKC").toLowerCase();
+  const canonicalSlug = String(article.slug || "").normalize("NFKC").toLowerCase();
+  if (requestedSlug !== canonicalSlug) {
+    permanentRedirect(article.path);
+  }
+
+  const articleJsonLd = {
     "@context": "https://schema.org",
     "@type": "Article",
     headline: article.title,
@@ -110,13 +129,28 @@ export default async function ArticleDetailPage({ params }) {
     publisher: {
       "@type": "Organization",
       name: "WEBTVBD",
+      url: article.canonicalUrl.replace(/\/articles\/.+$/, ""),
     },
+    author: {
+      "@type": "Organization",
+      name: "WEBTVBD Editorial Desk",
+      url: `${article.canonicalUrl.replace(/\/articles\/.+$/, "")}/editorial-team`,
+    },
+  };
+  const breadcrumbJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: article.canonicalUrl.replace(/\/articles\/.+$/, "") },
+      { "@type": "ListItem", position: 2, name: "Articles", item: `${article.canonicalUrl.replace(/\/articles\/.+$/, "")}/articles` },
+      { "@type": "ListItem", position: 3, name: article.title, item: article.canonicalUrl },
+    ],
   };
 
   return (
     <main className={styles.shell}>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
-      <article className={styles.articleDetailShell}>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify([articleJsonLd, breadcrumbJsonLd]) }} />
+      <article className={styles.articleDetailShell} lang={article.language}>
         <Link href="/articles" className={styles.secondaryLink}>{copy.back}</Link>
         <div className={styles.articleDetailContentGrid}>
           <div className={styles.articleMainColumn}>
@@ -126,8 +160,14 @@ export default async function ArticleDetailPage({ params }) {
               <p className={styles.articleMeta}>
                 <span>{copy.updated}: {formatDate(article.updatedAt || article.publishedAt, locale)}</span>
                 <span>{article.readingMinutes} {copy.readingTime}</span>
+                <span><Link href="/editorial-team">{copy.byline}</Link></span>
               </p>
               <p className={styles.intro}>{article.description}</p>
+              <p className={styles.articleReviewNote}>
+                <Link href="/editorial-policy">{copy.reviewed}</Link>
+                <span aria-hidden="true"> · </span>
+                <Link href="/contact">{copy.correction}</Link>
+              </p>
             </header>
 
             {article.featuredImageUrl ? (

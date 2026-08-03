@@ -25,10 +25,10 @@ export function getDefaultSiteSeoSettings() {
   const baseUrl = getBaseUrl();
   return {
     site_name: "WEBTVBD",
-    home_title: "WEBTVBD || TV Beyond Borders",
-    home_description: "WEBTVBD live streaming platform for channels, categories, and on-demand viewer access.",
-    og_title: "WEBTVBD || TV Beyond Borders",
-    og_description: "Watch live channels, movies, and viewer content on WEBTVBD.",
+    home_title: "WEBTVBD | Television, Streaming and Digital Viewing Guides",
+    home_description: "Research-led guides and explainers about television, streaming technology, devices, and digital viewing in Bangladesh.",
+    og_title: "WEBTVBD | TV Beyond Borders",
+    og_description: "Practical guides, broadcasting context, and responsible digital viewing resources for Bangladesh.",
     og_image_url: `${baseUrl}/android-chrome-512x512.png`,
     og_image_alt: "WEBTVBD social preview",
     og_image_path: "",
@@ -39,15 +39,19 @@ export function getDefaultSiteSeoSettings() {
 export function normalizeSiteSeoSettings(valueJson) {
   const raw = valueJson && typeof valueJson === "object" ? valueJson : {};
   const defaults = getDefaultSiteSeoSettings();
-  const homeTitle = toCleanString(raw.home_title || defaults.home_title, 160) || defaults.home_title;
-  const homeDescription = toMultilineString(raw.home_description || defaults.home_description, 320) || defaults.home_description;
+  const legacyTitle = "WEBTVBD || TV Beyond Borders";
+  const legacyDescription = "WEBTVBD live streaming platform for channels, categories, and on-demand viewer access.";
+  const savedHomeTitle = toCleanString(raw.home_title, 160);
+  const savedHomeDescription = toMultilineString(raw.home_description, 320);
+  const homeTitle = !savedHomeTitle || savedHomeTitle === legacyTitle ? defaults.home_title : savedHomeTitle;
+  const homeDescription = !savedHomeDescription || savedHomeDescription === legacyDescription ? defaults.home_description : savedHomeDescription;
 
   return {
     site_name: toCleanString(raw.site_name || defaults.site_name, 120) || defaults.site_name,
     home_title: homeTitle,
     home_description: homeDescription,
-    og_title: toCleanString(raw.og_title || homeTitle, 160) || homeTitle,
-    og_description: toMultilineString(raw.og_description || homeDescription, 320) || homeDescription,
+    og_title: toCleanString(!raw.og_title || raw.og_title === legacyTitle ? defaults.og_title : raw.og_title, 160) || homeTitle,
+    og_description: toMultilineString(!raw.og_description || raw.og_description === legacyDescription ? defaults.og_description : raw.og_description, 320) || homeDescription,
     og_image_url: toOgImageUrl(raw.og_image_url, defaults.og_image_url),
     og_image_alt: toCleanString(raw.og_image_alt || defaults.og_image_alt, 160) || defaults.og_image_alt,
     og_image_path: toCleanString(raw.og_image_path || defaults.og_image_path, 320),

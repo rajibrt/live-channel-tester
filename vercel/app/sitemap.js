@@ -1,58 +1,86 @@
 import { getPublicArticles } from "../lib/publicArticles";
 import { getBaseUrl } from "../lib/siteUrl";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function sitemap() {
   const baseUrl = getBaseUrl();
   const publicArticles = await getPublicArticles().catch(() => []);
+  const staticLastModified = new Date("2026-08-03T00:00:00.000Z");
 
   const urls = [
     {
       url: `${baseUrl}/`,
-      lastModified: new Date(),
+      lastModified: staticLastModified,
       changeFrequency: "hourly",
       priority: 1,
     },
     {
       url: `${baseUrl}/articles`,
-      lastModified: new Date(),
+      lastModified: staticLastModified,
       changeFrequency: "weekly",
       priority: 0.8,
     },
     {
       url: `${baseUrl}/about`,
-      lastModified: new Date(),
+      lastModified: staticLastModified,
       changeFrequency: "monthly",
       priority: 0.6,
     },
     {
       url: `${baseUrl}/contact`,
-      lastModified: new Date(),
+      lastModified: staticLastModified,
       changeFrequency: "monthly",
       priority: 0.6,
     },
     {
       url: `${baseUrl}/privacy-policy`,
-      lastModified: new Date(),
+      lastModified: staticLastModified,
       changeFrequency: "monthly",
       priority: 0.5,
     },
     {
       url: `${baseUrl}/cookie-policy`,
-      lastModified: new Date(),
+      lastModified: staticLastModified,
       changeFrequency: "monthly",
       priority: 0.5,
     },
     {
       url: `${baseUrl}/terms`,
-      lastModified: new Date(),
+      lastModified: staticLastModified,
       changeFrequency: "monthly",
       priority: 0.5,
     },
     {
       url: `${baseUrl}/dmca`,
-      lastModified: new Date(),
+      lastModified: staticLastModified,
       changeFrequency: "monthly",
       priority: 0.4,
+    },
+    {
+      url: `${baseUrl}/editorial-policy`,
+      lastModified: staticLastModified,
+      changeFrequency: "monthly",
+      priority: 0.5,
+    },
+    {
+      url: `${baseUrl}/corrections-policy`,
+      lastModified: staticLastModified,
+      changeFrequency: "monthly",
+      priority: 0.5,
+    },
+    {
+      url: `${baseUrl}/advertising-disclosure`,
+      lastModified: staticLastModified,
+      changeFrequency: "monthly",
+      priority: 0.5,
+    },
+    {
+      url: `${baseUrl}/editorial-team`,
+      lastModified: staticLastModified,
+      changeFrequency: "monthly",
+      priority: 0.5,
     },
   ];
 

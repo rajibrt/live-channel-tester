@@ -4,6 +4,7 @@ import { getLocaleFromRequest } from "../../lib/i18n/server";
 export const metadata = {
   title: "Terms of Use | WEBTVBD",
   description: "Review the public terms that govern access to WEBTVBD and use of its live streaming and movie browsing features.",
+  alternates: { canonical: "/terms" },
 };
 
 const COPY = {
@@ -12,7 +13,7 @@ const COPY = {
     title: "Terms of use for WEBTVBD",
     intro: "By accessing or using WEBTVBD, you agree to use the service lawfully and in a way that does not interfere with the platform, its users, or its rights and review obligations.",
     noticeTitle: "Content responsibility notice",
-    noticeBody: "WEBTVBD provides the browsing interface, user access controls, and platform management for the channel and movie listings shown on the site. Specific streams, assets, or availability may change when provider status, technical issues, moderation, or rights review requires an update.",
+    noticeBody: "Access through WEBTVBD does not transfer ownership or distribution rights. Material should be available only where WEBTVBD or the relevant provider has permission to provide or reference it; credible rights concerns may result in prompt restriction or removal.",
     service: "Service scope",
     serviceBody: "WEBTVBD provides access, organization, and browsing interfaces for live channel and movie-related content. Features, availability, and access controls may change without notice.",
     use: "Acceptable use",
@@ -25,7 +26,7 @@ const COPY = {
     accounts: "Accounts and access",
     accountsBody: "Some parts of WEBTVBD require sign-in, approval, or access controls. You are responsible for keeping your credentials secure and for activity occurring through your account.",
     content: "Content and availability",
-    contentBody: "Playback quality, catalog coverage, and content availability can change due to upstream sources, rights issues, technical constraints, moderation, or operational decisions. Because WEBTVBD does not control those upstream sources, uninterrupted availability cannot be guaranteed.",
+    contentBody: "Playback quality, catalog coverage, and availability can change because of licensing, provider status, technical constraints, moderation, or operational decisions. Users must not copy, redistribute, record, or commercially exploit material unless they independently hold the required rights.",
     enforcement: "Enforcement",
     enforcementBody: "WEBTVBD may limit access, suspend accounts, remove items, or update policies when needed for security, compliance, platform review, or operational integrity.",
   },
@@ -34,7 +35,7 @@ const COPY = {
     title: "WEBTVBD ব্যবহারের শর্তাবলী",
     intro: "WEBTVBD ব্যবহার বা অ্যাক্সেস করার মাধ্যমে আপনি সম্মত হচ্ছেন যে সেবাটি বৈধভাবে এবং এমনভাবে ব্যবহার করবেন যাতে প্ল্যাটফর্ম, এর ব্যবহারকারী বা এর অধিকার ও review obligation-এ ব্যাঘাত না ঘটে।",
     noticeTitle: "কনটেন্ট দায়বদ্ধতা নোটিশ",
-    noticeBody: "WEBTVBD সাইটে দেখানো channel ও movie listing-এর browsing interface, user access control এবং platform management পরিচালনা করে। Provider status, technical issue, moderation বা rights review-এর কারণে নির্দিষ্ট stream, asset বা availability আপডেট হতে পারে।",
+    noticeBody: "WEBTVBD-এর মাধ্যমে access কোনো ownership বা distribution right হস্তান্তর করে না। WEBTVBD বা relevant provider-এর provide বা reference করার অনুমতি আছে—শুধু এমন material available থাকা উচিত; বিশ্বাসযোগ্য rights concern এলে দ্রুত restrict বা remove করা হতে পারে।",
     service: "সেবার পরিধি",
     serviceBody: "WEBTVBD লাইভ চ্যানেল ও মুভি-সম্পর্কিত কনটেন্টের জন্য access, organization এবং browsing interface দেয়। feature, availability এবং access control পূর্ব নোটিশ ছাড়াই পরিবর্তিত হতে পারে।",
     use: "গ্রহণযোগ্য ব্যবহার",
@@ -47,7 +48,7 @@ const COPY = {
     accounts: "অ্যাকাউন্ট ও অ্যাক্সেস",
     accountsBody: "WEBTVBD-র কিছু অংশে sign-in, approval বা access control প্রয়োজন। আপনার credential নিরাপদে রাখা এবং আপনার account-এর মাধ্যমে হওয়া activity-এর দায়িত্ব আপনার।",
     content: "কনটেন্ট ও availability",
-    contentBody: "Playback quality, catalog coverage এবং content availability upstream source, rights issue, technical constraint, moderation বা operational decision-এর কারণে পরিবর্তিত হতে পারে। WEBTVBD ওই upstream source নিয়ন্ত্রণ না করায় uninterrupted availability নিশ্চিত করা যায় না।",
+    contentBody: "Licensing, provider status, technical constraint, moderation বা operational decision-এর কারণে playback quality, catalog coverage ও availability বদলাতে পারে। প্রয়োজনীয় অধিকার না থাকলে user কোনো material copy, redistribute, record বা commercially exploit করতে পারবেন না।",
     enforcement: "প্রয়োগ ও ব্যবস্থা",
     enforcementBody: "Security, compliance, platform review বা operational integrity-এর প্রয়োজনে WEBTVBD access সীমিত করতে, account suspend করতে, item remove করতে বা policy update করতে পারে।",
   },

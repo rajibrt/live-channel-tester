@@ -9,6 +9,7 @@ const supportEmail = String(process.env.NEXT_PUBLIC_SUPPORT_EMAIL || "admin@webt
 export const metadata = {
   title: "Contact WEBTVBD",
   description: "Public contact information and support routes for WEBTVBD visitors, rights holders, and business inquiries.",
+  alternates: { canonical: "/contact" },
 };
 
 const COPY = {

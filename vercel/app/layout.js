@@ -1,5 +1,4 @@
 import "./globals.css";
-import Script from "next/script";
 import { cookies } from "next/headers";
 import { LanguageProvider } from "../components/i18n/LanguageProvider";
 import PublicSmoothScroll from "../components/site/PublicSmoothScroll";
@@ -116,47 +115,6 @@ export default async function RootLayout({ children }) {
             {children}
           </SiteChrome>
         </LanguageProvider>
-        <Script id="statcounter-config" strategy="afterInteractive">
-          {`
-            window.sc_project = 12383019;
-            window.sc_invisible = 1;
-            window.sc_security = "596c1a94";
-          `}
-        </Script>
-        <Script
-          id="adsense-loader"
-          strategy="afterInteractive"
-          async
-          crossOrigin="anonymous"
-          src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_CLIENT}`}
-        />
-        <Script
-          id="statcounter-loader"
-          src="https://www.statcounter.com/counter/counter.js"
-          strategy="afterInteractive"
-        />
-        <noscript>
-          <div className="statcounter">
-            <a title="site stats" href="https://statcounter.com/" target="_blank" rel="noreferrer">
-              <img
-                className="statcounter"
-                src="https://c.statcounter.com/12383019/0/596c1a94/1/"
-                alt="site stats"
-                referrerPolicy="no-referrer-when-downgrade"
-              />
-            </a>
-          </div>
-        </noscript>
-        <a
-          href="https://statcounter.com/p12383019/?guest=1"
-          target="_blank"
-          rel="noreferrer"
-          style={{ display: "none" }}
-          aria-hidden="true"
-          tabIndex={-1}
-        >
-          View My Stats
-        </a>
       </body>
     </html>
   );

@@ -38,7 +38,7 @@ function buildPrompt({ title, language, tone, length }) {
   const lengthLabel = length === "long" ? "900-1400 words" : length === "short" ? "450-650 words" : "650-950 words";
 
   return `
-You are writing a high-quality publisher article for WEBTVBD.
+You are preparing a research draft for a human WEBTVBD editor. It is not publish-ready until an editor verifies it.
 
 Requirements:
 - Article title/topic: "${title}"
@@ -49,9 +49,13 @@ Requirements:
 - Use tags like article, header, h1, h2, h3, p, ul, ol, strong when relevant
 - Do not use Tailwind classes or utility CSS classes
 - Do not mention AI, automation, or that the article was generated
-- Make the article original, useful, readable, and suitable for human review before publication
-- Include a concise intro, 3-5 structured sections, and a short closing section
+- Make the draft original, useful, readable, and suitable for rigorous human review before publication
+- Include a concise intro, 3-5 structured sections, practical reader value, and a short closing section
 - Focus on Bangladesh / WEBTVBD context when relevant
+- Never invent a quote, statistic, event detail, source, test result, or first-hand experience
+- Mark any time-sensitive or unsupported factual claim with [VERIFY] so the editor can research it before publishing
+- Do not add generic keyword labels, "Published on WEBTVBD", or repetitive promotional conclusions
+- Suggest where primary sources, original screenshots, testing, or data would materially improve the article
 
 Return strict JSON with this shape:
 {

@@ -4,6 +4,7 @@ import { getLocaleFromRequest } from "../../lib/i18n/server";
 export const metadata = {
   title: "About WEBTVBD",
   description: "Learn what WEBTVBD offers, who it serves, and how the platform organizes live TV and movies.",
+  alternates: { canonical: "/about" },
 };
 
 const COPY = {
@@ -14,7 +15,7 @@ const COPY = {
       "WEBTVBD organizes live TV channels and on-demand movies into a single browser-based experience designed for quick playback, simple navigation, and multilingual viewers.",
     noticeTitle: "Important service notice",
     noticeBody:
-      "WEBTVBD provides the browsing experience, account layer, and editorial organization for the catalog shown on this site. Stream availability and playback status can change over time because listings may be updated, reviewed, restricted, or removed when operational or rights-related issues are identified.",
+      "WEBTVBD is committed to displaying only material it is authorized to provide or reference. Listings are reviewed, restricted, or removed when authorization cannot be confirmed, a credible rights concern is received, or technical and safety requirements are not met.",
     home: "Open Home",
     contact: "Contact WEBTVBD",
     whatWeDo: "What we do",
@@ -43,7 +44,7 @@ const COPY = {
       "WEBTVBD লাইভ টিভি চ্যানেল এবং অন-ডিমান্ড মুভিকে একটি ব্রাউজারভিত্তিক অভিজ্ঞতায় গুছিয়ে আনে, যাতে দ্রুত প্লেব্যাক, সহজ নেভিগেশন এবং বহুভাষী ভিউয়ারদের জন্য ব্যবহার আরামদায়ক হয়।",
     noticeTitle: "গুরুত্বপূর্ণ সার্ভিস নোটিশ",
     noticeBody:
-      "WEBTVBD এই সাইটে দেখানো ক্যাটালগের browsing experience, account layer এবং editorial organization পরিচালনা করে। Listing, stream availability এবং playback status সময়ের সাথে বদলাতে পারে, কারণ operational বা rights-related issue শনাক্ত হলে item update, review, restrict বা remove করা হতে পারে।",
+      "WEBTVBD কেবল অনুমোদিতভাবে provide বা reference করা যায় এমন material দেখাতে প্রতিশ্রুতিবদ্ধ। Authorization নিশ্চিত না হলে, বিশ্বাসযোগ্য rights concern এলে অথবা technical ও safety requirement পূরণ না হলে listing review, restrict বা remove করা হয়।",
     home: "হোম খুলুন",
     contact: "WEBTVBD-র সাথে যোগাযোগ",
     whatWeDo: "আমরা কী করি",

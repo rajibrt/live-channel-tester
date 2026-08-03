@@ -70,6 +70,31 @@ export default function AnnouncementCreateForm({ mode: sectionMode = "articles",
 
   async function handleSubmit(event, mode = "publish") {
     event.preventDefault();
+    const willPublish = mode !== "draft" && !!form.is_published;
+    if (!isAnnouncementMode && willPublish) {
+      const plainText = String(form.content_html || "")
+        .replace(/<[^>]+>/g, " ")
+        .replace(/&[a-z#0-9]+;/gi, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+      const wordCount = plainText ? plainText.split(" ").length : 0;
+      if (wordCount < 450) {
+        setError(`Published articles need substantial reader value. This draft has about ${wordCount} words; expand the research, examples, or tested guidance before publishing.`);
+        return;
+      }
+      if (!form.featured_image_url && !form.featured_image_path) {
+        setError("Add an original or properly licensed featured image before publishing.");
+        return;
+      }
+      if (/\[VERIFY\]/i.test(plainText)) {
+        setError("Resolve every [VERIFY] marker with reliable research before publishing.");
+        return;
+      }
+      if ((String(form.content_html || "").match(/<h2\b/gi) || []).length < 2) {
+        setError("Use clear section headings so the published article is organized and easy to navigate.");
+        return;
+      }
+    }
     setSaving(true);
     setError("");
     try {
@@ -195,7 +220,7 @@ export default function AnnouncementCreateForm({ mode: sectionMode = "articles",
               </Button>
             </div>
             <small className={styles.fieldHint}>
-              Enter a strong title first. The generated HTML draft will be inserted into the editor for review.
+              AI output is a research draft, not publish-ready copy. Resolve every [VERIFY] marker, add primary sources, original evidence, and human editing before publication.
             </small>
           </div>
         ) : null}
@@ -271,6 +296,15 @@ export default function AnnouncementCreateForm({ mode: sectionMode = "articles",
             </span>
           </label>
         </div>
+
+        {!isAnnouncementMode ? (
+          <div className={`${styles.field} ${styles.full}`}>
+            <strong>Pre-publication checklist</strong>
+            <p className={styles.fieldHint}>
+              Verify time-sensitive claims, link primary sources, add original screenshots or testing where useful, confirm image rights, remove promotional filler, and disclose sponsorship or conflicts.
+            </p>
+          </div>
+        ) : null}
 
         {error ? <p className={styles.errorText}>{error}</p> : null}
 

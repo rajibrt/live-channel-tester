@@ -3,6 +3,11 @@ import styles from "./page.module.css";
 import PasswordField from "../../components/auth/PasswordField";
 import { getDictionaryForRequest } from "../../lib/i18n/server";
 
+export const metadata = {
+  title: "Admin Login | WEBTVBD",
+  robots: { index: false, follow: false },
+};
+
 export default async function LoginPage({ searchParams }) {
   const { t } = await getDictionaryForRequest();
   const params = await searchParams;

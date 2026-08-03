@@ -4,32 +4,15 @@ import styles from "../login/page.module.css";
 import { getCurrentClient } from "../../lib/clientAuth";
 import { redirect } from "next/navigation";
 import { getDictionaryForRequest } from "../../lib/i18n/server";
-import { buildHomePageMetadata, loadSiteSeoSettingsCached } from "../../lib/siteSeoSettings";
 import ClientAuthTabs from "./ClientAuthTabs";
 
 export async function generateMetadata() {
-  try {
-    const settings = await loadSiteSeoSettingsCached();
-    const metadata = buildHomePageMetadata(settings);
-    return {
-      ...metadata,
-      title: "Client Login | WEBTVBD",
-      robots: {
-        index: false,
-        follow: true,
-      },
-    };
-  } catch {
-    const metadata = buildHomePageMetadata({});
-    return {
-      ...metadata,
-      title: "Client Login | WEBTVBD",
-      robots: {
-        index: false,
-        follow: true,
-      },
-    };
-  }
+  return {
+    title: "Client Login | WEBTVBD",
+    description: "Sign in to the WEBTVBD member viewing area.",
+    alternates: { canonical: "/client-login" },
+    robots: { index: false, follow: true },
+  };
 }
 
 export default async function ClientLoginPage({ searchParams }) {

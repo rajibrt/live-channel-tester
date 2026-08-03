@@ -2,6 +2,7 @@ import { cache } from "react";
 import { resolveObjectUrl, resolvePublicObjectUrl } from "./objectStorage";
 import { getSupabaseAdmin } from "./supabaseAdmin";
 import { toAbsoluteUrl } from "./siteUrl";
+import { getEditorialOverride } from "./editorialOverrides";
 
 const TABLE = "admin_announcements";
 
@@ -26,8 +27,9 @@ export function stripHtml(html) {
 
 export function slugify(value) {
   return cleanText(value)
+    .normalize("NFKC")
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/[^\p{L}\p{M}\p{N}]+/gu, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 90);
 }
@@ -51,9 +53,40 @@ function estimateReadingMinutes(text) {
   return Math.max(2, Math.ceil(words / 180));
 }
 
+function inferContentLanguage(...values) {
+  return values.some((value) => /[\u0980-\u09ff]/.test(String(value || ""))) ? "bn" : "en";
+}
+
+function normalizeArticleHtml(value) {
+  return String(value || "")
+    .replace(/^\s*<article\b[^>]*>/i, "")
+    .replace(/<\/article>\s*$/i, "")
+    .replace(/^\s*<header\b[^>]*>[\s\S]*?<\/header>/i, "")
+    .replace(/<h1\b([^>]*)>/gi, "<h2$1>")
+    .replace(/<\/h1>/gi, "</h2>")
+    .trim();
+}
+
 async function normalizeArticle(row) {
+  const editorialOverride = getEditorialOverride(row?.id);
+  if (editorialOverride) {
+    row = {
+      ...row,
+      title: editorialOverride.title,
+      content_html: editorialOverride.html,
+      updated_at: editorialOverride.reviewedAt,
+      ...(editorialOverride.featuredImageUrl
+        ? {
+            featured_image_url: editorialOverride.featuredImageUrl,
+            featured_image_path: "",
+            featured_image_bucket: "",
+          }
+        : {}),
+    };
+  }
   const title = cleanText(row?.title) || "Untitled article";
-  const plain = stripHtml(row?.content_html);
+  const html = normalizeArticleHtml(row?.content_html);
+  const plain = stripHtml(html);
   const path = buildPublicArticlePath(row?.id, title);
   const slug = path.split("/").pop() || slugify(title) || "article";
   const excerpt = plain.slice(0, 190);
@@ -80,7 +113,8 @@ async function normalizeArticle(row) {
     publishedAt,
     updatedAt,
     readingMinutes: estimateReadingMinutes(plain),
-    html: String(row?.content_html || ""),
+    html,
+    language: inferContentLanguage(title, plain),
     featuredImageUrl: cleanUrl(featuredImageUrl),
     socialImageUrl: cleanUrl(toAbsoluteUrl(socialImageUrl)),
     featuredImageBucket: cleanText(row?.featured_image_bucket),
@@ -150,5 +184,12 @@ export async function getPublicArticleBySlug(slug) {
   const key = cleanText(slug).toLowerCase();
   if (!key) return null;
   const articles = await getPublicArticles();
-  return articles.find((item) => String(item.slug || "").toLowerCase() === key) || null;
+  return (
+    articles.find((item) => String(item.slug || "").toLowerCase() === key) ||
+    articles.find((item) => {
+      const idSuffix = shortId(item.id);
+      return idSuffix && (key === `article-${idSuffix}` || key.endsWith(`-${idSuffix}`));
+    }) ||
+    null
+  );
 }

@@ -46,17 +46,8 @@ export default function PublicSiteHeader({ viewerEntryHref = "/client-login" }) 
           <Link href="/" className={styles.siteBrand} aria-label="WEBTVBD home">
             <Image src="/logo.png" alt="WEBTVBD" width={156} height={49} className={styles.siteBrandLogo} priority />
           </Link>
-          <div className={styles.headerTicker} role="note" aria-label="Login required notice">
-            <div className={styles.headerTickerTrack}>
-              <div className={styles.headerTickerGroup}>
-                <span>{t("publicSite.tickerText")}</span>
-                <span aria-hidden="true">{t("publicSite.tickerText")}</span>
-              </div>
-              <div className={styles.headerTickerGroup} aria-hidden="true">
-                <span>{t("publicSite.tickerText")}</span>
-                <span>{t("publicSite.tickerText")}</span>
-              </div>
-            </div>
+          <div className={styles.headerTicker} role="note" aria-label="Viewer access notice">
+            <span>{t("publicSite.tickerText")}</span>
           </div>
           <Link href={viewerEntryHref} className={styles.mobileTopLoginLink}>
             {t("publicSite.clientLogin")}

@@ -2,6 +2,10 @@ import styles from "../login/page.module.css";
 import AdminResetPasswordForm from "./AdminResetPasswordForm";
 
 export const dynamic = "force-dynamic";
+export const metadata = {
+  title: "Reset Admin Password | WEBTVBD",
+  robots: { index: false, follow: false },
+};
 
 export default function AdminResetPasswordPage() {
   return (

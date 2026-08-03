@@ -3,6 +3,10 @@ import { getDictionaryForRequest } from "../../lib/i18n/server";
 import ClientResetPasswordForm from "./ClientResetPasswordForm";
 
 export const dynamic = "force-dynamic";
+export const metadata = {
+  title: "Reset Client Password | WEBTVBD",
+  robots: { index: false, follow: false },
+};
 
 export default async function ClientResetPasswordPage() {
   const { t } = await getDictionaryForRequest();

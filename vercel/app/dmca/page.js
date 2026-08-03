@@ -4,6 +4,7 @@ import { getLocaleFromRequest } from "../../lib/i18n/server";
 export const metadata = {
   title: "DMCA and Rights Notices | WEBTVBD",
   description: "Instructions for copyright owners and authorized representatives to send content removal or rights-related notices to WEBTVBD.",
+  alternates: { canonical: "/dmca" },
 };
 
 const COPY = {

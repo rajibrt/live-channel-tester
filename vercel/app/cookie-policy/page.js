@@ -4,6 +4,7 @@ import { getLocaleFromRequest } from "../../lib/i18n/server";
 export const metadata = {
   title: "Cookie Policy | WEBTVBD",
   description: "Learn how WEBTVBD uses cookies, local storage, and consent preferences on public and signed-in experiences.",
+  alternates: { canonical: "/cookie-policy" },
 };
 
 const COPY = {

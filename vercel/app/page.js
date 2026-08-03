@@ -3,11 +3,10 @@ import PendingApprovalCard from "../components/client/PendingApprovalCard";
 import PublicHomePage from "../components/site/PublicHomePage";
 import { getFeaturedPublicArticles } from "../lib/publicArticles";
 import { buildHomePageMetadata, loadSiteSeoSettingsCached } from "../lib/siteSeoSettings";
-import { getLocaleFromRequest } from "../lib/i18n/server";
-import { localizeArticles } from "../lib/articleLocalization";
 import { getCurrentClient } from "../lib/clientAuth";
 import { loadClientAccessSettingsCached } from "../lib/clientAccessSettings";
 import { getClientHomeData } from "../lib/clientHomeData";
+import { getBaseUrl } from "../lib/siteUrl";
 
 export const dynamic = "force-dynamic";
 
@@ -21,10 +20,12 @@ export async function generateMetadata() {
 }
 
 export default async function HomePage({ searchParams }) {
-  const locale = await getLocaleFromRequest();
-  const query = (await searchParams) || {};
-  const current = await getCurrentClient().catch(() => null);
-  const accessSettings = await loadClientAccessSettingsCached().catch(() => null);
+  const [resolvedSearchParams, current, accessSettings] = await Promise.all([
+    searchParams,
+    getCurrentClient().catch(() => null),
+    loadClientAccessSettingsCached().catch(() => null),
+  ]);
+  const query = resolvedSearchParams || {};
   const publicGuestAccessEnabled = accessSettings?.public_guest_access_enabled === true;
 
   if (!current) {
@@ -58,8 +59,36 @@ export default async function HomePage({ searchParams }) {
         />
       );
     }
-    const featuredArticles = await localizeArticles(await getFeaturedPublicArticles(21), locale);
-    return <PublicHomePage featuredArticles={featuredArticles} />;
+    const featuredArticles = await getFeaturedPublicArticles(21);
+    const baseUrl = getBaseUrl();
+    const publicSiteJsonLd = [
+      {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        name: "WEBTVBD",
+        url: baseUrl,
+        logo: `${baseUrl}/android-chrome-512x512.png`,
+        contactPoint: {
+          "@type": "ContactPoint",
+          contactType: "editorial and customer support",
+          url: `${baseUrl}/contact`,
+        },
+      },
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        name: "WEBTVBD",
+        url: baseUrl,
+        inLanguage: ["bn", "en"],
+        publisher: { "@type": "Organization", name: "WEBTVBD", url: baseUrl },
+      },
+    ];
+    return (
+      <>
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(publicSiteJsonLd) }} />
+        <PublicHomePage featuredArticles={featuredArticles} />
+      </>
+    );
   }
 
   const approvalStatus = String(current?.client?.approval_status || "approved").toLowerCase();
