@@ -7,6 +7,7 @@ const OVERRIDES = [
   {
     idPrefix: "064a26f9",
     title: "বাংলাদেশ টেলিভিশনের ইতিহাস: ১৯৬৪ থেকে ডিজিটাল যুগ",
+    seoDescription: "বাংলাদেশ টেলিভিশনের ১৯৬৪ সালের সূচনা, রামপুরায় স্থানান্তর, রঙিন সম্প্রচার এবং ডিজিটাল যুগে রূপান্তরের যাচাইযোগ্য ইতিহাস পড়ুন।",
     html: `
       <section>
         <p>বাংলাদেশে টেলিভিশনের ইতিহাস বোঝার জন্য বাংলাদেশ টেলিভিশন—বিটিভি—দিয়ে শুরু করাই স্বাভাবিক। এটি শুধু একটি চ্যানেলের গল্প নয়; রাষ্ট্রীয় সম্প্রচার, সংবাদ, শিক্ষা, সংস্কৃতি এবং প্রযুক্তিগত পরিবর্তনের দীর্ঘ যাত্রা। বিটিভির নিজস্ব ইতিহাস পাতার তথ্য অনুযায়ী, ১৯৬৪ সালের ২৫ ডিসেম্বর তৎকালীন ডিআইটি ভবনের দুটি কক্ষ থেকে পাইলট প্রকল্প হিসেবে সম্প্রচার শুরু হয়। শুরুতে দৈনিক সম্প্রচার ছিল মাত্র তিন ঘণ্টা।</p>
@@ -38,6 +39,8 @@ const OVERRIDES = [
   {
     idPrefix: "2cb453ce",
     title: "বাংলাদেশে টেলিভিশন ও OTT: দর্শকের অভ্যাস কীভাবে বদলাচ্ছে",
+    seoTitle: "বাংলাদেশে TV ও OTT: বদলে যাওয়া দর্শক অভ্যাস",
+    seoDescription: "Broadcast TV, official live stream ও OTT কীভাবে বাংলাদেশের দর্শকের অভ্যাস বদলাচ্ছে এবং সেবা বাছাইয়ে কোন বিষয়গুলো দেখা উচিত তা জানুন।",
     html: `
       <section>
         <p>বাংলাদেশে টেলিভিশন দেখা এখন আর নির্দিষ্ট সময় ও একটি নির্দিষ্ট screen-এর মধ্যে সীমাবদ্ধ নয়। Broadcast channel, official live stream, catch-up video, subscription OTT এবং social video—সব মিলিয়ে দর্শকের সামনে বহু পথ। পরিবর্তনের কেন্দ্রবিন্দুতে রয়েছে internet access, smartphone, affordable display এবং নিজের সময় অনুযায়ী content দেখার অভ্যাস।</p>
@@ -72,6 +75,7 @@ const OVERRIDES = [
   {
     idPrefix: "b77246e3",
     title: "বাংলাদেশি টিভি চ্যানেল বেছে নেওয়ার ব্যবহারিক গাইড",
+    seoDescription: "সংবাদ, বিনোদন ও পারিবারিক অনুষ্ঠানের জন্য বাংলাদেশি টিভি চ্যানেল বাছাইয়ে reliability, official access ও accessibility যাচাইয়ের গাইড।",
     html: `
       <section>
         <p>“সেরা চ্যানেল” সবার জন্য এক নয়। একজন দর্শক দ্রুত সংবাদ চান, অন্যজন পরিবারসহ নাটক বা সংগীত দেখতে চান, আরেকজন শিশুদের উপযোগী অনুষ্ঠান খোঁজেন। তাই ranking-এর বদলে content type, editorial reliability, official availability এবং accessibility দেখে বাংলাদেশি টিভি channel বেছে নেওয়া বেশি কার্যকর।</p>
@@ -113,6 +117,7 @@ const OVERRIDES = [
   {
     idPrefix: "5474a282",
     title: "অনলাইনে বাংলাদেশি টিভি বৈধ ও নিরাপদভাবে দেখার গাইড",
+    seoDescription: "Official website ও app চিনে অনলাইনে বাংলাদেশি টিভি নিরাপদে দেখুন। নকল site, অজানা APK, permission ও payment ঝুঁকি এড়ানোর checklist।",
     html: `
       <section>
         <p>অনলাইনে live TV দেখার সময় শুধু video চলছে কি না দেখলেই হয় না। Source বৈধ কি না, website নিরাপদ কি না, device কত data ব্যবহার করছে এবং account permission যুক্তিসঙ্গত কি না—সবকিছু viewing experience-এর অংশ। এই guide কোনো নির্দিষ্ট stream-এর availability প্রতিশ্রুতি দেয় না; নিরাপদ decision process দেখায়।</p>
@@ -150,6 +155,7 @@ const OVERRIDES = [
   {
     idPrefix: "193f727c",
     title: "ভিডিও স্ট্রিমিংয়ে কত ডেটা লাগে: কোয়ালিটি ও খরচের গাইড",
+    seoDescription: "Resolution, bitrate ও adaptive quality কীভাবে streaming data usage বদলায়, নিজের খরচ মাপার পদ্ধতি এবং mobile data বাঁচানোর উপায় জানুন।",
     featuredImageUrl: "/editorial/streaming-data-quality.webp",
     html: `
       <section>
@@ -191,6 +197,8 @@ const OVERRIDES = [
   {
     idPrefix: "26dd31c2",
     title: "লাইভ স্ট্রিম বারবার বাফার করলে কী করবেন: ধাপে ধাপে সমাধান",
+    seoTitle: "লাইভ স্ট্রিম বাফারিং: ধাপে ধাপে সমাধান",
+    seoDescription: "লাইভ ভিডিও buffering হলে quality, Wi-Fi, device, browser ও source—এই ক্রমে সমস্যা চিহ্নিত ও সমাধানের বাস্তব troubleshooting guide।",
     featuredImageUrl: "/editorial/buffering-troubleshooting.webp",
     html: `
       <section>
@@ -240,6 +248,8 @@ const OVERRIDES = [
   {
     idPrefix: "313b1b73",
     title: "ক্যাপশন, অ্যাক্সেসিবিলিটি ও টিভিতে কাস্টিং: সবার জন্য ভালো দেখার অভিজ্ঞতা",
+    seoTitle: "ক্যাপশন, অ্যাক্সেসিবিলিটি ও TV কাস্টিং গাইড",
+    seoDescription: "Caption, subtitle ও transcript-এর পার্থক্য, accessible video controls এবং Google Cast বা AirPlay দিয়ে নিরাপদে TV-তে দেখার গাইড।",
     featuredImageUrl: "/editorial/captions-casting-accessibility.webp",
     html: `
       <section>

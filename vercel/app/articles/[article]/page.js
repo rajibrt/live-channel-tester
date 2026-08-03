@@ -76,19 +76,19 @@ export async function generateMetadata({ params }) {
     : [];
 
   return {
-    title: `${article.title} | WEBTVBD`,
+    title: `${article.seoTitle || article.title} | WEBTVBD`,
     description: article.description,
     alternates: { canonical: article.canonicalUrl },
     openGraph: {
       type: "article",
       url: article.canonicalUrl,
-      title: article.title,
+      title: article.seoTitle || article.title,
       description: article.description,
       images: socialImage,
     },
     twitter: {
       card: "summary_large_image",
-      title: article.title,
+      title: article.seoTitle || article.title,
       description: article.description,
       images: socialImageUrl ? [socialImageUrl] : [],
     },
@@ -171,7 +171,15 @@ export default async function ArticleDetailPage({ params }) {
             </header>
 
             {article.featuredImageUrl ? (
-              <img src={article.featuredImageUrl} alt={article.title} className={styles.articleHeroImage} />
+              <img
+                src={article.featuredImageUrl}
+                alt={article.title}
+                width="1600"
+                height="900"
+                fetchPriority="high"
+                decoding="async"
+                className={styles.articleHeroImage}
+              />
             ) : null}
 
             <section
@@ -190,6 +198,8 @@ export default async function ArticleDetailPage({ params }) {
                       <img
                         src={item.featuredImageUrl}
                         alt={item.title}
+                        width="640"
+                        height="360"
                         className={styles.articleListThumb}
                         loading="lazy"
                       />

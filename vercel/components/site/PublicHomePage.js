@@ -78,7 +78,15 @@ export default function PublicHomePage({ featuredArticles = [] }) {
           {latestArticles.map((article) => (
             <article key={article.slug} className={styles.featuredArticleCard} lang={article.language}>
               {article.featuredImageUrl ? (
-                <img src={article.featuredImageUrl} alt={article.title} className={styles.articleLatestImage} loading="lazy" />
+                <img
+                  src={article.featuredImageUrl}
+                  alt={article.title}
+                  width="1000"
+                  height="562"
+                  className={styles.articleLatestImage}
+                  loading="lazy"
+                  decoding="async"
+                />
               ) : null}
               <p className={styles.articleMeta}>
                 <span>{article.readingMinutes} {t("publicSite.readingMinutes")}</span>

@@ -103,7 +103,15 @@ export default async function ArticlesPage({ searchParams }) {
             {paginatedArticles.map((article) => (
               <Link key={article.slug} href={article.path} className={styles.articleLatestCard} lang={article.language}>
                 {article.featuredImageUrl ? (
-                  <img src={article.featuredImageUrl} alt={article.title} className={styles.articleLatestImage} loading="lazy" />
+                  <img
+                    src={article.featuredImageUrl}
+                    alt={article.title}
+                    width="1000"
+                    height="562"
+                    className={styles.articleLatestImage}
+                    loading="lazy"
+                    decoding="async"
+                  />
                 ) : null}
                 <div className={styles.articleLatestCopy}>
                   <p className={styles.articleMeta}>

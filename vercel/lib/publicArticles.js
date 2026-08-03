@@ -73,6 +73,8 @@ async function normalizeArticle(row) {
     row = {
       ...row,
       title: editorialOverride.title,
+      seo_title: editorialOverride.seoTitle || editorialOverride.title,
+      seo_description: editorialOverride.seoDescription || "",
       content_html: editorialOverride.html,
       updated_at: editorialOverride.reviewedAt,
       ...(editorialOverride.featuredImageUrl
@@ -108,7 +110,8 @@ async function normalizeArticle(row) {
     source: "announcement",
     slug,
     title,
-    description: excerpt || title,
+    seoTitle: cleanText(row?.seo_title) || title,
+    description: cleanText(row?.seo_description) || excerpt || title,
     excerpt,
     publishedAt,
     updatedAt,

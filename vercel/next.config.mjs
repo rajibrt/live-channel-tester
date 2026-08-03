@@ -34,6 +34,14 @@ const nextConfig = {
     NEXT_PUBLIC_BUILD_VERSION: buildVersion,
   },
   generateBuildId: async () => buildVersion,
+  async headers() {
+    return [
+      {
+        source: "/editorial/:path*",
+        headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
+      },
+    ];
+  },
 };
 
 export default nextConfig;
