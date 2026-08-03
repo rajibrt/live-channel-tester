@@ -9,6 +9,7 @@
     "lint": "next lint",
     "docker:build": "docker build -t webtvbd:latest .",
     "docker:run": "docker run --rm -p 3000:3000 webtvbd:latest",
+    "audit:public": "node scripts/audit-public-site.mjs",
     "vapid:generate": "node scripts/generate-vapid-keys.mjs",
     "android:setup": "npx cap add android",
     "android:sync": "npx cap sync android",
