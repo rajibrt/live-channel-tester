@@ -790,8 +790,8 @@
   inset: 0;
   z-index: 1;
   background:
-    linear-gradient(90deg, rgba(5, 8, 18, 0.9) 0%, rgba(5, 8, 18, 0.46) 58%, rgba(5, 8, 18, 0.16) 100%),
-    linear-gradient(0deg, rgba(5, 8, 18, 0.58), transparent 48%);
+    linear-gradient(90deg, rgba(5, 8, 18, 0.96) 0%, rgba(5, 8, 18, 0.86) 24%, rgba(5, 8, 18, 0.58) 52%, rgba(5, 8, 18, 0.16) 82%),
+    linear-gradient(0deg, rgba(5, 8, 18, 0.92) 0%, rgba(5, 8, 18, 0.32) 54%, rgba(5, 8, 18, 0.08) 100%);
 }
 
 .homeHeroImage {
@@ -821,15 +821,11 @@
 .homeHeroFeatureCard {
   display: grid;
   gap: 12px;
-  width: min(100%, 520px);
-  padding: 20px;
-  border: 1px solid color-mix(in oklab, var(--primary) 30%, var(--border));
-  border-radius: 20px;
-  background:
-    linear-gradient(180deg, rgba(14, 18, 35, 0.82), rgba(14, 18, 35, 0.66)),
-    color-mix(in oklab, var(--card) 92%, transparent);
-  box-shadow: var(--shadow-xl);
-  backdrop-filter: blur(10px);
+  width: min(100%, 620px);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.68);
 }
 
 .homeHeroCardImage {
@@ -838,7 +834,7 @@
   aspect-ratio: 16 / 9;
   object-fit: cover;
   border-radius: 14px;
-  border: 1px solid color-mix(in oklab, var(--primary) 22%, var(--border));
+  border: 0;
 }
 
 .homeHeroFeatureCard h2 {
@@ -1767,8 +1763,6 @@
   }
 
   .homeHeroFeatureCard {
-    padding: 18px;
-    border-radius: 18px;
     width: min(100%, 460px);
   }
 
@@ -1783,7 +1777,7 @@
 
   .homeHeroBackdrop::after {
     background:
-      linear-gradient(180deg, rgba(6, 8, 18, 0.82) 0%, rgba(6, 8, 18, 0.94) 100%);
+      linear-gradient(180deg, rgba(6, 8, 18, 0.48) 0%, rgba(6, 8, 18, 0.9) 54%, rgba(6, 8, 18, 0.98) 100%);
   }
 
   .homeHeroImage {
@@ -1920,7 +1914,6 @@
   }
 
   .homeHeroFeatureCard {
-    padding: 16px;
     gap: 12px;
   }
 
