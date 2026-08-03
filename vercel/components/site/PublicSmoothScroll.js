@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import Lenis from "lenis";
 
 const DISABLED_PREFIXES = [
@@ -18,8 +18,27 @@ const DISABLED_PREFIXES = [
 
 export default function PublicSmoothScroll({ hasClientSession = false }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const path = String(pathname || "");
-  const isViewerShell = hasClientSession && (path === "/" || path.startsWith("/watch/") || path.startsWith("/movie/"));
+  const search = searchParams.toString();
+  const isViewerShell = hasClientSession && (path.startsWith("/watch/") || path.startsWith("/movie/"));
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [path, search]);
+
+  useEffect(() => {
+    if (typeof window.history?.scrollRestoration !== "string") {
+      return undefined;
+    }
+
+    const previousRestoration = window.history.scrollRestoration;
+    window.history.scrollRestoration = "manual";
+
+    return () => {
+      window.history.scrollRestoration = previousRestoration || "auto";
+    };
+  }, []);
 
   useEffect(() => {
     if (!path || isViewerShell || DISABLED_PREFIXES.some((prefix) => path.startsWith(prefix))) {

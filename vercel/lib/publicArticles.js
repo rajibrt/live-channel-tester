@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { unstable_cache } from "next/cache";
 import { resolveObjectUrl, resolvePublicObjectUrl } from "./objectStorage";
 import { getSupabaseAdmin } from "./supabaseAdmin";
 import { toAbsoluteUrl } from "./siteUrl";
@@ -171,7 +172,7 @@ async function loadPublishedAnnouncementArticles(limit = 24) {
   return await Promise.all((Array.isArray(data) ? data : []).filter(isArticleRow).map(normalizeArticle));
 }
 
-export const getPublicArticles = cache(async () => {
+const getCachedPublicArticles = unstable_cache(async () => {
   const [dbArticles, staticArticles] = await Promise.all([
     loadPublishedAnnouncementArticles(32),
     Promise.all(STATIC_EDITORIAL_ARTICLES.map(normalizeArticle)),
@@ -180,7 +181,12 @@ export const getPublicArticles = cache(async () => {
     return new Date(b.updatedAt || b.publishedAt || 0).getTime() - new Date(a.updatedAt || a.publishedAt || 0).getTime();
   });
   return merged;
+}, ["public-articles"], {
+  revalidate: 60,
+  tags: ["public-articles"],
 });
+
+export const getPublicArticles = cache(getCachedPublicArticles);
 
 export async function getFeaturedPublicArticles(limit = 6) {
   const all = await getPublicArticles();

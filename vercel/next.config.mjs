@@ -30,6 +30,13 @@ process.env.NEXT_PUBLIC_BUILD_VERSION = buildVersion;
 const nextConfig = {
   reactStrictMode: true,
   output: "standalone",
+  images: {
+    localPatterns: [
+      { pathname: "/editorial/**" },
+      { pathname: "/logo.png" },
+      { pathname: "/api/media/object" },
+    ],
+  },
   env: {
     NEXT_PUBLIC_BUILD_VERSION: buildVersion,
   },

@@ -60,6 +60,10 @@ export function LanguageProvider({ initialLocale = DEFAULT_LOCALE, children }) {
     setLocaleState(scopedLocale || getDefaultLocaleForPath(pathname));
   }, [pathname]);
 
+  useEffect(() => {
+    document.documentElement.lang = locale;
+  }, [locale]);
+
   function setLocale(nextLocale) {
     const normalized = normalizeLocale(nextLocale);
     setLocaleState(normalized);

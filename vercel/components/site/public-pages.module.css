@@ -34,60 +34,10 @@
 .siteHeaderTopRow {
   min-height: 56px;
   display: grid;
-  grid-template-columns: auto minmax(220px, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
   min-width: 0;
   align-items: center;
   gap: 14px;
-}
-
-.headerTicker {
-  min-width: 0;
-  width: 100%;
-  max-width: 440px;
-  justify-self: center;
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-  overflow: hidden;
-  border: 1px solid color-mix(in oklab, var(--primary) 36%, var(--border));
-  border-radius: 999px;
-  background:
-    linear-gradient(135deg, color-mix(in oklab, var(--primary) 16%, transparent), transparent 82%),
-    color-mix(in oklab, var(--card) 96%, transparent);
-  box-shadow: var(--shadow-lg);
-  padding: 0 18px;
-}
-
-.headerTicker > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 0.9rem;
-  font-weight: 650;
-  color: var(--muted-foreground);
-}
-
-.headerTickerTrack {
-  display: flex;
-  align-items: center;
-  width: max-content;
-  white-space: nowrap;
-  will-change: transform;
-  animation: headerTickerScroll 16s linear infinite;
-}
-
-.headerTickerGroup {
-  display: inline-flex;
-  align-items: center;
-  gap: 32px;
-  flex: 0 0 auto;
-  padding-right: 32px;
-}
-
-.headerTickerTrack span {
-  font-size: 0.94rem;
-  font-weight: 700;
-  color: var(--foreground);
 }
 
 .siteBrand {
@@ -165,9 +115,21 @@
 .siteHeaderActions {
   display: flex;
   align-items: center;
+  justify-self: end;
   flex: 0 0 auto;
   min-width: fit-content;
   gap: 12px;
+}
+
+.mobileDrawerHeader,
+.mobileDrawerIntro,
+.mobileDrawerFooter,
+.drawerBackdrop {
+  display: none;
+}
+
+.mobileDrawerUtility {
+  display: contents;
 }
 
 .mobileMenuButton {
@@ -205,10 +167,6 @@
 .mobileMenuButton:hover {
   transform: translateY(-1px);
   box-shadow: 0 14px 24px rgba(0, 0, 0, 0.18);
-}
-
-.mobileHeaderNotice {
-  display: none;
 }
 
 .mobileTopLoginLink,
@@ -658,6 +616,81 @@
   line-height: 1.6;
 }
 
+.articleShare {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.articleShareLabel {
+  margin-right: 2px;
+  color: var(--muted-foreground);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.articleShareActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.articleShareIcon {
+  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--card) 94%, transparent);
+  color: var(--foreground);
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, background-color 0.18s ease, color 0.18s ease;
+}
+
+.articleShareIcon svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+
+.articleShareIcon:hover {
+  transform: translateY(-2px);
+  border-color: transparent;
+  color: #fff;
+}
+
+.articleShareFacebook:hover {
+  background: #1877f2;
+}
+
+.articleShareX:hover {
+  background: #111;
+}
+
+.articleShareWhatsapp:hover {
+  background: #25d366;
+}
+
+.articleShareLinkedin:hover {
+  background: #0a66c2;
+}
+
+.articleShareCopy:hover {
+  background: var(--primary);
+}
+
+.articleShareStatus {
+  min-width: 110px;
+  color: color-mix(in oklab, var(--primary) 76%, var(--foreground));
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
 .articleBody {
   padding: 28px;
   border: 1px solid var(--border);
@@ -790,8 +823,8 @@
   inset: 0;
   z-index: 1;
   background:
-    linear-gradient(90deg, rgba(5, 8, 18, 0.96) 0%, rgba(5, 8, 18, 0.86) 24%, rgba(5, 8, 18, 0.58) 52%, rgba(5, 8, 18, 0.16) 82%),
-    linear-gradient(0deg, rgba(5, 8, 18, 0.92) 0%, rgba(5, 8, 18, 0.32) 54%, rgba(5, 8, 18, 0.08) 100%);
+    linear-gradient(90deg, rgba(5, 8, 18, 0.86) 0%, rgba(5, 8, 18, 0.62) 28%, rgba(5, 8, 18, 0.24) 56%, rgba(5, 8, 18, 0.03) 84%),
+    linear-gradient(0deg, rgba(5, 8, 18, 0.62) 0%, rgba(5, 8, 18, 0.1) 54%, rgba(5, 8, 18, 0) 100%);
 }
 
 .homeHeroImage {
@@ -800,6 +833,7 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+  filter: brightness(1.12) saturate(1.06);
   opacity: 0;
   transition: opacity 0.35s ease;
 }
@@ -837,7 +871,32 @@
   border: 0;
 }
 
-.homeHeroFeatureCard h2 {
+.articleMediaLink,
+.articleTitleLink {
+  color: inherit;
+  text-decoration: none;
+}
+
+.articleMediaLink {
+  display: block;
+  border-radius: 18px;
+}
+
+.articleTitleLink {
+  transition: color 0.18s ease;
+}
+
+.articleMediaLink:focus-visible,
+.articleTitleLink:focus-visible {
+  outline: 3px solid color-mix(in oklab, var(--primary) 68%, white);
+  outline-offset: 3px;
+}
+
+.articleTitleLink:hover {
+  color: color-mix(in oklab, var(--primary) 78%, var(--foreground));
+}
+
+.homeHeroFeatureCard h1 {
   margin: 0;
   font-size: clamp(1.28rem, 2vw, 1.82rem);
   line-height: 1.2;
@@ -917,191 +976,98 @@
   gap: 22px;
 }
 
-.landingHero {
-  display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
-  gap: 20px;
-  align-items: stretch;
+.homeEditorialSection {
+  gap: 26px;
+  padding: 48px 8px 30px;
 }
 
-.landingCopy,
-.heroShowcase,
-.landingSection {
-  min-width: 0;
-  border: 1px solid var(--border);
-  border-radius: 24px;
-  background: color-mix(in oklab, var(--card) 92%, transparent);
-  box-shadow: var(--shadow-xl);
-  overflow: hidden;
-}
-
-.landingCopy {
-  padding: 30px;
-  background:
-    radial-gradient(circle at top left, color-mix(in oklab, var(--primary) 18%, transparent), transparent 44%),
-    color-mix(in oklab, var(--card) 92%, transparent);
-}
-
-.landingTitle {
-  margin: 0;
-  font-size: clamp(2.5rem, 6vw, 4.8rem);
-  line-height: 0.98;
-}
-
-.landingIntro {
-  margin: 18px 0 0;
-  max-width: 62ch;
-  color: var(--muted-foreground);
-  font-size: 1.04rem;
-  line-height: 1.8;
-}
-
-.landingChecklist {
-  margin: 22px 0 0;
-  padding-left: 20px;
-  display: grid;
-  gap: 10px;
-  color: var(--muted-foreground);
-  line-height: 1.75;
-}
-
-.loginHighlightBox {
-  display: grid;
-  gap: 8px;
-  margin-top: 18px;
-  padding: 16px 18px;
-  border: 1px solid color-mix(in oklab, var(--primary) 44%, var(--border));
-  border-radius: 18px;
-  background:
-    linear-gradient(135deg, color-mix(in oklab, var(--primary) 20%, transparent), transparent 72%),
-    color-mix(in oklab, var(--card) 96%, transparent);
-  box-shadow: var(--shadow-lg);
-}
-
-.loginHighlightEyebrow {
-  margin: 0;
-  font-size: 0.78rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: color-mix(in oklab, var(--primary) 76%, var(--foreground));
-}
-
-.loginHighlightText {
-  margin: 0;
-  font-size: 1.06rem;
-  line-height: 1.65;
-  font-weight: 700;
-  color: var(--foreground);
-}
-
-.heroShowcase {
-  padding: 24px;
-  display: grid;
-  background:
-    radial-gradient(circle at 78% 18%, color-mix(in oklab, var(--primary) 22%, transparent), transparent 30%),
-    radial-gradient(circle at 18% 88%, color-mix(in oklab, var(--primary) 12%, transparent), transparent 32%),
-    linear-gradient(180deg, color-mix(in oklab, var(--card) 96%, transparent), color-mix(in oklab, var(--card) 88%, transparent));
-}
-
-.heroPanel {
-  display: grid;
-  gap: 18px;
-  min-height: 100%;
-}
-
-.heroBrandCard {
-  display: grid;
-  gap: 14px;
-  padding: 22px;
-  border-radius: 22px;
-  border: 1px solid color-mix(in oklab, var(--primary) 28%, var(--border));
-  background:
-    linear-gradient(145deg, color-mix(in oklab, var(--card) 96%, transparent), color-mix(in oklab, var(--card) 90%, transparent)),
-    color-mix(in oklab, var(--card) 92%, transparent);
-  box-shadow: inset 0 1px 0 color-mix(in oklab, white 10%, transparent);
-}
-
-.heroBrandRow {
+.homeSectionHeader {
   display: flex;
-  flex-wrap: wrap;
-  gap: 14px;
-  align-items: center;
+  align-items: end;
   justify-content: space-between;
+  gap: 28px;
 }
 
-.heroLogo {
-  width: auto;
-  height: 56px;
-  object-fit: contain;
+.homeSectionHeader .sectionHeading {
+  max-width: 720px;
 }
 
-.heroBadge {
+.homeSectionLink,
+.homeArticleLink {
   display: inline-flex;
-  min-height: 42px;
   align-items: center;
-  padding: 0 16px;
-  border-radius: 999px;
-  border: 1px solid color-mix(in oklab, var(--primary) 38%, var(--border));
-  background: color-mix(in oklab, var(--card) 94%, transparent);
-  color: color-mix(in oklab, var(--primary) 76%, var(--foreground));
-  font-size: 0.84rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.heroBrandLead {
-  margin: 0;
-  max-width: 38ch;
-  color: var(--muted-foreground);
-  font-size: 1rem;
-  line-height: 1.8;
-}
-
-.heroStats {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 12px;
-}
-
-.heroStatCard {
-  display: grid;
-  align-content: start;
   gap: 8px;
-  min-height: 188px;
-  padding: 18px;
-  border-radius: 18px;
-  border: 1px solid var(--border);
-  background:
-    linear-gradient(180deg, color-mix(in oklab, var(--card) 98%, transparent), color-mix(in oklab, var(--card) 92%, transparent));
-  box-shadow: var(--shadow-lg);
+  color: var(--foreground);
+  font-weight: 750;
+  text-decoration: none;
+  text-underline-offset: 5px;
 }
 
-.heroStatCard p {
-  margin: 0;
-  font-size: 0.76rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+.homeSectionLink {
+  flex: 0 0 auto;
+  padding-bottom: 4px;
+  border-bottom: 1px solid color-mix(in oklab, var(--primary) 52%, var(--border));
+}
+
+.homeSectionLink:hover,
+.homeArticleLink:hover {
   color: color-mix(in oklab, var(--primary) 76%, var(--foreground));
 }
 
-.heroStatCard strong {
-  display: block;
-  font-size: 1.06rem;
+.homeEditorialSection .articleFeaturedGrid {
+  gap: 34px 22px;
+}
+
+.homeEditorialSection .featuredArticleCard {
+  position: relative;
+  align-content: start;
+  gap: 11px;
+  padding: 0 0 24px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.homeEditorialSection .articleLatestImage {
+  aspect-ratio: 16 / 9;
+  border-radius: 18px;
+  transition: transform 0.25s ease, filter 0.25s ease;
+}
+
+.homeEditorialSection .featuredArticleCard:hover .articleLatestImage {
+  transform: translateY(-3px);
+  filter: saturate(1.06) brightness(1.04);
+}
+
+.homeEditorialSection .featuredArticleCard h3 {
+  font-size: 1.15rem;
   line-height: 1.35;
 }
 
-.heroStatCard span {
-  color: var(--muted-foreground);
-  line-height: 1.75;
+.homeEditorialSection .featuredArticleCard > p:not(.articleMeta) {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
 }
 
-.landingSection {
-  padding: 28px;
-  display: grid;
-  gap: 18px;
+.homeArticleLink {
+  margin-top: auto;
+  padding-top: 4px;
+  color: color-mix(in oklab, var(--primary) 76%, var(--foreground));
+}
+
+.homeAllArticlesAction {
+  display: flex;
+  justify-content: center;
+  padding-top: 4px;
+}
+
+.homeAllArticlesAction .primaryLink {
+  min-width: 210px;
+  gap: 8px;
 }
 
 .sectionHeading {
@@ -1441,12 +1407,7 @@
 
 @media (max-width: 1200px) {
   .siteHeaderTopRow {
-    grid-template-columns: auto minmax(160px, 1fr) auto;
     gap: 12px;
-  }
-
-  .headerTicker {
-    max-width: 320px;
   }
 
   .siteBrandText {
@@ -1469,12 +1430,6 @@
 }
 
 @media (max-width: 980px) {
-  .headerTicker {
-    flex: 1 1 auto;
-    min-width: 0;
-    max-width: none;
-  }
-
   .siteHeaderActions {
     gap: 10px;
   }
@@ -1483,9 +1438,8 @@
     flex: 1 1 auto;
   }
 
-  .landingHero {
-    display: flex;
-    flex-direction: column;
+  .homeEditorialSection .articleFeaturedGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .homeHeroOverlay {
@@ -1506,14 +1460,6 @@
   .articleSidebar {
     position: static;
     top: auto;
-  }
-
-  .landingCopy {
-    order: 1;
-  }
-
-  .heroShowcase {
-    order: 2;
   }
 
 }
@@ -1551,28 +1497,6 @@
   }
 }
 
-@keyframes headerTickerScroll {
-  from {
-    transform: translateX(0);
-  }
-
-  to {
-    transform: translateX(-50%);
-  }
-}
-
-@keyframes mobileDrawerIn {
-  from {
-    opacity: 0;
-    transform: translateY(-10px) scale(0.98);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .siteHeader,
   .siteHeaderInner,
@@ -1583,17 +1507,10 @@
   .siteHeaderNav a,
   .headerLoginLink,
   .mobileMenuButton,
-  .mobileMenuButton span {
+  .mobileMenuButton span,
+  .siteHeaderActions,
+  .mobileDrawerSocials a {
     transition: none;
-  }
-
-  .headerTickerTrack {
-    animation: none;
-    transform: none;
-  }
-
-  .siteHeaderActionsOpen {
-    animation: none;
   }
 }
 
@@ -1612,10 +1529,6 @@
     min-height: 44px;
     gap: 10px;
     align-items: center;
-  }
-
-  .headerTicker {
-    display: none;
   }
 
   .publicConsent {
@@ -1672,75 +1585,236 @@
   }
 
   .siteHeaderActions {
-    position: absolute;
-    top: calc(100% + 10px);
-    left: 8px;
-    right: 8px;
-    z-index: 60;
-    display: none;
-    padding: 14px;
-    border: 1px solid var(--border);
-    border-radius: 18px;
-    background: color-mix(in oklab, var(--card) 96%, transparent);
-    box-shadow: var(--shadow-xl);
-    backdrop-filter: blur(12px);
+    position: fixed;
+    inset: 0 0 0 auto;
+    z-index: 80;
+    display: flex;
+    width: min(88vw, 360px);
+    height: 100dvh;
+    min-width: 0;
+    padding: 18px;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 0;
+    overflow-y: auto;
+    border-left: 1px solid var(--sidebar-border);
+    background:
+      radial-gradient(circle at 100% 0, color-mix(in oklab, var(--sidebar-primary) 18%, transparent), transparent 34%),
+      var(--sidebar);
+    color: var(--sidebar-foreground);
+    box-shadow: var(--shadow-2xl);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateX(100%);
+    transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.2s ease, visibility 0.28s;
   }
 
   .siteHeaderActionsOpen {
-    display: grid;
-    animation: mobileDrawerIn 0.24s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: translateX(0);
   }
 
-  .siteHeaderActionsOpen ~ .mobileMenuButton span:nth-child(1) {
+  .mobileMenuButtonOpen span:nth-child(1) {
     transform: translateY(6px) rotate(45deg);
   }
 
-  .siteHeaderActionsOpen ~ .mobileMenuButton span:nth-child(2) {
+  .mobileMenuButtonOpen span:nth-child(2) {
     opacity: 0;
   }
 
-  .siteHeaderActionsOpen ~ .mobileMenuButton span:nth-child(3) {
+  .mobileMenuButtonOpen span:nth-child(3) {
     transform: translateY(-6px) rotate(-45deg);
+  }
+
+  .drawerBackdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 70;
+    display: block;
+    padding: 0;
+    border: 0;
+    background: color-mix(in oklab, var(--background) 56%, transparent);
+    backdrop-filter: blur(5px);
+    cursor: pointer;
+  }
+
+  .mobileDrawerHeader {
+    display: flex;
+    min-height: 62px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--sidebar-border);
+  }
+
+  .mobileDrawerBrand {
+    display: inline-flex;
+    min-width: 0;
+    align-items: center;
+  }
+
+  .mobileDrawerLogo {
+    width: auto;
+    height: 38px;
+    object-fit: contain;
+  }
+
+  .mobileDrawerClose {
+    display: inline-flex;
+    width: 42px;
+    height: 42px;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 1px solid var(--sidebar-border);
+    border-radius: calc(var(--radius) + 8px);
+    background: color-mix(in oklab, var(--sidebar-accent) 72%, transparent);
+    color: var(--sidebar-foreground);
+    font: inherit;
+    font-size: 1.7rem;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .mobileDrawerIntro {
+    display: grid;
+    gap: 5px;
+    padding: 24px 4px 14px;
+  }
+
+  .mobileDrawerIntro span {
+    color: var(--sidebar-primary);
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .mobileDrawerIntro strong {
+    color: var(--sidebar-foreground);
+    font-size: 1.35rem;
   }
 
   .siteHeaderNav {
     display: grid;
-    gap: 10px;
+    gap: 8px;
     justify-content: stretch;
   }
 
   .siteHeaderNav a {
     display: flex;
-    min-height: 42px;
+    min-height: 50px;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 0 16px;
+    border: 1px solid transparent;
+    border-radius: calc(var(--radius) + 8px);
+    background: transparent;
+    color: color-mix(in oklab, var(--sidebar-foreground) 70%, transparent);
+    font-size: 1rem;
+  }
+
+  .siteHeaderNav a:hover {
+    border-color: var(--sidebar-border);
+    background: color-mix(in oklab, var(--sidebar-accent) 62%, transparent);
+    color: var(--sidebar-foreground);
+    transform: none;
+  }
+
+  .siteHeaderNav .siteHeaderNavActive {
+    border-color: color-mix(in oklab, var(--sidebar-primary) 48%, var(--sidebar-border));
+    background: color-mix(in oklab, var(--sidebar-primary) 18%, var(--sidebar));
+    color: var(--sidebar-foreground) !important;
+    box-shadow: inset 3px 0 0 var(--sidebar-primary);
+  }
+
+  .mobileDrawerUtility {
+    display: grid;
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+    gap: 10px;
+    padding: 20px 0;
+    border-bottom: 1px solid var(--sidebar-border);
+  }
+
+  .mobileDrawerUtility .headerLocaleButton,
+  .mobileDrawerUtility .headerLoginLink {
+    display: inline-flex;
+    width: 100%;
+    min-width: 0;
+    min-height: 46px;
+  }
+
+  .mobileDrawerUtility .headerLocaleButton {
+    border-color: var(--sidebar-border);
+    background: color-mix(in oklab, var(--sidebar-accent) 64%, transparent);
+    color: var(--sidebar-foreground);
+  }
+
+  .mobileDrawerFooter {
+    display: grid;
+    gap: 12px;
+    margin-top: auto;
+    padding: 24px 4px 4px;
+  }
+
+  .mobileDrawerSocialLabel {
+    color: var(--sidebar-foreground);
+    font-size: 0.85rem;
+    font-weight: 750;
+  }
+
+  .mobileDrawerSocials {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 9px;
+  }
+
+  .mobileDrawerSocials a {
+    display: inline-flex;
+    width: 42px;
+    height: 42px;
     align-items: center;
     justify-content: center;
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    background: color-mix(in oklab, var(--card) 92%, transparent);
+    border: 1px solid var(--sidebar-border);
+    border-radius: 999px;
+    background: color-mix(in oklab, var(--sidebar-accent) 68%, transparent);
+    color: var(--sidebar-foreground);
+    transition: transform 0.18s ease, border-color 0.18s ease, background-color 0.18s ease;
   }
 
-  .mobileHeaderNotice {
-    display: grid;
-    gap: 8px;
-    padding: 14px;
-    border: 1px solid color-mix(in oklab, var(--primary) 40%, var(--border));
-    border-radius: 16px;
-    background:
-      linear-gradient(135deg, color-mix(in oklab, var(--primary) 18%, transparent), transparent 78%),
-      color-mix(in oklab, var(--card) 96%, transparent);
+  .mobileDrawerSocials a:hover {
+    transform: translateY(-2px);
+    border-color: var(--sidebar-primary);
+    background: color-mix(in oklab, var(--sidebar-primary) 74%, var(--sidebar));
   }
 
-  .mobileHeaderNoticeLabel {
-    font-size: 0.76rem;
-    font-weight: 800;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: color-mix(in oklab, var(--primary) 76%, var(--foreground));
+  .mobileDrawerClose:focus-visible,
+  .siteHeaderNav a:focus-visible,
+  .mobileDrawerSocials a:focus-visible,
+  .mobileDrawerUtility button:focus-visible,
+  .mobileDrawerUtility a:focus-visible {
+    outline: 3px solid color-mix(in oklab, var(--sidebar-ring) 58%, transparent);
+    outline-offset: 2px;
   }
 
-  .mobileHeaderNotice strong {
-    font-size: 0.92rem;
-    line-height: 1.6;
+  .mobileDrawerSocials svg {
+    width: 18px;
+    height: 18px;
+    fill: currentColor;
+  }
+
+  .mobileDrawerFooter p,
+  .mobileDrawerFooter small {
+    margin: 0;
+    color: color-mix(in oklab, var(--sidebar-foreground) 58%, transparent);
+    font-size: 0.78rem;
+    line-height: 1.55;
   }
 
   .landingShell {
@@ -1748,7 +1822,18 @@
     padding: 14px 0 42px;
   }
 
-  .landingHero {
+  .homeEditorialSection {
+    padding-right: 4px;
+    padding-left: 4px;
+  }
+
+  .homeSectionHeader {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .homeEditorialSection .articleFeaturedGrid {
     grid-template-columns: 1fr;
   }
 
@@ -1788,51 +1873,8 @@
     opacity: 0.22;
   }
 
-  .landingCopy,
-  .heroShowcase,
-  .landingSection {
-    padding: 20px;
-  }
-
-  .landingTitle {
-    font-size: clamp(2rem, 12vw, 3rem);
-    line-height: 1.02;
-    overflow-wrap: anywhere;
-  }
-
-  .landingIntro,
-  .heroBrandLead,
-  .heroStatCard span,
-  .noticeText,
-  .loginHighlightText {
+  .noticeText {
     font-size: 0.96rem;
-  }
-
-  .heroBrandCard {
-    padding: 18px;
-  }
-
-  .heroBrandRow {
-    align-items: flex-start;
-    justify-content: flex-start;
-  }
-
-  .heroLogo {
-    height: 46px;
-  }
-
-  .heroBadge {
-    min-height: 38px;
-    padding: 0 14px;
-    font-size: 0.78rem;
-  }
-
-  .heroStats {
-    grid-template-columns: 1fr;
-  }
-
-  .heroStatCard {
-    min-height: auto;
   }
 
   .shell {
@@ -1895,9 +1937,6 @@
   }
 
   .siteHeaderInner,
-  .landingCopy,
-  .heroShowcase,
-  .landingSection,
   .hero,
   .body {
     padding: 16px;
@@ -1975,14 +2014,6 @@
   .quickLinks {
     display: grid;
     gap: 10px;
-  }
-
-  .landingTitle {
-    font-size: clamp(1.85rem, 11vw, 2.5rem);
-  }
-
-  .headerTickerTrack span {
-    font-size: 0.76rem;
   }
 
   .articleBody,

@@ -36,6 +36,7 @@
   --sidebar-border: oklch(0.3752 0.0394 256.8467);
   --sidebar-ring: oklch(0.5998 0.2334 18.3657);
   --font-sans: Inter, sans-serif;
+  --font-bangla: "Siyam Rupali", "SiyamRupali", sans-serif;
   --font-serif: Georgia, serif;
   --font-mono: "JetBrains Mono", monospace;
   --radius: 0.5rem;
@@ -109,6 +110,17 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans);
   letter-spacing: var(--tracking-normal);
+}
+
+:lang(bn) {
+  font-family: var(--font-bangla);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
 }
 
 html.lenis,

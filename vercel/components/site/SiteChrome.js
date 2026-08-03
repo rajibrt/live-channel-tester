@@ -10,7 +10,7 @@ const MONETIZABLE_PREFIXES = ["/articles"];
 function shouldHidePublicChrome(pathname, hasClientSession) {
   const path = String(pathname || "");
   if (!hasClientSession) return false;
-  return path === "/" || path.startsWith("/watch/") || path.startsWith("/movie/");
+  return path.startsWith("/watch/") || path.startsWith("/movie/");
 }
 
 export default function SiteChrome({ hasClientSession = false, viewerEntryHref = "/client-login", children }) {

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 import { getLocaleFromRequest } from "../../../lib/i18n/server";
 import { getPublicArticleBySlug, getPublicArticles } from "../../../lib/publicArticles";
+import ArticleShareActions from "../../../components/site/ArticleShareActions";
 import styles from "../../../components/site/public-pages.module.css";
 
 export const dynamic = "force-dynamic";
@@ -17,6 +18,11 @@ const COPY = {
     byline: "By WEBTVBD Editorial Desk",
     reviewed: "Read our editorial standards",
     correction: "Report a correction",
+    shareTitle: "Share this article",
+    shareOn: "Share on",
+    copyLink: "Copy link",
+    copied: "Link copied",
+    copyFailed: "Could not copy link",
   },
   bn: {
     eyebrow: "WEBTVBD আর্টিকেল",
@@ -28,6 +34,11 @@ const COPY = {
     byline: "WEBTVBD সম্পাদকীয় ডেস্ক",
     reviewed: "আমাদের সম্পাদনা নীতিমালা পড়ুন",
     correction: "সংশোধনের অনুরোধ করুন",
+    shareTitle: "আর্টিকেলটি শেয়ার করুন",
+    shareOn: "শেয়ার করুন",
+    copyLink: "লিংক কপি করুন",
+    copied: "লিংক কপি হয়েছে",
+    copyFailed: "লিংক কপি করা যায়নি",
   },
 };
 
@@ -168,6 +179,17 @@ export default async function ArticleDetailPage({ params }) {
                 <span aria-hidden="true"> · </span>
                 <Link href="/contact">{copy.correction}</Link>
               </p>
+              <ArticleShareActions
+                title={article.title}
+                url={article.canonicalUrl}
+                labels={{
+                  shareTitle: copy.shareTitle,
+                  shareOn: copy.shareOn,
+                  copyLink: copy.copyLink,
+                  copied: copy.copied,
+                  copyFailed: copy.copyFailed,
+                }}
+              />
             </header>
 
             {article.featuredImageUrl ? (
