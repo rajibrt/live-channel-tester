@@ -788,7 +788,10 @@
   content: "";
   position: absolute;
   inset: 0;
-  background: transparent;
+  z-index: 1;
+  background:
+    linear-gradient(90deg, rgba(5, 8, 18, 0.9) 0%, rgba(5, 8, 18, 0.46) 58%, rgba(5, 8, 18, 0.16) 100%),
+    linear-gradient(0deg, rgba(5, 8, 18, 0.58), transparent 48%);
 }
 
 .homeHeroImage {
@@ -851,6 +854,19 @@
   line-height: 1.65;
 }
 
+.homeHeroActions,
+.homeHeroControls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.homeHeroControls {
+  justify-content: space-between;
+  margin-top: 2px;
+}
+
 .homeHeroIndicators {
   display: flex;
   flex-wrap: wrap;
@@ -875,6 +891,29 @@
 .homeHeroIndicatorActive {
   width: 28px;
   background: var(--primary);
+}
+
+.homeHeroIndicator:focus-visible,
+.homeHeroPauseButton:focus-visible {
+  outline: 3px solid color-mix(in oklab, var(--primary) 64%, white);
+  outline-offset: 3px;
+}
+
+.homeHeroPauseButton {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid color-mix(in oklab, white 18%, var(--border));
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--card) 82%, transparent);
+  color: var(--foreground);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.homeHeroPauseButton:hover {
+  border-color: color-mix(in oklab, var(--primary) 52%, var(--border));
 }
 
 .homeArticleSection {
@@ -1731,6 +1770,11 @@
     padding: 18px;
     border-radius: 18px;
     width: min(100%, 460px);
+  }
+
+  .homeHeroActions .primaryLink,
+  .homeHeroActions .secondaryLink {
+    width: auto;
   }
 
   .homeHeroCardImage {
