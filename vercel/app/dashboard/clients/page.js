@@ -29,6 +29,18 @@ function pickFacebookProfileUrl(user, providerUserId) {
   return "";
 }
 
+async function fetchAllRows(queryFactory, pageSize = 1000) {
+  const rows = [];
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await queryFactory().range(from, from + pageSize - 1);
+    if (error) return { data: rows, error };
+    const page = Array.isArray(data) ? data : [];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+  }
+  return { data: rows, error: null };
+}
+
 async function syncMissingFacebookClientUsers(admin) {
   try {
     const [{ data: listed, error: listErr }, { data: currentUsers }, { data: adminUsers }] = await Promise.all([
@@ -113,11 +125,11 @@ async function syncMissingFacebookClientUsers(admin) {
 async function getClientUsers() {
   const admin = getSupabaseAdmin();
   await syncMissingFacebookClientUsers(admin);
-  const [{ data: users }, { data: pushSubscriptions }] = await Promise.all([
-    admin
+  const [usersResult, { data: pushSubscriptions }] = await Promise.all([
+    fetchAllRows(() => admin
       .from("client_users")
       .select("user_id,email,full_name,mobile_number,is_active,approval_status,approval_note,auth_provider,provider_user_id,avatar_url,oauth_profile_json,lifetime_watch_count,lifetime_watch_seconds,last_watched_at,created_at,updated_at")
-      .order("created_at", { ascending: false }),
+      .order("created_at", { ascending: false })),
     admin
       .from("client_push_subscriptions")
       .select("user_id,is_active,updated_at")
@@ -138,7 +150,7 @@ async function getClientUsers() {
     return map;
   }, new Map());
 
-  return (Array.isArray(users) ? users : []).map((user) => {
+  return (Array.isArray(usersResult?.data) ? usersResult.data : []).map((user) => {
     const pushState = pushByUser.get(String(user?.user_id || "").trim()) || {
       push_enabled: false,
       push_subscription_count: 0,

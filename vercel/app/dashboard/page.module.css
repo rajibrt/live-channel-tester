@@ -1068,6 +1068,58 @@
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
+.filePickerBox {
+  width: 100%;
+  min-height: 48px;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 6px;
+  background: var(--card);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.filePickerBox:hover {
+  border-color: color-mix(in oklab, var(--ring) 58%, var(--border));
+  background: color-mix(in oklab, var(--background) 88%, var(--card));
+}
+
+.filePickerBox input {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.filePickerBtn {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  padding: 0 12px;
+  color: var(--primary-foreground) !important;
+  background: linear-gradient(135deg, var(--primary) 0%, color-mix(in oklab, var(--primary) 58%, var(--accent)) 100%);
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  white-space: nowrap;
+}
+
+.filePickerName {
+  min-width: 0;
+  color: var(--foreground) !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .field textarea {
   width: 100%;
   min-width: 0;
@@ -2097,6 +2149,66 @@
   width: 100%;
   border-collapse: collapse;
   min-width: 100%;
+}
+
+.tableWrap .localCheckTable {
+  table-layout: fixed;
+  min-width: 920px;
+}
+
+.tableWrap .localCheckTable th:first-child,
+.tableWrap .localCheckTable td:first-child {
+  width: 320px;
+}
+
+.tableWrap .localCheckTable th:nth-child(2),
+.tableWrap .localCheckTable td:nth-child(2) {
+  width: 210px;
+}
+
+.tableWrap .localCheckTable th:nth-child(3),
+.tableWrap .localCheckTable td:nth-child(3) {
+  width: 170px;
+}
+
+.tableWrap .localCheckTable th:nth-child(4),
+.tableWrap .localCheckTable td:nth-child(4) {
+  width: auto;
+}
+
+.tableWrap .localCheckTable th:nth-child(5),
+.tableWrap .localCheckTable td:nth-child(5) {
+  width: 84px;
+}
+
+.tableWrap .localCheckTable .inlineInput {
+  padding: 7px 8px;
+}
+
+.tableWrap .localCheckTable .uploadLogoBtn {
+  padding: 7px 8px;
+}
+
+.tableWrap .localCheckTable .url {
+  display: block;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.localLogoCell {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+}
+
+.localLogoCell .channelLogoThumb {
+  width: 38px;
+  height: 38px;
+}
+
+.localLogoCell .logoFieldRow {
+  column-gap: 6px;
 }
 
 .tableWrap > div {

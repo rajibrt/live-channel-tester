@@ -24,6 +24,18 @@ function sumWatchSeconds(rows) {
   return rows.reduce((sum, row) => sum + Math.max(0, Number(row?.watch_seconds || 0)), 0);
 }
 
+async function fetchAllRows(queryFactory, pageSize = 1000) {
+  const rows = [];
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await queryFactory().range(from, from + pageSize - 1);
+    if (error) return { data: rows, error };
+    const page = Array.isArray(data) ? data : [];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+  }
+  return { data: rows, error: null };
+}
+
 function startOfHour(date) {
   const d = new Date(date);
   d.setMinutes(0, 0, 0);
@@ -88,7 +100,7 @@ export async function getDashboardReports() {
   const [
     { data: events },
     { data: history },
-    { data: users },
+    usersResult,
     viewerActivityResult,
     { data: visitorEventsTrend },
     { data: visitorHistoryTrend },
@@ -109,9 +121,10 @@ export async function getDashboardReports() {
       .gte("watched_at", cutoff7d.toISOString())
       .order("watched_at", { ascending: false })
       .limit(50000),
-    admin
+    fetchAllRows(() => admin
       .from("client_users")
-      .select("user_id,approval_status,auth_provider,created_at,is_active"),
+      .select("user_id,approval_status,auth_provider,created_at,is_active")
+      .order("created_at", { ascending: false })),
     admin
       .from("viewer_activity_events")
       .select("viewer_type,viewer_key,user_id,event_type,event_data,created_at")
@@ -150,7 +163,7 @@ export async function getDashboardReports() {
 
   const eventRows = Array.isArray(events) ? events : [];
   const historyRows = (Array.isArray(history) ? history : []).filter((row) => String(row?.source || "") !== "sync");
-  const userRows = Array.isArray(users) ? users : [];
+  const userRows = Array.isArray(usersResult?.data) ? usersResult.data : [];
   const viewerActivityRows = !viewerActivityResult?.error && Array.isArray(viewerActivityResult?.data)
     ? viewerActivityResult.data
     : [];

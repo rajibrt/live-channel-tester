@@ -33,6 +33,7 @@ export default function ClientAuthTabs({
   registerErrorCode = "",
   registerErrorMessage = "",
   turnstileSiteKey = "",
+  nextPath = "/watch",
 }) {
   const { t } = useI18n();
   const [tab, setTab] = useState(initialTab === "signup" ? "signup" : "login");
@@ -203,6 +204,7 @@ export default function ClientAuthTabs({
             ) : null}
 
             <form method="post" action="/api/client/auth/login" className={styles.form} autoComplete="off">
+              <input type="hidden" name="next" value={nextPath} />
               <label className={styles.field}>
                 <span>{t("auth.emailOrMobile")}</span>
                 <input

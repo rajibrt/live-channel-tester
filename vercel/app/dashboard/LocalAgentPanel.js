@@ -3,6 +3,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import styles from "./page.module.css";
 
+const PLACEHOLDER_LOGO =
+  "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 64 64'><rect width='64' height='64' rx='10' fill='%23e2e8f0'/><circle cx='32' cy='24' r='9' fill='%2394a3b8'/><rect x='16' y='38' width='32' height='10' rx='5' fill='%2394a3b8'/></svg>";
+
 function slugify(value) {
   return String(value || "")
     .toLowerCase()
@@ -49,6 +52,7 @@ export default function LocalAgentPanel({ defaultAgentBaseUrl }) {
   const [saveMessage, setSaveMessage] = useState("");
   const [saveError, setSaveError] = useState("");
   const [saveDuplicateUrls, setSaveDuplicateUrls] = useState([]);
+  const [uploadingLogoUrl, setUploadingLogoUrl] = useState("");
 
   const abortRef = useRef(null);
   const pausedRef = useRef(false);
@@ -207,6 +211,38 @@ export default function LocalAgentPanel({ defaultAgentBaseUrl }) {
     }
   }
 
+  function updateCheckedItem(url, patch) {
+    const itemUrl = String(url || "");
+    if (!itemUrl) return;
+    setCheckedItems((prev) =>
+      prev.map((item) => (String(item.url || "") === itemUrl ? { ...item, ...patch } : item))
+    );
+  }
+
+  async function uploadLogo(itemUrl, file) {
+    try {
+      if (!file) return;
+      setSaveError("");
+      setSaveMessage("");
+      setUploadingLogoUrl(itemUrl);
+      const form = new FormData();
+      form.append("file", file);
+      form.append("playlist_slug", playlistSlug.trim().toLowerCase() || mergeTargetSlug || "local-check");
+      const res = await fetch("/api/admin/media/logo-upload", {
+        method: "POST",
+        body: form,
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload?.error || "Failed to upload logo.");
+      updateCheckedItem(itemUrl, { logo_url: String(payload.url || "") });
+      setSaveMessage("Logo uploaded. Save playlist to update database.");
+    } catch (err) {
+      setSaveError(err?.message || "Failed to upload logo.");
+    } finally {
+      setUploadingLogoUrl("");
+    }
+  }
+
   async function saveChecked(mode) {
     try {
       setSaveError("");
@@ -255,6 +291,7 @@ export default function LocalAgentPanel({ defaultAgentBaseUrl }) {
 
   const canSave = checkedItems.length > 0;
   const disableSaveControls = loading || !!saveLoading;
+  const disableResultEdits = !!saveLoading;
   const liveCheckedItems = useMemo(
     () => checkedItems.filter((x) => String(x.status || "").toUpperCase() === "LIVE"),
     [checkedItems]
@@ -278,12 +315,16 @@ export default function LocalAgentPanel({ defaultAgentBaseUrl }) {
       </label>
 
       <label className={styles.field}>
-        <span>Choose .m3u file</span>
-        <input
-          type="file"
-          accept=".m3u,.m3u8,audio/x-mpegurl,application/vnd.apple.mpegurl"
-          onChange={(e) => setPlaylistFile(e.target.files?.[0] || null)}
-        />
+        <span>Playlist File</span>
+        <span className={styles.filePickerBox}>
+          <span className={styles.filePickerBtn}>Upload M3U</span>
+          <span className={styles.filePickerName}>{playlistFile?.name || "No file selected"}</span>
+          <input
+            type="file"
+            accept=".m3u,.m3u8,audio/x-mpegurl,application/vnd.apple.mpegurl"
+            onChange={(e) => setPlaylistFile(e.target.files?.[0] || null)}
+          />
+        </span>
       </label>
 
       <p className={styles.hint}>Use URL or file upload. If both are set, uploaded file is used.</p>
@@ -533,9 +574,10 @@ export default function LocalAgentPanel({ defaultAgentBaseUrl }) {
             </button>
           </div>
           <div className={styles.tableWrap}>
-            <table>
+            <table className={styles.localCheckTable}>
               <thead>
                 <tr>
+                  <th>Logo</th>
                   <th>Name</th>
                   <th>Category</th>
                   <th>Stream URL</th>
@@ -545,8 +587,57 @@ export default function LocalAgentPanel({ defaultAgentBaseUrl }) {
               <tbody>
                 {activeItems.map((item, idx) => (
                   <tr key={`${item.url}-${idx}`}>
-                    <td>{item.title}</td>
-                    <td>{item.category || "-"}</td>
+                    <td>
+                      <div className={styles.localLogoCell}>
+                        <img
+                          src={item.logo_url || PLACEHOLDER_LOGO}
+                          alt={item.title || "Channel logo"}
+                          className={styles.channelLogoThumb}
+                          onError={(e) => {
+                            e.currentTarget.src = PLACEHOLDER_LOGO;
+                          }}
+                        />
+                        <div className={styles.logoFieldRow}>
+                          <input
+                            className={styles.inlineInput}
+                            value={item.logo_url}
+                            onChange={(e) => updateCheckedItem(item.url, { logo_url: e.target.value })}
+                            placeholder="Logo URL"
+                            disabled={disableResultEdits || uploadingLogoUrl === item.url}
+                          />
+                          <label className={styles.uploadLogoBtn}>
+                            {uploadingLogoUrl === item.url ? "Uploading..." : "Upload"}
+                            <input
+                              type="file"
+                              accept="image/*"
+                              disabled={disableResultEdits || uploadingLogoUrl === item.url}
+                              onChange={(e) => {
+                                uploadLogo(item.url, e.target.files?.[0]);
+                                e.target.value = "";
+                              }}
+                              style={{ display: "none" }}
+                            />
+                          </label>
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <input
+                        className={styles.inlineInput}
+                        value={item.title}
+                        onChange={(e) => updateCheckedItem(item.url, { title: e.target.value })}
+                        disabled={disableResultEdits}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        className={styles.inlineInput}
+                        value={item.category}
+                        onChange={(e) => updateCheckedItem(item.url, { category: e.target.value })}
+                        placeholder="Unknown"
+                        disabled={disableResultEdits}
+                      />
+                    </td>
                     <td>
                       <a href={item.url} target="_blank" rel="noreferrer" className={styles.url}>
                         {item.url}
@@ -565,7 +656,7 @@ export default function LocalAgentPanel({ defaultAgentBaseUrl }) {
                 ))}
                 {!activeItems.length ? (
                   <tr>
-                    <td colSpan={4}>
+                    <td colSpan={5}>
                       <p className={styles.pending}>
                         {resultTab === "dead" ? "No DEAD links found." : "No LIVE links found."}
                       </p>

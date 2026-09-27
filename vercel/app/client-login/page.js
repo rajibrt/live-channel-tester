@@ -18,7 +18,7 @@ export async function generateMetadata() {
 export default async function ClientLoginPage({ searchParams }) {
   const { t } = await getDictionaryForRequest();
   const current = await getCurrentClient();
-  if (current) redirect("/");
+  if (current) redirect("/watch");
 
   const params = await searchParams;
   const requestedTab = String(params?.tab || "").trim().toLowerCase();
@@ -30,6 +30,8 @@ export default async function ClientLoginPage({ searchParams }) {
   const hasRegisterError = Boolean(registerErrorCode);
   const hasResetInfo = resetState === "sent" || resetState === "updated" || resetState === "invalid";
   const pending = String(params?.pending || "").trim() === "1";
+  const nextPath = String(params?.next || "").trim();
+  const safeNext = nextPath.startsWith("/") && !nextPath.startsWith("//") ? nextPath : "/watch";
   const initialTab = hasRegisterError || requestedTab === "signup" ? "signup" : "login";
   const errorMessage =
     errorCode === "inactive"
@@ -119,6 +121,7 @@ export default async function ClientLoginPage({ searchParams }) {
           registerErrorCode={registerErrorCode}
           registerErrorMessage={registerErrorMessage}
           turnstileSiteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || ""}
+          nextPath={safeNext}
         />
       </section>
     </main>

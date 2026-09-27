@@ -43,6 +43,15 @@ function loadHlsScript() {
   });
 }
 
+function formatExistingChannelDescription(item) {
+  const name = String(item?.name || "").trim();
+  const category = String(item?.category || "").trim();
+  if (name && category) return `Already added as "${name}" in "${category}".`;
+  if (name) return `Already added as "${name}".`;
+  if (category) return `Already added in "${category}".`;
+  return "এই Stream URL আগেই সার্ভারে যোগ করা আছে।";
+}
+
 function SearchableCombobox({
   value,
   options,
@@ -388,7 +397,7 @@ export default function ChannelAttachForm({
       const payload = await res.json().catch(() => ({}));
       if (!res.ok) {
         if (res.status === 409 || payload?.code === "CHANNEL_ALREADY_EXISTS") {
-          showToast("error", "Channel already exists", "এই Stream URL আগেই সার্ভারে যোগ করা আছে।");
+          showToast("error", "Channel already exists", formatExistingChannelDescription(payload?.item));
           return;
         }
         throw new Error(payload?.error || "Failed to save channel.");
@@ -426,11 +435,10 @@ export default function ChannelAttachForm({
       if (!res.ok) throw new Error(payload?.error || "Failed to check stream URL.");
 
       if (payload?.exists) {
-        const existingName = String(payload?.item?.name || "").trim();
         showToast(
           "error",
           "Channel already exists",
-          existingName ? `Already added as "${existingName}".` : "এই Stream URL আগেই সার্ভারে যোগ করা আছে।"
+          formatExistingChannelDescription(payload?.item)
         );
         return;
       }

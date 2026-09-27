@@ -29,6 +29,8 @@ export async function POST(request) {
   const form = await request.formData();
   const identifier = String(form.get("identifier") || "").trim();
   const password = String(form.get("password") || "");
+  const requestedNext = String(form.get("next") || "").trim();
+  const nextPath = requestedNext.startsWith("/") && !requestedNext.startsWith("//") ? requestedNext : "/watch";
 
   if (!identifier || !password) {
     return redirectRelative("/client-login?error=invalid");
@@ -79,8 +81,8 @@ export async function POST(request) {
     },
   });
 
-  const nextPath = String(profile?.approval_status || "").toLowerCase() === "approved" ? "/" : "/?pending=1";
-  const res = redirectRelative(nextPath);
+  const destination = String(profile?.approval_status || "").toLowerCase() === "approved" ? nextPath : "/?pending=1";
+  const res = redirectRelative(destination);
   const sessionToken = createSessionToken({ sub: data.user.id, typ: "client" }, SESSION_MAX_AGE);
   res.cookies.set(CLIENT_SESSION_COOKIE, sessionToken, {
     ...(cookieDomain ? { domain: cookieDomain } : {}),
