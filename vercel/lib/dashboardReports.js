@@ -136,6 +136,7 @@ export async function getDashboardReports() {
     { count: totalPlaybackAttemptsCount },
     { count: totalPlaybackFailuresCount },
     { count: totalWatchSessionsCount },
+    archiveTotalsResult,
   ] = await Promise.all([
     fetchAllRows(() => admin
       .from("client_activity_events")
@@ -179,7 +180,19 @@ export async function getDashboardReports() {
       .from("client_recent_history")
       .select("id", { count: "exact", head: true })
       .neq("source", "sync"),
+    // Counts of rows removed by prune_client_activity_events
+    // (vercel/supabase/activity_retention.sql); missing table => no archive.
+    admin
+      .from("client_activity_event_archive_totals")
+      .select("event_type,archived_count"),
   ]);
+  const archivedCounts = new Map(
+    (Array.isArray(archiveTotalsResult?.data) ? archiveTotalsResult.data : []).map((row) => [
+      String(row?.event_type || ""),
+      Math.max(0, Number(row?.archived_count || 0)),
+    ])
+  );
+  const archived = (type) => archivedCounts.get(type) || 0;
 
   const eventRows = Array.isArray(events) ? events : [];
   const historyRows = (Array.isArray(history) ? history : []).filter((row) => String(row?.source || "") !== "sync");
@@ -536,9 +549,9 @@ export async function getDashboardReports() {
 
   return {
     generated_at: now.toISOString(),
-    total_sessions: Math.max(0, Number(totalSessionsCount || 0)),
-    total_playback_attempts: Math.max(0, Number(totalPlaybackAttemptsCount || 0)),
-    total_playback_failures: Math.max(0, Number(totalPlaybackFailuresCount || 0)),
+    total_sessions: Math.max(0, Number(totalSessionsCount || 0)) + archived("client_login"),
+    total_playback_attempts: Math.max(0, Number(totalPlaybackAttemptsCount || 0)) + archived("playback_attempt"),
+    total_playback_failures: Math.max(0, Number(totalPlaybackFailuresCount || 0)) + archived("playback_failed"),
     total_watch_sessions: Math.max(0, Number(totalWatchSessionsCount || 0)),
     total_users: userRows.length,
     total_guest_events: viewerActivityRows.filter((row) => String(row?.viewer_type || "") === "guest").length,
