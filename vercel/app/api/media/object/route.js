@@ -1,6 +1,11 @@
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { NextResponse } from "next/server";
-import { getObjectStorageProvider, getS3ClientSafe } from "../../../../lib/objectStorage";
+import {
+  getObjectStorageProvider,
+  getPublicMediaBuckets,
+  getS3ClientSafe,
+  isSafeObjectPath,
+} from "../../../../lib/objectStorage";
 import { getSupabaseAdmin } from "../../../../lib/supabaseAdmin";
 
 export const runtime = "nodejs";
@@ -25,6 +30,9 @@ export async function GET(request) {
   if (!bucket || !path) {
     return NextResponse.json({ error: "bucket and path are required" }, { status: 400 });
   }
+  if (!getPublicMediaBuckets().has(bucket) || !isSafeObjectPath(path)) {
+    return NextResponse.json({ error: "Object not found" }, { status: 404 });
+  }
 
   try {
     if (getObjectStorageProvider() === "s3") {
@@ -48,7 +56,7 @@ export async function GET(request) {
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase.storage.from(bucket).download(path);
     if (error || !data) {
-      return NextResponse.json({ error: error?.message || "Object not found" }, { status: 404 });
+      return NextResponse.json({ error: "Object not found" }, { status: 404 });
     }
     const body = Buffer.from(await data.arrayBuffer());
     return new NextResponse(body, {
@@ -59,7 +67,8 @@ export async function GET(request) {
       },
     });
   } catch (error) {
-    return NextResponse.json({ error: error?.message || "Failed to load object" }, { status: 500 });
+    const status = error?.name === "NoSuchKey" || error?.$metadata?.httpStatusCode === 404 ? 404 : 500;
+    return NextResponse.json({ error: status === 404 ? "Object not found" : "Failed to load object" }, { status });
   }
 }
 

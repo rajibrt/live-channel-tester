@@ -4,6 +4,7 @@ import { getCurrentAdmin } from "../../../lib/auth";
 import { getCurrentClient } from "../../../lib/clientAuth";
 import { loadClientAccessSettingsCached } from "../../../lib/clientAccessSettings";
 import { normalizeStreamUrl } from "../../../lib/streamUrl";
+import { getBlockedStreamTargetReason } from "../../../lib/streamTargetGuard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -144,6 +145,11 @@ export async function GET(request) {
     }
   } catch {
     return NextResponse.json({ error: "Invalid target URL." }, { status: 400 });
+  }
+
+  const blockedReason = await getBlockedStreamTargetReason(target);
+  if (blockedReason) {
+    return NextResponse.json({ error: blockedReason }, { status: 403 });
   }
 
   const cached = fromCache(target);

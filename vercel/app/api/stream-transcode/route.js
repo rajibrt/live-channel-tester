@@ -4,6 +4,7 @@ import { getCurrentAdmin } from "../../../lib/auth";
 import { getCurrentClient } from "../../../lib/clientAuth";
 import { loadClientAccessSettingsCached } from "../../../lib/clientAccessSettings";
 import { normalizeStreamUrl } from "../../../lib/streamUrl";
+import { getBlockedStreamTargetReason } from "../../../lib/streamTargetGuard";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -246,6 +247,11 @@ export async function GET(request) {
   }
   if (!/^https?:$/i.test(parsed.protocol)) {
     return NextResponse.json({ error: "Only HTTP/HTTPS URLs are allowed." }, { status: 400 });
+  }
+
+  const blockedReason = await getBlockedStreamTargetReason(target);
+  if (blockedReason) {
+    return NextResponse.json({ error: blockedReason }, { status: 403 });
   }
 
   const gatewayRaw = String(

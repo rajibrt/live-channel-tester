@@ -12,6 +12,29 @@ function cleanBool(value, fallback = false) {
   return !["0", "false", "no", "off"].includes(text);
 }
 
+// Buckets that hold publicly displayed media (logos, OG images, article images).
+// /api/media/object only serves objects from these buckets.
+export function getPublicMediaBuckets() {
+  const names = [
+    process.env.LOGO_BUCKET,
+    process.env.OG_IMAGE_BUCKET,
+    process.env.ARTICLE_IMAGE_BUCKET,
+    process.env.OBJECT_STORAGE_BUCKET_IMAGES,
+    ...cleanText(process.env.OBJECT_STORAGE_PUBLIC_BUCKETS).split(","),
+    "logos",
+    "og-images",
+    "article-images",
+  ];
+  return new Set(names.map(cleanText).filter(Boolean));
+}
+
+export function isSafeObjectPath(path) {
+  const value = cleanText(path);
+  if (!value || value.length > 512) return false;
+  if (value.startsWith("/") || value.includes("\\") || value.includes("\0")) return false;
+  return !value.split("/").some((segment) => segment === ".." || segment === ".");
+}
+
 export function getObjectStorageProvider() {
   const provider = cleanText(process.env.OBJECT_STORAGE_PROVIDER || "supabase").toLowerCase();
   return provider === "s3" || provider === "s3-compatible" ? "s3" : "supabase";

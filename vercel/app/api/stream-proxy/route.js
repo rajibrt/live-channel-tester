@@ -3,6 +3,7 @@ import { getCurrentAdmin } from "../../../lib/auth";
 import { getCurrentClient } from "../../../lib/clientAuth";
 import { loadClientAccessSettingsCached } from "../../../lib/clientAccessSettings";
 import { normalizeStreamUrl, toStreamProxyUrl } from "../../../lib/streamUrl";
+import { fetchStreamTargetSafely } from "../../../lib/streamTargetGuard";
 
 export const dynamic = "force-dynamic";
 
@@ -99,14 +100,19 @@ export async function GET(request) {
   reqHeaders.set("accept", "*/*");
 
   let upstream = null;
+  let safeFinalUrl = target;
   try {
-    upstream = await fetch(target, {
+    const result = await fetchStreamTargetSafely(target, {
       method: "GET",
       headers: reqHeaders,
-      redirect: "follow",
       cache: "no-store",
     });
-  } catch {
+    upstream = result.response;
+    safeFinalUrl = result.finalUrl;
+  } catch (error) {
+    if (error?.code === "STREAM_TARGET_BLOCKED") {
+      return NextResponse.json({ error: error.message }, { status: 403 });
+    }
     return NextResponse.json({ error: "Failed to fetch target stream." }, { status: 502 });
   }
 
@@ -117,7 +123,7 @@ export async function GET(request) {
     );
   }
 
-  const finalUrl = upstream.url || target;
+  const finalUrl = safeFinalUrl;
   const contentType = upstream.headers.get("content-type") || "";
   const asManifest = hasHlsContentType(contentType) || isLikelyM3u8Url(finalUrl);
 
