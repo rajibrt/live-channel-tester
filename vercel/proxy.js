@@ -39,6 +39,19 @@ export function proxy(req) {
     return NextResponse.redirect(canonicalUrl, 308);
   }
 
+  // Signed-out visitors go straight to the admin login instead of waiting for
+  // dashboard data to render. Invalid/expired tokens are still handled by
+  // requireAdmin() in the dashboard layout.
+  if (
+    (req.nextUrl.pathname === "/dashboard" || req.nextUrl.pathname.startsWith("/dashboard/")) &&
+    !req.cookies.get("m3u_admin_token")?.value
+  ) {
+    const loginUrl = req.nextUrl.clone();
+    loginUrl.pathname = "/login";
+    loginUrl.search = "";
+    return NextResponse.redirect(loginUrl, 307);
+  }
+
   if (req.method === "POST" && req.headers.has("next-action")) {
     return NextResponse.json(
       {

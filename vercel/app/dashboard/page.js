@@ -3,6 +3,7 @@ import { Bell } from "lucide-react";
 import { getSupabaseAdmin } from "../../lib/supabaseAdmin";
 import { getActiveViewerSnapshot } from "../../lib/activeViewers";
 import { getDashboardReports } from "../../lib/dashboardReports";
+import { requireAdmin } from "../../lib/auth";
 import styles from "./page.module.css";
 import CopyUrlButton from "./CopyUrlButton";
 import ActiveViewersPanel from "./ActiveViewersPanel";
@@ -109,6 +110,9 @@ function formatShortCount(value) {
 }
 
 export default async function DashboardPage() {
+  // Layout and page render in parallel; check auth here too so the heavy
+  // report queries never run for signed-out visitors.
+  await requireAdmin();
   const { playlists, tokenBySlug, jobRun, activeViewers, reports, pushEnabledClients } = await getData();
   const base = process.env.PUBLIC_PLAYLIST_BASE_URL || "";
   const activeTokenCount = Object.keys(tokenBySlug).length;

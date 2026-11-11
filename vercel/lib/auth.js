@@ -1,11 +1,13 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { cache } from "react";
 import { getSupabaseAdmin } from "./supabaseAdmin";
 import { verifySessionToken } from "./sessionToken";
 
 export const ADMIN_SESSION_COOKIE = "m3u_admin_token";
 
-export async function getCurrentAdmin() {
+// Memoized per request so the dashboard layout and page share one lookup.
+export const getCurrentAdmin = cache(async function getCurrentAdmin() {
   const cookieStore = await cookies();
   const token = cookieStore.get(ADMIN_SESSION_COOKIE)?.value || "";
   if (!token) return null;
@@ -21,7 +23,7 @@ export async function getCurrentAdmin() {
     .single();
   if (!row) return null;
   return { user: { id: row.user_id, email: row.email }, admin: row, token };
-}
+});
 
 export async function requireAdmin() {
   const current = await getCurrentAdmin();

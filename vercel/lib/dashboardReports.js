@@ -36,6 +36,35 @@ async function fetchAllRows(queryFactory, pageSize = 1000) {
   return { data: rows, error: null };
 }
 
+const VISITOR_EVENT_TYPES = ["page_view", "presence_ping", "channel_select", "playback_attempt", "movie_playback_attempt", "client_login"];
+
+function getServerTimeZone() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  } catch {
+    return "UTC";
+  }
+}
+
+// Unique-visitor counts per bucket, computed in Postgres by
+// public.dashboard_unique_visitors (vercel/supabase/dashboard_performance.sql).
+// Returns Map(bucketIsoKey -> count), or null if the function is unavailable.
+async function fetchUniqueVisitorBuckets(admin, since, unit) {
+  const { data, error } = await admin.rpc("dashboard_unique_visitors", {
+    p_since: since.toISOString(),
+    p_unit: unit,
+    p_tz: getServerTimeZone(),
+    p_event_types: VISITOR_EVENT_TYPES,
+  });
+  if (error || !Array.isArray(data)) return null;
+  const counts = new Map();
+  for (const row of data) {
+    const at = safeDate(row?.bucket);
+    if (at) counts.set(at.toISOString(), Math.max(0, Number(row?.visitors || 0)));
+  }
+  return counts;
+}
+
 function startOfHour(date) {
   const d = new Date(date);
   d.setMinutes(0, 0, 0);
@@ -102,25 +131,22 @@ export async function getDashboardReports() {
     { data: history },
     usersResult,
     viewerActivityResult,
-    { data: visitorEventsTrend },
-    { data: visitorHistoryTrend },
+    [visitorBuckets24h, visitorBuckets7d, visitorBuckets30d, visitorBuckets365d],
     { count: totalSessionsCount },
     { count: totalPlaybackAttemptsCount },
     { count: totalPlaybackFailuresCount },
     { count: totalWatchSessionsCount },
   ] = await Promise.all([
-    admin
+    fetchAllRows(() => admin
       .from("client_activity_events")
       .select("user_id,event_type,event_data,created_at")
       .gte("created_at", cutoff7d.toISOString())
-      .order("created_at", { ascending: false })
-      .limit(50000),
-    admin
+      .order("created_at", { ascending: false })),
+    fetchAllRows(() => admin
       .from("client_recent_history")
       .select("user_id,channel_id,channel_name,watch_seconds,watched_at,source")
       .gte("watched_at", cutoff7d.toISOString())
-      .order("watched_at", { ascending: false })
-      .limit(50000),
+      .order("watched_at", { ascending: false })),
     fetchAllRows(() => admin
       .from("client_users")
       .select("user_id,approval_status,auth_provider,created_at,is_active")
@@ -131,18 +157,12 @@ export async function getDashboardReports() {
       .gte("created_at", cutoff365d.toISOString())
       .order("created_at", { ascending: true })
       .limit(250000),
-    admin
-      .from("client_activity_events")
-      .select("user_id,created_at,event_type")
-      .gte("created_at", cutoff365d.toISOString())
-      .order("created_at", { ascending: true })
-      .limit(200000),
-    admin
-      .from("client_recent_history")
-      .select("user_id,watched_at,source")
-      .gte("watched_at", cutoff365d.toISOString())
-      .order("watched_at", { ascending: true })
-      .limit(200000),
+    Promise.all([
+      fetchUniqueVisitorBuckets(admin, cutoff24h, "hour"),
+      fetchUniqueVisitorBuckets(admin, cutoff7d, "day"),
+      fetchUniqueVisitorBuckets(admin, cutoff30d, "day"),
+      fetchUniqueVisitorBuckets(admin, cutoff365d, "month"),
+    ]),
     admin
       .from("client_activity_events")
       .select("id", { count: "exact", head: true })
@@ -167,10 +187,6 @@ export async function getDashboardReports() {
   const viewerActivityRows = !viewerActivityResult?.error && Array.isArray(viewerActivityResult?.data)
     ? viewerActivityResult.data
     : [];
-  const visitorTrendRows = Array.isArray(visitorEventsTrend) ? visitorEventsTrend : [];
-  const visitorHistoryRows = (Array.isArray(visitorHistoryTrend) ? visitorHistoryTrend : []).filter(
-    (row) => String(row?.source || "") !== "sync"
-  );
 
   const sessionEvents = eventRows.filter((row) => String(row?.event_type || "") === "client_login");
   const playbackAttempts7d = eventRows.filter((row) => String(row?.event_type || "") === "playback_attempt");
@@ -433,13 +449,13 @@ export async function getDashboardReports() {
     };
   });
 
-  const visitorEventTypes = new Set(["page_view", "presence_ping", "channel_select", "playback_attempt", "movie_playback_attempt", "client_login"]);
-  const relevantEventVisitors = visitorTrendRows.filter((row) => visitorEventTypes.has(String(row?.event_type || "")));
-  const relevantHistoryVisitors = visitorHistoryRows.map((row) => ({
-    user_id: row?.user_id,
-    created_at: row?.watched_at,
-  }));
-  const relevantVisitors = [...relevantEventVisitors, ...relevantHistoryVisitors];
+  const visitorEventTypes = new Set(VISITOR_EVENT_TYPES);
+  // Fallback when the SQL function is not installed yet: the 7-day rows
+  // already loaded above can still fill the 24-hour and 7-day charts.
+  const relevantVisitors = [
+    ...eventRows.filter((row) => visitorEventTypes.has(String(row?.event_type || ""))),
+    ...historyRows.map((row) => ({ user_id: row?.user_id, created_at: row?.watched_at })),
+  ];
   const relevantUnifiedViewers = viewerActivityRows
     .filter((row) => visitorEventTypes.has(String(row?.event_type || "")) || String(row?.event_type || "") === "watch_session")
     .map((row) => ({
@@ -462,10 +478,18 @@ export async function getDashboardReports() {
     }
   };
 
-  fillUniqueUserBuckets(dayBuckets, (at) => startOfHour(at), relevantVisitors.filter((r) => safeDate(r?.created_at) >= cutoff24h));
-  fillUniqueUserBuckets(weekBuckets, (at) => startOfDay(at), relevantVisitors.filter((r) => safeDate(r?.created_at) >= cutoff7d));
-  fillUniqueUserBuckets(monthBuckets, (at) => startOfDay(at), relevantVisitors.filter((r) => safeDate(r?.created_at) >= cutoff30d));
-  fillUniqueUserBuckets(yearBuckets, (at) => startOfMonth(at), relevantVisitors.filter((r) => safeDate(r?.created_at) >= cutoff365d));
+  const applyBucketCounts = (buckets, counts) => {
+    for (const bucket of buckets) bucket.value = counts.get(bucket.key) || 0;
+  };
+
+  if (visitorBuckets24h) applyBucketCounts(dayBuckets, visitorBuckets24h);
+  else fillUniqueUserBuckets(dayBuckets, (at) => startOfHour(at), relevantVisitors.filter((r) => safeDate(r?.created_at) >= cutoff24h));
+  if (visitorBuckets7d) applyBucketCounts(weekBuckets, visitorBuckets7d);
+  else fillUniqueUserBuckets(weekBuckets, (at) => startOfDay(at), relevantVisitors.filter((r) => safeDate(r?.created_at) >= cutoff7d));
+  if (visitorBuckets30d) applyBucketCounts(monthBuckets, visitorBuckets30d);
+  else fillUniqueUserBuckets(monthBuckets, (at) => startOfDay(at), relevantVisitors.filter((r) => safeDate(r?.created_at) >= cutoff30d));
+  if (visitorBuckets365d) applyBucketCounts(yearBuckets, visitorBuckets365d);
+  else fillUniqueUserBuckets(yearBuckets, (at) => startOfMonth(at), relevantVisitors.filter((r) => safeDate(r?.created_at) >= cutoff365d));
 
   const buildViewerBuckets = (sourceRows, filterType = "") => {
     const cloneBuckets = (buckets) => buckets.map((bucket) => ({ ...bucket, value: 0 }));
