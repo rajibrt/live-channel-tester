@@ -240,8 +240,23 @@ async function loadHomeIptvData() {
     channel.categoryId = categoryMap.get(key)?.id || "";
   }
 
-  // Keep playlist traversal order so dashboard group sorting is reflected on homepage.
-  const categories = Array.from(categoryMap.values());
+  // Category order = the order saved in the admin Groups tab (playlist_groups),
+  // falling back to playlist traversal order for groups without a saved position.
+  const traversal = Array.from(categoryMap.entries());
+  const groupRank = new Map();
+  const { data: savedGroups } = await supabase
+    .from("playlist_groups")
+    .select("playlist_slug,name,position")
+    .order("playlist_slug", { ascending: true })
+    .order("position", { ascending: true });
+  for (const row of savedGroups || []) {
+    const key = normKey(normalizeCategory(row.name));
+    if (!groupRank.has(key)) groupRank.set(key, groupRank.size);
+  }
+  const categories = traversal
+    .map(([key, value], index) => ({ value, index, rank: groupRank.has(key) ? groupRank.get(key) : Number.MAX_SAFE_INTEGER }))
+    .sort((a, b) => a.rank - b.rank || a.index - b.index)
+    .map((entry) => entry.value);
   return {
     channels,
     categories,

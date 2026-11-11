@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowDown, ArrowUp, Check, Pencil, Plus, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, GripVertical, Pencil, Plus, Trash2, X } from "lucide-react";
 import styles from "../../workspace.module.css";
 import { normalizeGroup } from "./groupUtils";
 
@@ -23,6 +23,8 @@ export default function GroupsTab({ playlistSlug, groups, setChannels, setSavedG
   const [newName, setNewName] = useState("");
   const [editing, setEditing] = useState(null); // { name, draft }
   const [deleting, setDeleting] = useState(null); // { name, total, moveTo }
+  const [dragIndex, setDragIndex] = useState(null);
+  const [dropIndex, setDropIndex] = useState(null);
 
   const names = groups.map((g) => g.name);
 
@@ -51,6 +53,25 @@ export default function GroupsTab({ playlistSlug, groups, setChannels, setSavedG
     if (target < 0 || target >= names.length) return;
     const next = [...names];
     [next[index], next[target]] = [next[target], next[index]];
+    saveOrder(next);
+  };
+
+  const dropAt = (target) => {
+    const from = dragIndex;
+    setDragIndex(null);
+    setDropIndex(null);
+    if (from === null || target === null || from === target) return;
+    const next = [...names];
+    const [moved] = next.splice(from, 1);
+    next.splice(target, 0, moved);
+    saveOrder(next);
+  };
+
+  const moveToTop = (index) => {
+    if (index <= 0) return;
+    const next = [...names];
+    const [moved] = next.splice(index, 1);
+    next.unshift(moved);
     saveOrder(next);
   };
 
@@ -132,7 +153,8 @@ export default function GroupsTab({ playlistSlug, groups, setChannels, setSavedG
         </button>
       </div>
       <p className={styles.muted}>
-        The order here is the order viewers see. Renaming a group renames it for every channel in it; deleting a group moves its channels to another group.
+        The order here is the order viewers see. Drag a row by its handle (or use the arrows) to reorder; changes save immediately.
+        Renaming a group renames it for every channel in it; deleting a group moves its channels to another group.
       </p>
       {message ? <p className={styles.notice}>{message}</p> : null}
       {error ? <p className={styles.errorText}>{error}</p> : null}
@@ -146,8 +168,34 @@ export default function GroupsTab({ playlistSlug, groups, setChannels, setSavedG
           <span />
         </li>
         {groups.map((g, index) => (
-          <li key={g.name} className={styles.groupRow}>
+          <li
+            key={g.name}
+            className={`${styles.groupRow} ${dragIndex === index ? styles.dragging : ""} ${dropIndex === index && dragIndex !== index ? styles.dropTarget : ""}`}
+            draggable={!busy && !editing}
+            onDragStart={(e) => {
+              setDragIndex(index);
+              e.dataTransfer.effectAllowed = "move";
+              e.dataTransfer.setData("text/plain", g.name);
+            }}
+            onDragOver={(e) => {
+              if (dragIndex === null) return;
+              e.preventDefault();
+              e.dataTransfer.dropEffect = "move";
+              if (dropIndex !== index) setDropIndex(index);
+            }}
+            onDragEnd={() => {
+              setDragIndex(null);
+              setDropIndex(null);
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              dropAt(index);
+            }}
+          >
             <span className={styles.orderBtns}>
+              <span className={styles.dragHandle} title="Drag to reorder" aria-hidden="true">
+                <GripVertical size={16} />
+              </span>
               <button type="button" className={styles.iconBtn} disabled={busy || index === 0} onClick={() => moveGroup(index, -1)} aria-label={`Move ${g.name} up`}>
                 <ArrowUp size={14} />
               </button>
@@ -189,6 +237,9 @@ export default function GroupsTab({ playlistSlug, groups, setChannels, setSavedG
             <span>{g.total}</span>
             <span className={g.dead ? styles.bad : styles.muted}>{g.dead || "—"}</span>
             <span className={styles.rowActions}>
+              <button type="button" className={styles.ghostBtn} onClick={() => moveToTop(index)} disabled={busy || index === 0} title="Move to the top">
+                Top
+              </button>
               <button type="button" className={styles.ghostBtn} onClick={() => setEditing({ name: g.name, draft: g.name })} disabled={busy}>
                 <Pencil size={14} />
                 Rename

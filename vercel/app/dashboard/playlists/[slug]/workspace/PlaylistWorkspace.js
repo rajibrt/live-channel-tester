@@ -121,6 +121,7 @@ export default function PlaylistWorkspace({
         <ChannelsTab
           key={channelsGroup || "default"}
           initialGroup={channelsGroup}
+          onReorderGroups={() => switchTab("groups")}
           playlistSlug={playlist.slug}
           channels={channels}
           setChannels={setChannels}

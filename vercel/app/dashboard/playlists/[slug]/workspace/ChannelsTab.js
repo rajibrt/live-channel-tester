@@ -41,7 +41,7 @@ function ChannelLogo({ src, name }) {
   return <span className={`${styles.logo} ${styles.logoFallback}`}>{String(name || "TV").slice(0, 2).toUpperCase()}</span>;
 }
 
-export default function ChannelsTab({ initialGroup = null, playlistSlug, channels, setChannels, groups, setSavedGroups, sourceCounts, setSourceCounts }) {
+export default function ChannelsTab({ initialGroup = null, onReorderGroups, playlistSlug, channels, setChannels, groups, setSavedGroups, sourceCounts, setSourceCounts }) {
   const [group, setGroup] = useState(() => initialGroup || groups[0]?.name || ALL);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
@@ -176,7 +176,14 @@ export default function ChannelsTab({ initialGroup = null, playlistSlug, channel
   return (
     <div className={styles.channelsLayout}>
       <aside className={styles.groupPanel} aria-label="Groups">
-        <p className={styles.groupPanelTitle}>Groups</p>
+        <div className={styles.groupPanelHead}>
+          <p className={styles.groupPanelTitle}>Groups</p>
+          {onReorderGroups ? (
+            <button type="button" className={styles.linkBtn} onClick={onReorderGroups}>
+              Reorder
+            </button>
+          ) : null}
+        </div>
         <ul className={styles.groupList}>
           <li>
             <button

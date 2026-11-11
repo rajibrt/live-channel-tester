@@ -740,7 +740,7 @@
 /* Groups tab */
 .groupRow {
   display: grid;
-  grid-template-columns: 64px minmax(0, 1fr) 90px 70px 210px;
+  grid-template-columns: 92px minmax(0, 1fr) 90px 70px 270px;
   gap: 10px;
   align-items: center;
   padding: 8px 12px;
@@ -880,7 +880,7 @@
 
 @media (max-width: 900px) {
   .groupRow {
-    grid-template-columns: 64px minmax(0, 1fr) 60px;
+    grid-template-columns: 92px minmax(0, 1fr) 60px;
   }
 
   .groupRow > :nth-child(4),
@@ -895,4 +895,46 @@
   .healthRow {
     grid-template-columns: 1fr;
   }
+}
+
+.dragHandle {
+  display: inline-flex;
+  align-items: center;
+  color: var(--muted-foreground);
+  cursor: grab;
+}
+
+.groupRow[draggable="true"] {
+  cursor: grab;
+}
+
+.dragging {
+  opacity: 0.45;
+}
+
+.dropTarget {
+  box-shadow: inset 0 2px 0 var(--primary);
+  background: color-mix(in oklab, var(--primary) 8%, transparent);
+}
+
+.groupPanelHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.linkBtn {
+  border: 0;
+  background: transparent;
+  color: var(--primary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+
+.linkBtn:hover {
+  text-decoration: underline;
 }
