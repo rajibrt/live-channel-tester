@@ -186,8 +186,8 @@ The audit checks live robots.txt, sitemap, ads.txt, HTTP status, redirects, titl
 
 A. **Movie audio (AC3) plan (2026-11-12, user-approved steps 1+2, in progress):**
    1. Player notice — DEPLOYED in `2875a02` (2026-11-12): `components/movies/MoviePlayer.js` shows a Bengali notice with "VLC-তে খুলুন" (Android intent / iOS vlc-x-callback) and copy-link when (a) scan data says the source audio is browser-unsupported and the browser cannot decode it (`MediaSource.isTypeSupported`), or (b) after 4s of unmuted playback `webkitAudioDecodedByteCount === 0`. Verified in Chromium: AC3 file → 0 audio bytes, AAC file → 112 KB. Tracks `movie_audio_unsupported` activity.
-   2. Codec catalog — code deployed in `2875a02`, NOT yet active: `vercel/supabase/movie_media_info.sql` (table `movie_source_media_info`, keyed by source_url) + `vercel/scripts/scan-movie-media-info.mjs` (ffprobe, must run on a machine inside the ISP network, e.g. the user's Mac). `lib/moviesData.js` attaches `source.audioCodecs/browserAudioOk/reachable` when the table exists. Pending: user runs the SQL, then run the scan (~45-60 min for ~3,800 non-HLS URLs), then commit/push.
-   3. Later, after the scan shows how many AC3 files exist: decide between an ISP-local transcode gateway (existing `vercel/transcode-gateway`, Cloudflare Tunnel) or in-browser audio transcode. Also use the scan's `unreachable` rows to deactivate dead movie links.
+   2. Codec catalog — code deployed in `2875a02`, NOT yet active: `vercel/supabase/movie_media_info.sql` (table `movie_source_media_info`, keyed by source_url) + `vercel/scripts/scan-movie-media-info.mjs` (ffprobe, must run on a machine inside the ISP network, e.g. the user's Mac). `lib/moviesData.js` attaches `source.audioCodecs/browserAudioOk/reachable` when the table exists. DONE 2026-11-12: SQL applied and scan finished (4,038 URLs; 1,083 = 27% without browser-playable audio). The notice now uses this data.
+   3. DECIDED 2026-11-12 (user: "Keep notice for now"): keep the VLC/Edge/Safari notice; in-browser transcode is not feasible (no CORS on the FTP hosts). Revisit only if the user asks. Original note: decide between an ISP-local transcode gateway (existing `vercel/transcode-gateway`, Cloudflare Tunnel) or in-browser audio transcode. Also use the scan's `unreachable` rows to deactivate dead movie links.
 B. **TV channel multi-source failover (requested 2026-11-12; Phase 1 DEPLOYED in `2875a02` on 2026-11-12; Phases 2-3 pending):**
    - Current facts: `channels` has one `stream_url` (UNIQUE, used as import/dedupe key); `playlist_channels` links; `playlist_groups` = per-playlist category order; status LIVE/DEAD set by a server cron that cannot reach ISP-local hosts; `components/iptv/VideoPlayer.js` (1544 lines) has no retry/alternate URL; home data `components/iptv/homeData.js` cached 60s, no paging; admin channel management spread over ~10 files / ~5.7k lines (`playlist-editor.js` 2167, `live-check-workspace.js` 1431). Admins currently add duplicates like "Ananda TV" / "Ananda TV 2" as a workaround.
    - Phase 1: table `channel_sources` (channel_id, stream_url, label/collection, priority, is_active, last_status, counters), backfill from `channels.stream_url`, keep `channels.stream_url` = top source for compatibility; home data sends ordered `sources[]`; player auto-failover (startup timeout, fatal error, long stall) with a small non-blocking "trying alternate link n/N" indicator, remembers the working source per device, reports per-source success/failure; admin "Channel sources" drawer (add/reorder/test/disable links).
@@ -470,3 +470,36 @@ Re-check `git status` every time. This list is a historical snapshot, not permis
 - Verified locally in the user's Chrome: buttons render in the Indian Bangla group. Not clicked (it would change production order).
 - Correction: the earlier note "eslint clean" was wrong; the project has no eslint config. `npm run build` passed.
 - Deployed together with the English-default change in the same commit (user: "এটা করে তারপরে ডিপ্লয় করো").
+
+### 2026-11-12 - Movie codec scan finished
+
+- `scan-movie-media-info.mjs` finished from the user's Mac: 4,038 non-HLS movie URLs, 4,013 ok, 11 unreachable (10.1.1.1 ×5, cdn1.discoveryftp.net ×5, 172.16.50.14 ×1), 14 error (discoveryftp). Rows are in `movie_source_media_info`.
+- 1,083 ok files (27%) have no browser-playable audio: ac3 646, eac3 382, eac3+ac3 21, dts 21, plus a few truehd/wmav2. aac 2,569, mp3 262, opus 38 are fine. 22 files have eac3+aac (a playable second track the player could select).
+- Effect: `lib/moviesData.js` now attaches `browserAudioOk=false` for these sources, so the movie player shows the "open in VLC / Edge / Safari" notice up front.
+- Next decision for the user: real fix for ~27% of movies (ISP-local transcode gateway vs in-browser audio transcode); deactivate the 25 unreachable/error links (ask first).
+
+### 2026-11-12 - In-browser AC3 fix investigated: not feasible
+
+- User chose "Try in-browser fix". Checked feasibility first (no code written).
+- Blocker: browser JS (ffmpeg.wasm / WASM AC3 decoder) must read the file bytes with `fetch`, which needs CORS. `cdn1.discoveryftp.net` (≈97% of the 1,083 bad-audio files) returns 206 for Range but no `Access-Control-Allow-Origin`, and OPTIONS preflight → 405. `172.16.50.7` has no CORS and no HTTPS. So a page on webtvbd.com cannot read these files; only a `<video>` element can play them, and Chrome cannot decode AC3 there. Web Audio on a non-CORS media element outputs silence.
+- `video.audioTracks` (to pick the AAC track in the 22 eac3+aac files) works only in Safari, not Chrome.
+- Remaining real options: an ISP-local gateway (e.g. `vercel/transcode-gateway` on a machine inside the ISP: fetch → copy video, AC3→AAC audio → serve with CORS/HTTPS via Cloudflare Tunnel; limited by that machine's upload bandwidth), or ask the FTP operator to add CORS. Current mitigation (VLC/Edge/Safari notice driven by the scan) stays.
+
+### 2026-11-12 - Decision: keep the movie audio notice
+
+- User chose "Keep notice for now". No ISP gateway work planned. The 25 unreachable/error movie links are still active (not asked to deactivate).
+
+### 2026-11-12 - Deactivated dead movie links
+
+- User approved closing the 25 scan failures. Re-probed the 14 "error" rows one at a time: 9 play fine (scan errors were connection drops at concurrency 6), so they were left active (The Holy Man, Kartabya, Krishnakanter Will, Bar Asbe Ekhuni, Tintorettor Jishu, Sedin Dekha Hoyechilo, Dharasnan, Biwi No.1, Naaraaz). Also left active: Mumbai Central (corruption only deep in the file) and The Good Maharaja (AV1 decode warning).
+- Deactivated 14 `movie_sources` rows: 11 × HTTP 404 plus 3 corrupt files (Abhimanyu: no moov atom; Shajarur Kanta and Gaslight: invalid start). Each movie had only that one source, so those 14 movies were also set `is_published=false` (hidden from the site and the M3U VOD list): En kärlekshistoria, Bombay, Nikaah, Pakeezah, Roja, Abhimanyu, Shajarur Kanta, Projapati 2, Shiddat, Gaslight, Assi, O' Romeo, Vadh 2, Dhurandhar.
+- Backup and undo data: `backups/movie-sources-bad-links-2026-11-12.json` (`applied.deactivatedSourceIds`, `applied.unpublishedMovies` with their previous `is_published`).
+- TiviMate question (user): the public M3U (`app/playlist/[token]/route.js`) writes only `channels.stream_url` per channel, so backup links and failover do not reach TiviMate today. Not changed; options proposed to the user.
+
+### 2026-11-12 - Smart redirect links for TiviMate / M3U (local, not deployed)
+
+- User chose "Smart redirect link" so backup links help IPTV apps too.
+- New `vercel/app/playlist/[token]/live/[channel]/route.js`: validates the playlist token and that the channel is in that playlist, then 302s to the best active `channel_sources` link (`lib/channelSourcePick.js`: admin order, links that viewers recently reported failing moved to the back — ≥3 failures, latest event a failure, under 6 h old). Deterministic, with token/channel results cached in memory for 60 s/30 s, because players re-request the URL on every live playlist refresh. No server-side probing (Hetzner can't reach BDIX hosts).
+- `app/playlist/[token]/route.js`: channels with ≥2 active links get `<origin>/playlist/<token>/live/<id>` (origin from x-forwarded-host/proto); single-link channels keep their direct URL.
+- Verified locally: the user's playlist → 927 channels, 148 with smart links; redirect 302 to the top link; ffprobe follows it and sees audio+video; bad token / channel not in playlist → 404; selection unit check 7/7.
+- Caveats: TiviMate does not switch links mid-stream on its own; it gets a better link on the next open once website viewers have reported the failing one. Those 148 channels now depend on webtvbd.com being up.

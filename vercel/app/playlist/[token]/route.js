@@ -48,7 +48,37 @@ function toPositiveIntSet(rows, key = "id") {
   return out;
 }
 
-export async function GET(_request, context) {
+function requestOrigin(request) {
+  const headers = request?.headers;
+  const host = String(headers?.get("x-forwarded-host") || headers?.get("host") || "").split(",")[0].trim();
+  const proto = String(headers?.get("x-forwarded-proto") || "").split(",")[0].trim() || "https";
+  if (host && /^[a-z0-9.:-]+$/i.test(host)) return `${proto}://${host}`;
+  try {
+    return new URL(request.url).origin;
+  } catch {
+    return "";
+  }
+}
+
+// Channel ids that have two or more active links: these get the smart
+// redirect URL (/playlist/<token>/live/<id>) instead of a fixed stream URL.
+async function loadMultiSourceIds(supabase, ids) {
+  const counts = new Map();
+  for (let i = 0; i < ids.length; i += 200) {
+    const part = ids.slice(i, i + 200);
+    const { data, error } = await supabase
+      .from("channel_sources")
+      .select("channel_id")
+      .in("channel_id", part)
+      .eq("is_active", true)
+      .limit(5000);
+    if (error) return new Set();
+    for (const row of data || []) counts.set(Number(row.channel_id), (counts.get(Number(row.channel_id)) || 0) + 1);
+  }
+  return new Set([...counts.entries()].filter(([, n]) => n > 1).map(([id]) => id));
+}
+
+export async function GET(request, context) {
   const { token } = await context.params;
   const normalizedToken = normalizeTokenParam(token);
   const supabaseUrl = process.env.SUPABASE_URL || "";
@@ -97,6 +127,8 @@ export async function GET(_request, context) {
     channels = Array.isArray(data) ? data : [];
   }
   const channelById = Object.fromEntries(channels.map((c) => [c.id, c]));
+  const multiSourceIds = await loadMultiSourceIds(supabase, channels.map((c) => Number(c.id)));
+  const origin = requestOrigin(request);
 
   let movies = [];
   let sources = [];
@@ -180,7 +212,8 @@ export async function GET(_request, context) {
     const category = sanitizeAttr(c.category || "");
     const logo = sanitizeAttr(c.logo_url || "");
     out += `#EXTINF:-1 tvg-name="${name}" group-title="${category}" tvg-logo="${logo}",${name}\n`;
-    out += `${(c.stream_url || "").trim()}\n`;
+    const smart = origin && multiSourceIds.has(Number(c.id));
+    out += `${smart ? `${origin}/playlist/${normalizedToken}/live/${c.id}` : (c.stream_url || "").trim()}\n`;
   }
 
   for (const movie of movies || []) {
