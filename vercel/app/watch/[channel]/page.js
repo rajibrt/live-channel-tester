@@ -8,6 +8,7 @@ import { getClientHomeData } from "../../../lib/clientHomeData";
 import { buildChannelParam, parseChannelParam } from "../../../lib/channelSlug";
 import { buildChannelSeoMeta, getChannelById } from "../../../lib/channelSeo";
 import { getLocaleFromRequest } from "../../../lib/i18n/server";
+import { resolveMergedChannelId } from "../../../lib/channelMerges";
 import { getBaseUrl } from "../../../lib/siteUrl";
 
 export const dynamic = "force-dynamic";
@@ -190,6 +191,10 @@ export default async function WatchChannelPage({ params, searchParams }) {
   const locale = await getLocaleFromRequest();
 
   if (!channel) {
+    // Merged duplicate: send old links to the channel that was kept.
+    const mergedInto = await resolveMergedChannelId(id);
+    const target = mergedInto ? await getChannelById(mergedInto) : null;
+    if (target) permanentRedirect(`/watch/${buildChannelParam(target)}`);
     return (
       <main style={{ minHeight: "100dvh", display: "grid", placeItems: "center", color: "var(--foreground)" }}>
         <p>{locale === "bn" ? "চ্যানেল পাওয়া যায়নি।" : "Channel not found."}</p>

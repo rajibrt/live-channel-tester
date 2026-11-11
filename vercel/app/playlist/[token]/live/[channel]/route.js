@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from "../../../../../lib/supabaseAdmin";
 import { pickBestChannelSource } from "../../../../../lib/channelSourcePick";
+import { resolveMergedChannelId } from "../../../../../lib/channelMerges";
 
 // Smart link used in the public M3U for channels that have backup links.
 // IPTV apps (TiviMate etc.) open this URL; we answer with a 302 to the best
@@ -67,7 +68,12 @@ async function handle(_request, context) {
   const admin = getSupabaseAdmin();
   const slug = await resolveSlug(admin, token);
   if (!slug) return new Response("Not found", { status: 404 });
-  const url = await resolveUrl(admin, slug, channelId);
+  let url = await resolveUrl(admin, slug, channelId);
+  if (!url) {
+    // Old link of a merged duplicate (TiviMate playlist not refreshed yet).
+    const mergedInto = await resolveMergedChannelId(channelId);
+    if (mergedInto) url = await resolveUrl(admin, slug, mergedInto);
+  }
   if (!/^https?:\/\//i.test(url)) return new Response("Not found", { status: 404 });
 
   return new Response(null, {

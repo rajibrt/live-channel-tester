@@ -194,7 +194,7 @@ B. **TV channel multi-source failover (requested 2026-11-12; Phase 1 DEPLOYED in
    - Phase 2: "merge duplicates" tool (suggest by normalized name, keep one channel id, map favorites/history of merged ids), import a collection M3U as extra sources of existing channels instead of "Name 2" copies.
    - Phase 3: ISP-aware ranking from viewer reports (client IP → ASN/ISP), per-source/collection health dashboard, stop server-side marking of ISP-local sources as DEAD, simplify/merge editor + live-check UIs.
    - Keep `channels.id` stable (favorites, history, `/watch/{id}-slug`, analytics).
-C. **Import channels from the user's traffic capture — APPLIED 2026-11-12 (see ledger); follow-ups: 258 linked channels still without a logo (no safe match), 7-day review of unreachable links (~2026-11-19):**
+C. **Import channels from the user's traffic capture — APPLIED 2026-11-12 (see ledger); follow-ups: 130 linked channels still without a logo after round 3, 7-day review of unreachable links (~2026-11-19):**
    - Source file: `/Users/Kayum_1/Downloads/CSV_2026-11-11_23-07-12.csv` (copied to git-excluded `backups/imports/CSV_2026-11-11_23-07-12.csv`). It is an HTTP traffic log from the "WalaTV" app, not an M3U: 520 requests, ~53 unique `.m3u8` URLs (hosts such as `116.204.149.16`, `alvetv.com`, `app24.jagobd.com.bd`, `tvsen6.aynaott.com`, `85.237.89.160:9590`, `27.124.71.27`) and ~57 logo/image requests (`images.weserv.nl`, `i.imgur.com`, `trendnestbd.com`).
    - Task: extract the stream links (prefer master `index.m3u8` over `tracks-*/mono.m3u8` variants), play-test each from the ISP network, identify the channel (Bangladeshi / Indian / other), then add it to the right channel and group — as a backup link (`channel_sources`) when the channel already exists, otherwise as a new channel. Set an appropriate logo only when the channel has none. Present the mapping to the user before writing, and follow the local-review rule.
    - Extended scope (user, 2026-11-12), same task: reduce the number of categories (merge unnecessary/duplicate groups such as "SPORTS CHANNELS" vs "Sports", "INDIAN CHANNELS" vs "India"/"Indian Bangla"), remove dead channels that no longer play, and move channels sitting in the wrong category to the right one. Propose the new category list and the moves to the user before applying. Local and production share one Supabase DB, so data changes are live immediately (no deploy needed).
@@ -501,5 +501,39 @@ Re-check `git status` every time. This list is a historical snapshot, not permis
 - User chose "Smart redirect link" so backup links help IPTV apps too.
 - New `vercel/app/playlist/[token]/live/[channel]/route.js`: validates the playlist token and that the channel is in that playlist, then 302s to the best active `channel_sources` link (`lib/channelSourcePick.js`: admin order, links that viewers recently reported failing moved to the back — ≥3 failures, latest event a failure, under 6 h old). Deterministic, with token/channel results cached in memory for 60 s/30 s, because players re-request the URL on every live playlist refresh. No server-side probing (Hetzner can't reach BDIX hosts).
 - `app/playlist/[token]/route.js`: channels with ≥2 active links get `<origin>/playlist/<token>/live/<id>` (origin from x-forwarded-host/proto); single-link channels keep their direct URL.
-- Verified locally: the user's playlist → 927 channels, 148 with smart links; redirect 302 to the top link; ffprobe follows it and sees audio+video; bad token / channel not in playlist → 404; selection unit check 7/7.
-- Caveats: TiviMate does not switch links mid-stream on its own; it gets a better link on the next open once website viewers have reported the failing one. Those 148 channels now depend on webtvbd.com being up.
+- Verified locally: the user's playlist → 927 channels, 13 with smart links (an earlier note said 148; that count wrongly included source URLs containing /live/); redirect 302 to the top link; ffprobe follows it and sees audio+video; bad token / channel not in playlist → 404; selection unit check 7/7.
+- Caveats: TiviMate does not switch links mid-stream on its own; it gets a better link on the next open once website viewers have reported the failing one. Those 13 channels now depend on webtvbd.com being up.
+
+### 2026-11-12 - Deployed smart M3U links (260180b)
+
+- Pushed `260180b` to master; Dokploy autodeploy live after ~60 s. Verified: live M3U (www redirects to non-www) has 927 channels, 13 using `https://webtvbd.com/playlist/<token>/live/<id>`; that URL 302s and ffprobe reads audio+video through it; `/` 200, `/watch` 200, `/dashboard` 307.
+- Pending: user will refresh the playlist in TiviMate and test on 2026-11-13 (reported plan).
+
+### 2026-11-12 - Channel logos, round 2
+
+- User asked to fill the remaining logos. Re-matched the 258 playlist-linked channels with an empty logo using better name cleanup (price suffixes "- Rs x", emoji, "(1080p)", "_HD", "ENC nnnn", trailing copy digit), same-name siblings in our DB, iptv-org main/alt names with a country check for BD/IN/TH categories, and a hand-checked alias list (e.g. TEN 1/2/3/5 → SonySportsTen*.in, SET → SonyEntertainmentTelevision.in, DW, NDTV, CGTN, RT, Eurosport 1/2 Polska, Viasat, JTBC Golf).
+- Dropped by review: [MM] Light (matched a Ukrainian channel), Star Sports (generic), Star Sports Select 2 (would get the Select 1 logo), Azan TV (uncertain).
+- Of 111 matches, only the 85 whose URL returned HTTP 200 with image bytes were applied (imgur timeouts, roarzone DNS failure, wikia 403, dead 404s skipped). Written only where `logo_url` was still empty. Backup: `backups/channel-logos-round2-before-2026-11-12.json`. Script: session scratchpad `logos2/`.
+- Result (verified): 173 linked channels without a logo (was 258). Remaining are mostly generic names ("Channel 155", "ENC 7014", "EN", "HI") or brands with no confident logo source.
+
+### 2026-11-12 - Identified generic-name channels by frame grab; renamed + logos
+
+- User asked to play the unnamed channels and fix their names and logos. 74 playlist-linked channels with generic names ("Channel 155", "ENC 7014", "Sport 2", "EN", "Ani"…): frame grabs from the user's Mac (ffmpeg, 8 parallel) → 56 frames, 18 failed (timeouts/no video).
+- Identified from on-screen logos and renamed 43 (guarded on the old name), each with an iptv-org logo that was checked to load (guarded on empty logo): Khushboo Bangla, Goldmines Bollywood/Movies/Action, Manoranjan TV/Prime/Grand/Movies, B4U Music/Bhojpuri, Anmol TV, Anmol Cinema, Anmol Cinema 2, Rang, Shemaroo TV/Josh/MarathiBana, Channel WIN, Sangeet Bhojpuri, Al Sunnah Al Nabawiyah TV (+ "TV 2"), Kappa TV, A Spor, PTC Punjabi/Punjabi Gold/Music, Epic Music, Epic Bharat, RPlus Gold, All Time Movies, Ekushey TV (was "ETV TV"), Big Magic, E24, Dangal, Dangal 2, Food Food, Music India, Balle Balle, Pitaara, TRT World, 9X Tashan, 9X Jalwa, Fakt Marathi. Backup: `backups/channel-renames-logos-2026-11-12.json`.
+- Dead (OTTCLUB "Неверный ключ"/"Канал недоступен" slate), left untouched: 742 Sport 2, 743 Sport 3 HD, 744 Sport 4, 745 Sport 5 HD, 2054 Ani, 2056 Na!oc, 2118 be3.
+- Not identified (logo unclear or ad on screen): 991, 1101, 2005, 2012, 2014, 2036; plus 18 with no frame.
+- Several renamed channels now duplicate existing ones (e.g. Khushboo Bangla, Ekushey TV, 9X Tashan, Dangal): candidates for failover Phase 2 "merge duplicates" (keep one channel, move the other link in as a backup).
+- Result: 130 linked channels without a logo (was 173).
+
+### 2026-11-12 - Removed 7 dead OTTCLUB channels
+
+- User approved ("Yes, remove them"). Removed from `bdix` and deleted (their only playlist; channel_sources cascaded): 742 Sport 2, 743 Sport 3 HD, 744 Sport 4, 745 Sport 5 HD, 2054 Ani, 2056 Na!oc (all `ott.watch`), 2118 be3 (`4.team.ga`). Each showed an OTTCLUB "invalid key"/"channel unavailable" slate.
+- Backup: `backups/channels-dead-ottclub-2026-11-12.json` (channels, playlist links, sources). Verified 0 remain. Client favorites pointing at these ids were left as is.
+
+### 2026-11-12 - Merged duplicate channels (failover Phase 2, first pass)
+
+- User asked to merge duplicates. Grouped playlist-linked channels by normalized name (price/resolution/HD/ENC/emoji stripped; trailing copy digit stripped except for numbered series). Excluded on review: ESPN vs ESPN 2, Sansad TV 1/2, ThePapare 1/2, and the bad "news" group (News 1 Thailand / News 21 / News 24); News 24 + NEWS24 HD merged separately.
+- 108 groups, 155 channels merged into 108 kept channels (keeper = LIVE, has logo, best viewer success, lowest id). Per group: merged channels' links appended to the keeper's `channel_sources` (label `merged: <old name>`, inactive if the merged channel was DEAD), keeper added to any playlist only a merged channel was in (5), `client_favorites` moved (150) or dropped where the user already had the keeper (43), `client_recent_history` remapped (6,202 rows), keeper renamed to a clean name (e.g. "Somoy TV", "&TV HD", "Jamuna TV") and category fixed for Kappa TV/Khushboo Bangla/Ekushey TV/TRT World, merged channel rows deleted.
+- Old→new id map stored in `admin_settings` key `channel_merges` (`{ map: { oldId: keptId } }`). Backup: `backups/channel-merge-2026-11-12.json` (all involved channels, links, sources, favorites, remapped history row ids, previous setting).
+- Verified (data, live now): bdix 800 channels (was 953); no duplicate groups left except the 5 excluded; kept channels' `stream_url` = top active source; local M3U 793 live entries, 110 with smart links.
+- Code (uncommitted, build passed, NOT deployed — push needs user approval): new `lib/channelMerges.js`; `/watch/<oldId>` redirects to the kept channel (client-side redirect because the page streams; verified in a browser 564 → 865-somoy-tv); `/playlist/<token>/live/<oldId>` resolves to the kept channel. Until deployed, old `/watch/<mergedId>` links in production show "Channel not found".
