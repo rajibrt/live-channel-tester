@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import styles from './movies.module.css'
 import { resolveBrowserPlaybackUrl } from '../../lib/streamUrl'
+import { useI18n } from '../i18n/LanguageProvider'
 
 function toSeconds(value) {
   const n = Number(value)
@@ -328,6 +329,7 @@ export default function MoviePlayer({
   onTrackActivity,
   isGuest = false,
 }) {
+  const { t } = useI18n()
   const playerWrapRef = useRef(null)
   const videoRef = useRef(null)
   const hlsRef = useRef(null)
@@ -867,9 +869,9 @@ export default function MoviePlayer({
       await navigator.clipboard.writeText(value)
       setLinkCopied(true)
     } catch {
-      window.prompt('মুভির লিংক কপি করুন:', value)
+      window.prompt(t('player.copyPrompt'), value)
     }
-  }, [rawSourceUrl])
+  }, [rawSourceUrl, t])
   const watchedSeconds = Number(
     playbackSeconds || movie?.progress?.positionSeconds || 0,
   )
@@ -1222,36 +1224,35 @@ export default function MoviePlayer({
         <div className={styles.audioNotice} role='status'>
           <div className={styles.audioNoticeHead}>
             <AlertTriangle size={16} aria-hidden='true' />
-            <strong>এই মুভির শব্দ এই ব্রাউজারে বাজছে না</strong>
+            <strong>{t('player.audioTitle')}</strong>
             <button
               type='button'
               className={styles.audioNoticeClose}
               onClick={() => setAudioIssueDismissed(true)}
-              aria-label='বার্তাটি বন্ধ করুন'
+              aria-label={t('player.closeNotice')}
             >
               <X size={14} />
             </button>
           </div>
           <p className={styles.audioNoticeText}>
             {audioCodecText
-              ? `অডিও ফরম্যাট ${audioCodecText}। Chrome ও Android ব্রাউজার এই ফরম্যাট চালাতে পারে না, তাই ছবি চলবে কিন্তু শব্দ আসবে না।`
-              : 'ফাইলের অডিও ফরম্যাট এই ব্রাউজার চালাতে পারছে না, তাই ছবি চলছে কিন্তু শব্দ আসছে না।'}
+              ? t('player.audioCodecText').replace('{codec}', audioCodecText)
+              : t('player.audioGenericText')}
           </p>
           <div className={styles.audioNoticeActions}>
             {externalPlayerLink ? (
               <a className={styles.movieNavBtn} href={externalPlayerLink}>
                 <ExternalLink size={15} />
-                <span>VLC-তে খুলুন</span>
+                <span>{t('player.openInVlc')}</span>
               </a>
             ) : null}
             <button type='button' className={styles.movieNavBtn} onClick={handleCopyMovieLink} disabled={!rawSourceUrl}>
               <Copy size={15} />
-              <span>{linkCopied ? 'লিংক কপি হয়েছে' : 'মুভির লিংক কপি করুন'}</span>
+              <span>{linkCopied ? t('player.linkCopied') : t('player.copyMovieLink')}</span>
             </button>
           </div>
           <p className={styles.audioNoticeHint}>
-            শব্দসহ দেখতে: Microsoft Edge বা Safari ব্রাউজারে এই পেজটি খুলুন, অথবা VLC প্লেয়ারে লিংকটি চালান
-            (কম্পিউটারে VLC → Media → Open Network Stream → লিংক পেস্ট করুন)।
+            {t('player.audioHint')}
           </p>
         </div>
       ) : null}

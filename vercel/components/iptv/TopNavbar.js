@@ -311,7 +311,7 @@ export default function TopNavbar({
   debugStats,
   clientLabel,
   clientProfile,
-  language = 'bn',
+  language = 'en',
   isGuest = false,
 }) {
   const [open, setOpen] = useState(false)
@@ -344,7 +344,7 @@ export default function TopNavbar({
   const [pushError, setPushError] = useState('')
   const [showInstallCta, setShowInstallCta] = useState(false)
   const [showPushCta, setShowPushCta] = useState(false)
-  const [pushDialogLanguage, setPushDialogLanguage] = useState('bn')
+  const [pushDialogLanguage, setPushDialogLanguage] = useState('en')
   const vapidPublicKeyRef = useRef(
     String(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || '').trim(),
   )
@@ -367,7 +367,7 @@ export default function TopNavbar({
     [clientProfile?.mobileNumber],
   )
   const copy = useMemo(() => {
-    const isBn = String(pushDialogLanguage || 'bn').trim().toLowerCase() !== 'en'
+    const isBn = String(pushDialogLanguage || 'en').trim().toLowerCase() === 'bn'
     return isBn
       ? {
           pushTitle: 'পুশ নোটিফিকেশন চালু করুন',
@@ -397,7 +397,7 @@ export default function TopNavbar({
 
   useEffect(() => {
     if (showPushCta) {
-      setPushDialogLanguage('bn')
+      setPushDialogLanguage('en')
     }
   }, [showPushCta])
 

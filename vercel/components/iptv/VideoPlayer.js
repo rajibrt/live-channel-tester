@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "./icons";
+import { useI18n } from "../i18n/LanguageProvider";
 import styles from "./iptv.module.css";
 import { isPrivateNetworkUrl, resolveBrowserPlaybackUrl } from "../../lib/streamUrl";
 
@@ -126,6 +127,9 @@ export default function VideoPlayer({
   onPlaybackSuccess,
 }) {
   const LIVE_PLAYER_SCOPE = "live-player";
+  const { t } = useI18n();
+  const tRef = useRef(t);
+  tRef.current = t;
   const videoRef = useRef(null);
   const shellRef = useRef(null);
   const hlsRef = useRef(null);
@@ -240,12 +244,15 @@ export default function VideoPlayer({
   };
 
   const statusLabel = useMemo(() => {
-    if (status === "loading" && failoverInfo) return `বিকল্প লিংকে চেষ্টা হচ্ছে (${failoverInfo.index + 1}/${failoverInfo.total})`;
+    if (status === "loading" && failoverInfo)
+      return t("player.tryingBackupLink")
+        .replace("{current}", String(failoverInfo.index + 1))
+        .replace("{total}", String(failoverInfo.total));
     if (status === "loading") return "Switching channel...";
     if (status === "error") return errorMessage || "Stream unavailable";
     if (status === "playing") return "Live Stream Playing";
     return "Choose from the list to start streaming";
-  }, [status, errorMessage, failoverInfo]);
+  }, [status, errorMessage, failoverInfo, t]);
 
   useEffect(() => {
     onPlaybackAttemptRef.current = onPlaybackAttempt;
@@ -402,7 +409,7 @@ export default function VideoPlayer({
         setFailoverInfo(null);
         setErrorMessage(
           sources.length > 1
-            ? "এই চ্যানেলের কোনো লিংক এখন আপনার নেটওয়ার্কে চলছে না"
+            ? tRef.current("player.allLinksFailed")
             : "Stream unavailable"
         );
         setStatus("error");
@@ -1556,7 +1563,7 @@ export default function VideoPlayer({
                 data-tv-focus-id={isTvMode ? "live-player-retry" : undefined}
               >
                 <Icon name="RotateCcw" size={14} />
-                আবার চেষ্টা করুন
+                {t("player.tryAgain")}
               </button>
             ) : null}
           </div>

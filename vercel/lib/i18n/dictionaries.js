@@ -1,8 +1,22 @@
 export const SUPPORTED_LOCALES = ["en", "bn"];
-export const DEFAULT_LOCALE = "bn";
+export const DEFAULT_LOCALE = "en";
 
 export const dictionaries = {
   en: {
+    player: {
+      tryingBackupLink: "Trying backup link ({current}/{total})",
+      allLinksFailed: "None of this channel's links are playing on your network right now",
+      tryAgain: "Try again",
+      audioTitle: "This movie's sound can't play in this browser",
+      closeNotice: "Close message",
+      audioCodecText: "Audio format: {codec}. Chrome and Android browsers can't play this format, so the picture plays without sound.",
+      audioGenericText: "This browser can't play the file's audio format, so the picture plays without sound.",
+      openInVlc: "Open in VLC",
+      copyMovieLink: "Copy movie link",
+      linkCopied: "Link copied",
+      copyPrompt: "Copy the movie link:",
+      audioHint: "To watch with sound, open this page in Microsoft Edge or Safari, or play the link in VLC (on a computer: VLC → Media → Open Network Stream → paste the link).",
+    },
     common: {
       menu: "Menu",
       dashboard: "Dashboard",
@@ -291,6 +305,20 @@ export const dictionaries = {
     },
   },
   bn: {
+    player: {
+      tryingBackupLink: "বিকল্প লিংকে চেষ্টা হচ্ছে ({current}/{total})",
+      allLinksFailed: "এই চ্যানেলের কোনো লিংক এখন আপনার নেটওয়ার্কে চলছে না",
+      tryAgain: "আবার চেষ্টা করুন",
+      audioTitle: "এই মুভির শব্দ এই ব্রাউজারে বাজছে না",
+      closeNotice: "বার্তাটি বন্ধ করুন",
+      audioCodecText: "অডিও ফরম্যাট {codec}। Chrome ও Android ব্রাউজার এই ফরম্যাট চালাতে পারে না, তাই ছবি চলবে কিন্তু শব্দ আসবে না।",
+      audioGenericText: "ফাইলের অডিও ফরম্যাট এই ব্রাউজার চালাতে পারছে না, তাই ছবি চলছে কিন্তু শব্দ আসছে না।",
+      openInVlc: "VLC-তে খুলুন",
+      copyMovieLink: "মুভির লিংক কপি করুন",
+      linkCopied: "লিংক কপি হয়েছে",
+      copyPrompt: "মুভির লিংক কপি করুন:",
+      audioHint: "শব্দসহ দেখতে: Microsoft Edge বা Safari ব্রাউজারে এই পেজটি খুলুন, অথবা VLC প্লেয়ারে লিংকটি চালান (কম্পিউটারে VLC → Media → Open Network Stream → লিংক পেস্ট করুন)।",
+    },
     common: {
       menu: "মেনু",
       dashboard: "ড্যাশবোর্ড",

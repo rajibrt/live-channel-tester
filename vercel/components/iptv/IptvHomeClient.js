@@ -236,7 +236,7 @@ export default function IptvHomeClient({
   });
   const [cookieLanguage, setCookieLanguage] = useState(() => {
     const v = String(initialClientState?.cookiePrefs?.language || "").toLowerCase();
-    return v === "en" ? "en" : "bn";
+    return v === "bn" ? "bn" : "en";
   });
   const [cookiePrefsReady, setCookiePrefsReady] = useState(false);
   const [favorites, setFavorites] = usePersistentArray(
@@ -311,8 +311,8 @@ export default function IptvHomeClient({
       setCookieConsent(storedConsent);
     }
     const storedLanguage = String(readStoredValue(COOKIE_LANGUAGE_KEY)).trim().toLowerCase();
-    if (!initialClientState?.cookiePrefs?.language && storedLanguage === "en") {
-      setCookieLanguage("en");
+    if (!initialClientState?.cookiePrefs?.language && storedLanguage === "bn") {
+      setCookieLanguage("bn");
     }
     setCookiePrefsReady(true);
   }, [initialClientState?.cookiePrefs?.consent, initialClientState?.cookiePrefs?.language]);

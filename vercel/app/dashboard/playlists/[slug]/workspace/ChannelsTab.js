@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, Link2, Plus } from "lucide-react";
+import { ArrowDown, ArrowDownAZ, ArrowDownZA, ArrowUp, Link2, Plus } from "lucide-react";
 import styles from "../../workspace.module.css";
 import ChannelDrawer from "./ChannelDrawer";
 import { normalizeGroup } from "./groupUtils";
@@ -113,6 +113,29 @@ export default function ChannelsTab({ initialGroup = null, onReorderGroups, play
       const json = await postJson(`/api/admin/playlists/${encodeURIComponent(playlistSlug)}/channel-order`, { channel_ids: order });
       const positions = new Map((json.positions || []).map((p) => [Number(p.channel_id), Number(p.position)]));
       setChannels((prev) => prev.map((c) => (positions.has(Number(c.id)) ? { ...c, position: positions.get(Number(c.id)) } : c)));
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const sortGroupByName = async (direction) => {
+    if (!canReorder || visible.length < 2) return;
+    const label = direction === "desc" ? "Z–A" : "A–Z";
+    if (!window.confirm(`Sort all ${visible.length} channels in “${group}” ${label}? This replaces the current manual order.`)) return;
+    const sorted = [...visible].sort((a, b) => {
+      const cmp = String(a.name || "").localeCompare(String(b.name || ""), "en", { sensitivity: "base", numeric: true });
+      return direction === "desc" ? -cmp : cmp;
+    });
+    setBusy(true);
+    try {
+      const json = await postJson(`/api/admin/playlists/${encodeURIComponent(playlistSlug)}/channel-order`, {
+        channel_ids: sorted.map((c) => Number(c.id)),
+      });
+      const positions = new Map((json.positions || []).map((p) => [Number(p.channel_id), Number(p.position)]));
+      setChannels((prev) => prev.map((c) => (positions.has(Number(c.id)) ? { ...c, position: positions.get(Number(c.id)) } : c)));
+      flash(`Sorted “${group}” ${label}.`);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -234,6 +257,30 @@ export default function ChannelsTab({ initialGroup = null, onReorderGroups, play
             <option value="hidden">Hidden from home</option>
             <option value="multi">Has backup links</option>
           </select>
+          {group !== ALL ? (
+            <>
+              <button
+                type="button"
+                className={styles.ghostBtn}
+                onClick={() => sortGroupByName("asc")}
+                disabled={busy || !canReorder || visible.length < 2}
+                title={canReorder ? `Sort ${group} A–Z (saves immediately)` : "Clear search and status filter to sort"}
+              >
+                <ArrowDownAZ size={16} />
+                A–Z
+              </button>
+              <button
+                type="button"
+                className={styles.ghostBtn}
+                onClick={() => sortGroupByName("desc")}
+                disabled={busy || !canReorder || visible.length < 2}
+                title={canReorder ? `Sort ${group} Z–A (saves immediately)` : "Clear search and status filter to sort"}
+              >
+                <ArrowDownZA size={16} />
+                Z–A
+              </button>
+            </>
+          ) : null}
           <button type="button" className={styles.primaryBtn} onClick={() => setDrawer({ mode: "new" })}>
             <Plus size={16} />
             Add channel
