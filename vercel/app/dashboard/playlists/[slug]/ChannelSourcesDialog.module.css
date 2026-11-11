@@ -1,0 +1,196 @@
+.panel {
+  display: grid;
+  gap: 12px;
+}
+
+.card {
+  width: min(920px, 100%);
+  max-height: calc(100vh - 28px);
+  overflow: auto;
+  display: grid;
+  gap: 12px;
+}
+
+.help,
+.status {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--muted-foreground);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--background) 55%, var(--card));
+}
+
+.rowInactive {
+  opacity: 0.6;
+}
+
+.rank {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--primary) 22%, var(--card));
+  color: var(--foreground);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.fields {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.meta {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.urlInput,
+.labelInput {
+  width: 100%;
+  min-width: 0;
+  padding: 7px 10px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: var(--background);
+  color: var(--foreground);
+  font: inherit;
+  font-size: 13px;
+}
+
+.labelInput {
+  max-width: 260px;
+}
+
+.urlInput:focus,
+.labelInput:focus {
+  outline: none;
+  border-color: var(--ring);
+}
+
+.result {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+
+.actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.actions button,
+.addRow button,
+.footer button {
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 6px 10px;
+  background: var(--card);
+  color: var(--foreground);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.actions button:disabled,
+.addRow button:disabled,
+.footer button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.danger {
+  color: var(--destructive) !important;
+  border-color: color-mix(in oklab, var(--destructive) 45%, var(--border)) !important;
+}
+
+.addRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px auto;
+  gap: 8px;
+}
+
+.error,
+.notice {
+  margin: 0;
+  font-size: 13px;
+  padding: 8px 10px;
+  border-radius: 9px;
+}
+
+.error {
+  color: var(--destructive);
+  background: color-mix(in oklab, var(--destructive) 10%, transparent);
+}
+
+.notice {
+  background: color-mix(in oklab, var(--primary) 12%, transparent);
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.primary {
+  background: var(--primary) !important;
+  color: var(--primary-foreground) !important;
+  border-color: var(--primary) !important;
+  padding: 8px 16px !important;
+  font-size: 13px !important;
+}
+
+@media (max-width: 720px) {
+  .row {
+    grid-template-columns: 28px minmax(0, 1fr);
+  }
+
+  .actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+
+  .addRow {
+    grid-template-columns: 1fr;
+  }
+
+  .labelInput {
+    max-width: none;
+  }
+}

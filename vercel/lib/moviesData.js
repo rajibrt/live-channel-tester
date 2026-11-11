@@ -151,6 +151,10 @@ function toMovieShape(movie, categoryRows, sourceRows, progressRow, isFavorite) 
           label: text(firstSource.label) || "default",
           rawUrl: normalizedSource,
           playbackUrl,
+          audioCodecs: Array.isArray(firstSource.media_info?.audio_codecs) ? firstSource.media_info.audio_codecs : [],
+          browserAudioOk:
+            typeof firstSource.media_info?.browser_audio_ok === "boolean" ? firstSource.media_info.browser_audio_ok : null,
+          reachable: firstSource.media_info ? firstSource.media_info.status !== "unreachable" : null,
         }
       : null,
     rawPlaybackUrl: normalizedSource,
@@ -380,6 +384,22 @@ async function loadMovieSourceRows(admin, movieIds) {
   return rows;
 }
 
+// Codec details written by scripts/scan-movie-media-info.mjs
+// (table from supabase/movie_media_info.sql). Missing table => empty map.
+async function loadSourceMediaInfo(admin, sourceRows) {
+  const urls = [...new Set((Array.isArray(sourceRows) ? sourceRows : []).map((row) => text(row?.source_url)).filter(Boolean))];
+  const byUrl = new Map();
+  for (const chunk of chunkArray(urls, 40)) {
+    const { data, error } = await admin
+      .from("movie_source_media_info")
+      .select("source_url,status,audio_codecs,browser_audio_ok")
+      .in("source_url", chunk);
+    if (error) return byUrl;
+    for (const row of data || []) byUrl.set(text(row.source_url), row);
+  }
+  return byUrl;
+}
+
 async function loadMovieProgressRows(admin, userId, movieIds) {
   if (!userId || !Array.isArray(movieIds) || !movieIds.length) return [];
   const rows = [];
@@ -463,8 +483,10 @@ async function hydrateMoviesForUser(admin, userId, movieRows, options = {}) {
     categoriesByMovie.set(movieId, list);
   }
 
+  const mediaInfoByUrl = await loadSourceMediaInfo(admin, sourceRows).catch(() => new Map());
   const sourcesByMovie = new Map();
   for (const row of sourceRows) {
+    row.media_info = mediaInfoByUrl.get(text(row?.source_url)) || null;
     const movieId = Number(row?.movie_id);
     if (!Number.isInteger(movieId) || !movieIdSet.has(movieId)) continue;
     const list = sourcesByMovie.get(movieId) || [];

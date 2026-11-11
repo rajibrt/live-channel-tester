@@ -2857,3 +2857,24 @@
   border-color: color-mix(in oklab, var(--primary) 55%, var(--border));
   background: color-mix(in oklab, var(--primary) 24%, transparent);
 }
+
+.retryBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px auto 0;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--card) 80%, transparent);
+  color: var(--foreground);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.retryBtn:hover,
+.retryBtn:focus-visible {
+  border-color: var(--primary);
+}

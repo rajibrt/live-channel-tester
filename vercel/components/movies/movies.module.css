@@ -3597,3 +3597,63 @@
     grid-auto-columns: minmax(136px, 156px);
   }
 }
+
+/* Unsupported-audio notice (e.g. AC3 in Chrome) */
+.audioNotice {
+  margin: 8px 8px 0;
+  padding: 12px;
+  border: 1px solid color-mix(in oklab, #f59e0b 55%, var(--border));
+  border-radius: 12px;
+  background: color-mix(in oklab, #f59e0b 12%, var(--card));
+  color: var(--foreground);
+  display: grid;
+  gap: 8px;
+}
+
+.audioNoticeHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.audioNoticeHead > svg {
+  color: #d97706;
+  flex-shrink: 0;
+}
+
+.audioNoticeClose {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--foreground);
+  cursor: pointer;
+}
+
+.audioNoticeText,
+.audioNoticeHint {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.audioNoticeHint {
+  color: color-mix(in oklab, var(--muted-foreground) 88%, var(--foreground));
+  font-size: 12px;
+}
+
+.audioNoticeActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.audioNoticeActions a {
+  text-decoration: none;
+}

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireClientApi } from "../../../../lib/clientApi";
 import { buildClientMetaFromRequest } from "../../../../lib/requestClientMeta";
 import { getSupabaseAdmin } from "../../../../lib/supabaseAdmin";
+import { PLAYBACK_STARTED_EVENT } from "../../../../lib/channelSourceStats";
 
 const ALLOWED_EVENTS = new Set([
   "channel_select",
@@ -19,6 +20,8 @@ const ALLOWED_EVENTS = new Set([
   "movie_progress",
   "movie_complete",
   "movie_favorite_toggle",
+  "movie_audio_unsupported",
+  PLAYBACK_STARTED_EVENT,
 ]);
 
 export async function POST(request) {
@@ -40,11 +43,15 @@ export async function POST(request) {
   }
 
   const admin = getSupabaseAdmin();
-  await admin.from("client_activity_events").insert({
-    user_id: auth.current.user.id,
-    event_type: eventType,
-    event_data: mergedEventData,
-  });
+  // Per-link counters are recorded once in /api/visitor/activity (the player
+  // posts every event there too); playback_started is not stored as an event.
+  if (eventType !== PLAYBACK_STARTED_EVENT) {
+    await admin.from("client_activity_events").insert({
+      user_id: auth.current.user.id,
+      event_type: eventType,
+      event_data: mergedEventData,
+    });
+  }
 
   return NextResponse.json({ ok: true });
 }

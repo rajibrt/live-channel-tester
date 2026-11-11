@@ -42,14 +42,62 @@ function pickIcon(categoryName) {
   return "Globe";
 }
 
+async function fetchAllPages(buildQuery, pageSize = 1000) {
+  const rows = [];
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await buildQuery().range(from, from + pageSize - 1);
+    if (error) return { data: rows, error };
+    const page = Array.isArray(data) ? data : [];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+  }
+  return { data: rows, error: null };
+}
+
+function chunkList(list, size) {
+  const out = [];
+  for (let i = 0; i < list.length; i += size) out.push(list.slice(i, i + size));
+  return out;
+}
+
+// Ordered alternate links per channel (supabase/channel_sources.sql).
+// Missing table => empty map; channels then fall back to channels.stream_url.
+async function loadChannelSources(supabase, channelIds) {
+  const byChannel = new Map();
+  for (const chunk of chunkList(channelIds, 200)) {
+    const { data, error } = await fetchAllPages(() =>
+      supabase
+        .from("channel_sources")
+        .select("id,channel_id,stream_url,label,priority")
+        .eq("is_active", true)
+        .in("channel_id", chunk)
+        .order("channel_id", { ascending: true })
+        .order("priority", { ascending: true })
+        .order("id", { ascending: true })
+    );
+    if (error) return new Map();
+    for (const row of data) {
+      const key = Number(row.channel_id);
+      const list = byChannel.get(key) || [];
+      list.push(row);
+      byChannel.set(key, list);
+    }
+  }
+  return byChannel;
+}
+
 async function loadHomeIptvData() {
   const supabase = getSupabaseAdmin();
 
-  const { data: links, error: linksErr } = await supabase
-    .from("playlist_channels")
-    .select("playlist_slug,channel_id,position")
-    .order("playlist_slug", { ascending: true })
-    .order("position", { ascending: true });
+  // Paginated: Supabase returns at most 1000 rows per request.
+  const { data: links, error: linksErr } = await fetchAllPages(() =>
+    supabase
+      .from("playlist_channels")
+      .select("playlist_slug,channel_id,position")
+      .order("playlist_slug", { ascending: true })
+      .order("position", { ascending: true })
+      .order("channel_id", { ascending: true })
+  );
 
   if (linksErr || !Array.isArray(links) || !links.length) {
     return {
@@ -82,18 +130,19 @@ async function loadHomeIptvData() {
 
   let rows = [];
   let rowsErr = null;
-  ({ data: rows, error: rowsErr } = await supabase
-    .from("channels")
-    .select("id,name,category,logo_url,stream_url,status,include_on_home")
-    .in("id", ids)
-    .eq("status", "LIVE"));
+  const loadChannelRows = async (columns) => {
+    const collected = [];
+    for (const chunk of chunkList(ids, 200)) {
+      const { data, error } = await supabase.from("channels").select(columns).in("id", chunk).eq("status", "LIVE");
+      if (error) return { data: collected, error };
+      collected.push(...(data || []));
+    }
+    return { data: collected, error: null };
+  };
+  ({ data: rows, error: rowsErr } = await loadChannelRows("id,name,category,logo_url,stream_url,status,include_on_home"));
 
   if (rowsErr && String(rowsErr.message || "").toLowerCase().includes("include_on_home")) {
-    ({ data: rows, error: rowsErr } = await supabase
-      .from("channels")
-      .select("id,name,category,logo_url,stream_url,status")
-      .in("id", ids)
-      .eq("status", "LIVE"));
+    ({ data: rows, error: rowsErr } = await loadChannelRows("id,name,category,logo_url,stream_url,status"));
   }
 
   if (rowsErr || !Array.isArray(rows) || !rows.length) {
@@ -111,6 +160,7 @@ async function loadHomeIptvData() {
   }
 
   const byId = new Map(rows.map((row) => [Number(row.id), row]));
+  const sourcesByChannel = await loadChannelSources(supabase, [...byId.keys()]).catch(() => new Map());
   const seenUrl = new Set();
   const channels = [];
 
@@ -119,7 +169,18 @@ async function loadHomeIptvData() {
     if (!row) continue;
     if (row.include_on_home === false) continue;
 
-    const streamUrl = normalizeUrl(row.stream_url);
+    // Ordered failover list; the top active source is the primary stream.
+    const sources = [];
+    const seenSourceUrl = new Set();
+    for (const src of sourcesByChannel.get(Number(row.id)) || []) {
+      const url = normalizeUrl(src.stream_url);
+      if (!url || seenSourceUrl.has(url.toLowerCase())) continue;
+      seenSourceUrl.add(url.toLowerCase());
+      sources.push({ id: String(src.id), url, label: norm(src.label) });
+    }
+    const fallbackUrl = normalizeUrl(row.stream_url);
+    if (!sources.length && fallbackUrl) sources.push({ id: "", url: fallbackUrl, label: "" });
+    const streamUrl = sources[0]?.url || "";
     if (!streamUrl) continue;
 
     const urlKey = streamUrl.toLowerCase();
@@ -139,6 +200,7 @@ async function loadHomeIptvData() {
       logo: logoText,
       logoUrl: norm(row.logo_url),
       streamUrl,
+      sources,
       isLive: true,
       gradientStyle: hashGradient(`${name}:${streamUrl}`),
       playlistSlug: norm(link.playlist_slug),

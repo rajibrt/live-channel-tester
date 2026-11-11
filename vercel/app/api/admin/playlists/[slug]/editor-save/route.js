@@ -105,6 +105,22 @@ export async function POST(request, { params }) {
       }
     }
 
+    // Keep failover links in sync: a main link edited in the table becomes the
+    // first source; the previous link stays as a backup (supabase/channel_sources.sql).
+    for (const part of chunk(channels.filter((c) => normalizeStreamUrl(c?.stream_url)), 500)) {
+      const { error: sourceSyncError } = await supabase.from("channel_sources").upsert(
+        part.map((c) => ({
+          channel_id: Number(c.id),
+          stream_url: normalizeStreamUrl(c.stream_url),
+          label: "primary",
+          priority: -1,
+          is_active: true,
+        })),
+        { onConflict: "channel_id,stream_url", ignoreDuplicates: true }
+      );
+      if (sourceSyncError) break; // table not installed yet: nothing to sync
+    }
+
     if (channels.length) {
       for (const part of chunk(channels, 500)) {
         const linkRows = part.map((c) => ({

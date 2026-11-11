@@ -2055,6 +2055,9 @@ export default function IptvHomeClient({
                 onPlaybackFailure={(payload) => {
                   trackActivity("playback_failed", payload || {});
                 }}
+                onPlaybackSuccess={(payload) => {
+                  trackActivity("playback_started", payload || {});
+                }}
               />
               <div className={`${styles.debugBadge} ${styles.debugBadgeMobile}`}>
                 <strong>Debug</strong>

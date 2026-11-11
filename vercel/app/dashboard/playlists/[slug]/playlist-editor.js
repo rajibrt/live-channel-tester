@@ -16,6 +16,7 @@ import {
 } from "../../../../components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../../../components/ui/table";
 import { resolveBrowserPlaybackUrl } from "../../../../lib/streamUrl";
+import ChannelSourcesDialog from "./ChannelSourcesDialog";
 import {
   flexRender,
   getCoreRowModel,
@@ -318,6 +319,26 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
   const [groupEditValue, setGroupEditValue] = useState("");
   const [channelToolsOpen, setChannelToolsOpen] = useState(false);
   const [preview, setPreview] = useState(null);
+  const [sourcesChannel, setSourcesChannel] = useState(null);
+  const [sourceCounts, setSourceCounts] = useState({});
+  const loadSourceCounts = useCallback(async (ids) => {
+    const list = (Array.isArray(ids) ? ids : []).map(Number).filter((n) => Number.isFinite(n) && n > 0);
+    if (!list.length) return;
+    try {
+      const res = await fetch("/api/admin/channels/source-counts", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ids: list }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (res.ok && json?.counts) setSourceCounts((prev) => ({ ...prev, ...json.counts }));
+    } catch {
+      // counts are informational only
+    }
+  }, []);
+  useEffect(() => {
+    loadSourceCounts((initialChannels || []).map((c) => c?.id));
+  }, [initialChannels, loadSourceCounts]);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState("");
   const [previewVideoEl, setPreviewVideoEl] = useState(null);
@@ -1600,13 +1621,23 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
         cell: ({ row }) => {
           const c = row.original;
           return (
-            <button
-              type="button"
-              className={styles.previewCellBtn}
-              onClick={() => openPreview(c.name || "Stream", c.stream_url || "")}
-            >
-              Preview
-            </button>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button
+                type="button"
+                className={styles.previewCellBtn}
+                onClick={() => openPreview(c.name || "Stream", c.stream_url || "")}
+              >
+                Preview
+              </button>
+              <button
+                type="button"
+                className={`${styles.previewCellBtn} ${Number(sourceCounts[String(c.id)]?.active || 0) > 1 ? styles.linksCellBtnMulti : ""}`}
+                onClick={() => setSourcesChannel({ id: c.id, name: c.name || "Channel" })}
+                title="View and add backup links for this channel"
+              >
+                Links ({Number(sourceCounts[String(c.id)]?.total || 1)})
+              </button>
+            </div>
           );
         },
       },
@@ -1622,6 +1653,7 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
       moveChannel,
       moveChannelToPosition,
       openPreview,
+      sourceCounts,
       uploadingLogoId,
       uploadLogo,
     ]
@@ -2102,6 +2134,28 @@ export default function PlaylistEditor({ playlistSlug, playlistName, playlistUrl
         </div>
       </div>
 
+      {sourcesChannel ? (
+        <ChannelSourcesDialog
+          channel={sourcesChannel}
+          onClose={() => setSourcesChannel(null)}
+          onPreview={openPreview}
+          onSaved={(result) => {
+            const savedSources = Array.isArray(result?.sources) ? result.sources : [];
+            setSourceCounts((prev) => ({
+              ...prev,
+              [String(sourcesChannel.id)]: {
+                total: savedSources.length,
+                active: savedSources.filter((src) => src?.is_active !== false).length,
+              },
+            }));
+            const primary = String(result?.channel?.stream_url || "");
+            if (!primary) return;
+            setChannels((prev) =>
+              prev.map((ch) => (Number(ch.id) === Number(sourcesChannel.id) ? { ...ch, stream_url: primary } : ch))
+            );
+          }}
+        />
+      ) : null}
       {preview ? (
         <div className={styles.modalWrap} role="dialog" aria-modal="true">
           <div className={styles.modalCard}>

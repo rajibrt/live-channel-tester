@@ -2013,9 +2013,14 @@
 }
 
 .editorTable .colPreview {
-  width: 78px;
+  width: 150px;
   white-space: nowrap;
-  min-width: 78px;
+  min-width: 150px;
+}
+
+.linksCellBtnMulti {
+  background: color-mix(in oklab, var(--primary) 30%, var(--secondary));
+  color: var(--primary-foreground);
 }
 
 .channelLogoThumb {

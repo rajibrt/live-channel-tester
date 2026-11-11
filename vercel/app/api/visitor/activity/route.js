@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getCurrentClient } from "../../../../lib/clientAuth";
 import { buildClientMetaFromRequest } from "../../../../lib/requestClientMeta";
 import { getSupabaseAdmin } from "../../../../lib/supabaseAdmin";
+import { PLAYBACK_STARTED_EVENT, recordChannelSourceResult } from "../../../../lib/channelSourceStats";
 
 const ALLOWED_EVENTS = new Set([
   "page_view",
@@ -18,6 +19,8 @@ const ALLOWED_EVENTS = new Set([
   "favorite_toggle",
   "theme_change",
   "cookie_consent",
+  "movie_audio_unsupported",
+  PLAYBACK_STARTED_EVENT,
 ]);
 
 function isMissingAnalyticsTableError(error) {
@@ -70,6 +73,8 @@ export async function POST(request) {
   let error = null;
   try {
     const admin = getSupabaseAdmin();
+    await recordChannelSourceResult(admin, eventType, eventData);
+    if (eventType === PLAYBACK_STARTED_EVENT) return NextResponse.json({ ok: true });
     ({ error } = await admin.from("viewer_activity_events").insert({
       viewer_type: viewerType,
       viewer_key: viewerKey,

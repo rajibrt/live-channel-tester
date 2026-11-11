@@ -12,6 +12,10 @@ import {
   FastForward,
   Volume2,
   VolumeX,
+  AlertTriangle,
+  Copy,
+  ExternalLink,
+  X,
 } from 'lucide-react'
 import styles from './movies.module.css'
 import { resolveBrowserPlaybackUrl } from '../../lib/streamUrl'
@@ -36,6 +40,64 @@ function formatClock(totalSeconds) {
   if (h > 0)
     return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
   return `${m}:${String(s).padStart(2, '0')}`
+}
+
+// Audio codecs Chrome / Android WebView decode natively in <video>.
+const BROWSER_AUDIO_CODECS = new Set(['aac', 'mp3', 'opus', 'vorbis', 'flac', 'alac'])
+const CODEC_MIME_PROBES = {
+  ac3: ['audio/mp4; codecs="ac-3"', 'audio/ac3'],
+  eac3: ['audio/mp4; codecs="ec-3"', 'audio/eac3'],
+  dts: ['audio/mp4; codecs="dtsc"'],
+  truehd: ['audio/mp4; codecs="mlpa"'],
+}
+const CODEC_LABELS = {
+  ac3: 'AC3 (Dolby Digital)',
+  eac3: 'E-AC3 (Dolby Digital Plus)',
+  dts: 'DTS',
+  truehd: 'Dolby TrueHD',
+  mp2: 'MP2',
+}
+
+function browserSupportsAudioCodec(codec) {
+  const name = String(codec || '').toLowerCase()
+  if (!name) return true
+  if (BROWSER_AUDIO_CODECS.has(name) || name.startsWith('pcm_')) return true
+  if (typeof window === 'undefined') return true
+  const probes = CODEC_MIME_PROBES[name] || []
+  try {
+    if (probes.some((mime) => window.MediaSource?.isTypeSupported?.(mime))) return true
+    const el = document.createElement('video')
+    if (probes.some((mime) => el.canPlayType(mime))) return true
+  } catch {
+    // ignore capability probe failures
+  }
+  return false
+}
+
+function describeAudioCodecs(codecs) {
+  const list = (Array.isArray(codecs) ? codecs : []).map((c) => String(c || '').toLowerCase()).filter(Boolean)
+  if (!list.length) return ''
+  return [...new Set(list)].map((c) => CODEC_LABELS[c] || c.toUpperCase()).join(', ')
+}
+
+function getExternalPlayerLink(url) {
+  const target = String(url || '').trim()
+  if (!target || typeof navigator === 'undefined') return null
+  const ua = String(navigator.userAgent || '')
+  if (/android/i.test(ua) && !/; wv\)/i.test(ua)) {
+    try {
+      const parsed = new URL(target)
+      const scheme = parsed.protocol.replace(':', '')
+      const rest = `${parsed.host}${parsed.pathname}${parsed.search}`
+      return `intent://${rest}#Intent;scheme=${scheme};type=video/*;package=org.videolan.vlc;end`
+    } catch {
+      return null
+    }
+  }
+  if (/iphone|ipad|ipod/i.test(ua) || (/macintosh/i.test(ua) && navigator.maxTouchPoints > 1)) {
+    return `vlc-x-callback://x-callback-url/stream?url=${encodeURIComponent(target)}`
+  }
+  return null
 }
 
 function isHlsUrl(url) {
@@ -287,6 +349,9 @@ export default function MoviePlayer({
   const [scrubValue, setScrubValue] = useState(null)
   const [isPlayerFullscreen, setIsPlayerFullscreen] = useState(false)
   const [volumeIndicator, setVolumeIndicator] = useState(null)
+  const [audioIssue, setAudioIssue] = useState(null)
+  const [audioIssueDismissed, setAudioIssueDismissed] = useState(false)
+  const [linkCopied, setLinkCopied] = useState(false)
 
   useEffect(() => {
     onProgressSavedRef.current = onProgressSaved
@@ -306,7 +371,19 @@ export default function MoviePlayer({
     setScrubValue(null)
     setMediaDurationSeconds(0)
     setProbedDurationSeconds(0)
-  }, [movie?.id])
+    setAudioIssueDismissed(false)
+    setLinkCopied(false)
+    const knownCodecs = Array.isArray(movie?.source?.audioCodecs) ? movie.source.audioCodecs : []
+    if (
+      movie?.source?.browserAudioOk === false &&
+      knownCodecs.length &&
+      !knownCodecs.some((codec) => browserSupportsAudioCodec(codec))
+    ) {
+      setAudioIssue({ reason: 'known', codecs: knownCodecs })
+    } else {
+      setAudioIssue(null)
+    }
+  }, [movie?.id, movie?.source?.audioCodecs, movie?.source?.browserAudioOk])
 
   useEffect(() => {
     if (!autoEnterFullscreen || typeof window === 'undefined') return undefined
@@ -739,6 +816,60 @@ export default function MoviePlayer({
   const rawSourceUrl = getPreferredRawMovieUrl(movie)
   const showPlayAction = isPaused || !hasPlayableMovie
   const videoElementKey = `${movie?.id || 'movie'}:${rawSourceUrl || movie?.playbackUrl || ''}`
+
+  // Detect "video plays but no audio is decoded" (e.g. AC3 in Chrome).
+  // Only judged while unmuted, after ~4s of continuous playback.
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video || typeof window === 'undefined') return undefined
+    let baseline = null
+    let decided = false
+    const check = () => {
+      if (decided) return
+      if (video.paused || video.muted || video.volume === 0) {
+        baseline = null
+        return
+      }
+      const now = Number(video.currentTime || 0)
+      if (baseline === null) {
+        baseline = now
+        return
+      }
+      if (now - baseline < 4) return
+      decided = true
+      let noAudio = false
+      if (typeof video.webkitAudioDecodedByteCount === 'number') {
+        noAudio = video.webkitAudioDecodedByteCount === 0
+      } else if (typeof video.mozHasAudio === 'boolean') {
+        noAudio = video.mozHasAudio === false
+      } else if (video.audioTracks && typeof video.audioTracks.length === 'number') {
+        noAudio = video.audioTracks.length === 0
+      }
+      if (!noAudio) return
+      const codecs = Array.isArray(movie?.source?.audioCodecs) ? movie.source.audioCodecs : []
+      setAudioIssue((prev) => prev || { reason: 'detected', codecs })
+      onTrackActivityRef.current?.('movie_audio_unsupported', {
+        movie_id: movie?.id ? String(movie.id) : '',
+        audio_codecs: codecs,
+        detected: true,
+      })
+    }
+    video.addEventListener('timeupdate', check)
+    return () => video.removeEventListener('timeupdate', check)
+  }, [videoElementKey, movie?.id, movie?.source?.audioCodecs])
+
+  const externalPlayerLink = getExternalPlayerLink(rawSourceUrl)
+  const audioCodecText = describeAudioCodecs(audioIssue?.codecs)
+  const handleCopyMovieLink = useCallback(async () => {
+    const value = String(rawSourceUrl || '')
+    if (!value) return
+    try {
+      await navigator.clipboard.writeText(value)
+      setLinkCopied(true)
+    } catch {
+      window.prompt('মুভির লিংক কপি করুন:', value)
+    }
+  }, [rawSourceUrl])
   const watchedSeconds = Number(
     playbackSeconds || movie?.progress?.positionSeconds || 0,
   )
@@ -1087,6 +1218,43 @@ export default function MoviePlayer({
           </div>
         ) : null}
       </div>
+      {audioIssue && !audioIssueDismissed && !hideTvFullscreenChrome ? (
+        <div className={styles.audioNotice} role='status'>
+          <div className={styles.audioNoticeHead}>
+            <AlertTriangle size={16} aria-hidden='true' />
+            <strong>এই মুভির শব্দ এই ব্রাউজারে বাজছে না</strong>
+            <button
+              type='button'
+              className={styles.audioNoticeClose}
+              onClick={() => setAudioIssueDismissed(true)}
+              aria-label='বার্তাটি বন্ধ করুন'
+            >
+              <X size={14} />
+            </button>
+          </div>
+          <p className={styles.audioNoticeText}>
+            {audioCodecText
+              ? `অডিও ফরম্যাট ${audioCodecText}। Chrome ও Android ব্রাউজার এই ফরম্যাট চালাতে পারে না, তাই ছবি চলবে কিন্তু শব্দ আসবে না।`
+              : 'ফাইলের অডিও ফরম্যাট এই ব্রাউজার চালাতে পারছে না, তাই ছবি চলছে কিন্তু শব্দ আসছে না।'}
+          </p>
+          <div className={styles.audioNoticeActions}>
+            {externalPlayerLink ? (
+              <a className={styles.movieNavBtn} href={externalPlayerLink}>
+                <ExternalLink size={15} />
+                <span>VLC-তে খুলুন</span>
+              </a>
+            ) : null}
+            <button type='button' className={styles.movieNavBtn} onClick={handleCopyMovieLink} disabled={!rawSourceUrl}>
+              <Copy size={15} />
+              <span>{linkCopied ? 'লিংক কপি হয়েছে' : 'মুভির লিংক কপি করুন'}</span>
+            </button>
+          </div>
+          <p className={styles.audioNoticeHint}>
+            শব্দসহ দেখতে: Microsoft Edge বা Safari ব্রাউজারে এই পেজটি খুলুন, অথবা VLC প্লেয়ারে লিংকটি চালান
+            (কম্পিউটারে VLC → Media → Open Network Stream → লিংক পেস্ট করুন)।
+          </p>
+        </div>
+      ) : null}
       {!hideTvFullscreenChrome ? (
       <div className={`${styles.moviePlayerControlsRow} ${isTvMode ? styles.moviePlayerControlsRowTv : ""}`}>
         <div className={`${styles.moviePlayerButtons} ${isTvMode ? styles.moviePlayerButtonsTv : ""}`}>

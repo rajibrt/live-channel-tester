@@ -31,6 +31,62 @@ function loadHlsScript() {
   });
 }
 
+const STARTUP_FAILOVER_MS = 12000;
+const STALL_FAILOVER_MS = 15000;
+const SOURCE_MEMORY_PREFIX = "webtvbd:channel-source:";
+
+// Ordered list of playable links for a channel (falls back to streamUrl).
+function getChannelSources(channel) {
+  const list = Array.isArray(channel?.sources) ? channel.sources : [];
+  const out = [];
+  const seen = new Set();
+  for (const src of list) {
+    const url = String(src?.url || "").trim();
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    out.push({ id: String(src?.id || ""), url, label: String(src?.label || "") });
+  }
+  const primary = String(channel?.streamUrl || "").trim();
+  if (primary && !seen.has(primary)) out.unshift({ id: "", url: primary, label: "" });
+  return out;
+}
+
+// The link that last worked on this device (usually the same ISP) goes first.
+function orderSourcesByMemory(channelId, sources) {
+  if (!channelId || sources.length < 2 || typeof window === "undefined") return sources;
+  let remembered = "";
+  try {
+    remembered = window.localStorage.getItem(SOURCE_MEMORY_PREFIX + channelId) || "";
+  } catch {
+    return sources;
+  }
+  const index = sources.findIndex((src) => src.url === remembered);
+  if (index <= 0) return sources;
+  return [sources[index], ...sources.slice(0, index), ...sources.slice(index + 1)];
+}
+
+// Local testing aid only (never active in production builds): set
+// localStorage "webtvbd:dev-break-first-source" = "1" to make the first link fail
+// so the automatic failover can be tried without editing real links.
+function applyDevFailoverTest(sources) {
+  if (process.env.NODE_ENV === "production" || typeof window === "undefined" || !sources.length) return sources;
+  try {
+    if (window.localStorage.getItem("webtvbd:dev-break-first-source") !== "1") return sources;
+  } catch {
+    return sources;
+  }
+  return [{ ...sources[0], id: "", url: "https://failover-test.invalid/broken.m3u8" }, ...sources];
+}
+
+function rememberWorkingSource(channelId, url) {
+  if (!channelId || !url || typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(SOURCE_MEMORY_PREFIX + channelId, url);
+  } catch {
+    // storage unavailable (private mode); failover still works
+  }
+}
+
 async function tryStartPlayback(video, { allowMutedFallback = false } = {}) {
   if (!video) return false;
   try {
@@ -67,6 +123,7 @@ export default function VideoPlayer({
   onSelectChannel,
   onPlaybackAttempt,
   onPlaybackFailure,
+  onPlaybackSuccess,
 }) {
   const LIVE_PLAYER_SCOPE = "live-player";
   const videoRef = useRef(null);
@@ -74,6 +131,7 @@ export default function VideoPlayer({
   const hlsRef = useRef(null);
   const onPlaybackAttemptRef = useRef(onPlaybackAttempt);
   const onPlaybackFailureRef = useRef(onPlaybackFailure);
+  const onPlaybackSuccessRef = useRef(onPlaybackSuccess);
   const hlsNativeFallbackTriedRef = useRef(false);
   const hudTimerRef = useRef(null);
   const fsPanelsTimerRef = useRef(null);
@@ -94,6 +152,8 @@ export default function VideoPlayer({
   const autoplayMutedRef = useRef(false);
   const [status, setStatus] = useState("idle");
   const [errorMessage, setErrorMessage] = useState("");
+  const [failoverInfo, setFailoverInfo] = useState(null);
+  const [retryNonce, setRetryNonce] = useState(0);
   const [volumePercent, setVolumePercent] = useState(100);
   const [isActuallyMuted, setIsActuallyMuted] = useState(false);
   const [audioStatusMessage, setAudioStatusMessage] = useState("");
@@ -180,11 +240,12 @@ export default function VideoPlayer({
   };
 
   const statusLabel = useMemo(() => {
+    if (status === "loading" && failoverInfo) return `বিকল্প লিংকে চেষ্টা হচ্ছে (${failoverInfo.index + 1}/${failoverInfo.total})`;
     if (status === "loading") return "Switching channel...";
     if (status === "error") return errorMessage || "Stream unavailable";
     if (status === "playing") return "Live Stream Playing";
     return "Choose from the list to start streaming";
-  }, [status, errorMessage]);
+  }, [status, errorMessage, failoverInfo]);
 
   useEffect(() => {
     onPlaybackAttemptRef.current = onPlaybackAttempt;
@@ -193,6 +254,10 @@ export default function VideoPlayer({
   useEffect(() => {
     onPlaybackFailureRef.current = onPlaybackFailure;
   }, [onPlaybackFailure]);
+
+  useEffect(() => {
+    onPlaybackSuccessRef.current = onPlaybackSuccess;
+  }, [onPlaybackSuccess]);
 
   useEffect(() => {
     setLogoFailed(false);
@@ -267,28 +332,39 @@ export default function VideoPlayer({
     showHud();
   };
 
+  const sourceListKey = useMemo(
+    () => getChannelSources(channel).map((src) => src.url).join("\n"),
+    [channel]
+  );
+
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return undefined;
 
-    if (hlsRef.current) {
-      hlsRef.current.destroy();
-      hlsRef.current = null;
-    }
+    const teardownMedia = () => {
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+      video.pause();
+      video.removeAttribute("src");
+      video.load();
+    };
+    teardownMedia();
+    setFailoverInfo(null);
 
-    video.pause();
-    video.removeAttribute("src");
-    video.load();
-    hlsNativeFallbackTriedRef.current = false;
-
-    if (!channel?.streamUrl) {
+    const sources = applyDevFailoverTest(orderSourcesByMemory(channel?.id, getChannelSources(channel)));
+    if (!sources.length) {
       setStatus("idle");
       setErrorMessage("");
       return undefined;
     }
 
     let cancelled = false;
-    let failureReported = false;
+    let attemptToken = 0;
+    let startupTimer = null;
+    let stallTimer = null;
+    let detachListeners = () => {};
     setStatus("loading");
     setErrorMessage("");
     autoplayMutedRef.current = false;
@@ -299,146 +375,231 @@ export default function VideoPlayer({
     }
     applyPreferredAudio(video);
 
-    const reportAttempt = () => {
-      onPlaybackAttemptRef.current?.({
-        channel_id: String(channel?.id || ""),
-        channel_name: String(channel?.name || ""),
-        stream_url: String(channel?.streamUrl || ""),
-      });
+    const clearTimers = () => {
+      if (startupTimer) clearTimeout(startupTimer);
+      if (stallTimer) clearTimeout(stallTimer);
+      startupTimer = null;
+      stallTimer = null;
     };
 
-    const reportFailure = (reason, details = {}) => {
-      if (failureReported || cancelled) return;
-      failureReported = true;
-      onPlaybackFailureRef.current?.({
-        channel_id: String(channel?.id || ""),
-        channel_name: String(channel?.name || ""),
-        stream_url: String(channel?.streamUrl || ""),
-        reason: String(reason || "stream_unavailable"),
-        ...details,
-      });
-    };
+    const basePayload = (src, index) => ({
+      channel_id: String(channel?.id || ""),
+      channel_name: String(channel?.name || ""),
+      stream_url: String(src?.url || ""),
+      source_id: String(src?.id || ""),
+      source_index: index,
+      source_total: sources.length,
+    });
 
-    let playbackStarted = false;
-    const markPlaying = () => {
+    const trySource = (index) => {
       if (cancelled) return;
-      playbackStarted = true;
-      setStatus("playing");
-    };
-    const markLoading = () => {
-      // Avoid fullscreen loading backdrop flash during transient buffering.
-      if (cancelled || playbackStarted) return;
-      setStatus("loading");
-    };
-    const onError = () => {
-      if (cancelled) return;
-      setErrorMessage("Stream unavailable");
-      setStatus("error");
-      reportFailure("video_tag_error");
-    };
-    video.addEventListener("loadeddata", markPlaying);
-    video.addEventListener("loadedmetadata", markPlaying);
-    video.addEventListener("canplay", markPlaying);
-    video.addEventListener("playing", markPlaying);
-    video.addEventListener("waiting", markLoading);
-    video.addEventListener("stalled", markLoading);
-    video.addEventListener("error", onError);
+      clearTimers();
+      detachListeners();
+      teardownMedia();
+      hlsNativeFallbackTriedRef.current = false;
 
-    const source = resolveBrowserPlaybackUrl(
-      channel.streamUrl,
-      typeof window !== "undefined" ? window.location?.protocol : ""
-    );
-    const isPrivateSource = isPrivateNetworkUrl(source);
-    const forceProxy = process.env.NEXT_PUBLIC_FORCE_STREAM_PROXY === "1";
-    const sourceForPlayback = forceProxy ? resolveBrowserPlaybackUrl(source, "https:") : source;
-
-    const startNativePlayback = async () => {
-      applyPreferredAudio(video);
-      video.src = sourceForPlayback;
-      video.load();
-      const result = await tryStartPlayback(video, { allowMutedFallback: true });
-      autoplayMutedRef.current = Boolean(result?.usedMutedFallback) && !userMutedRef.current;
-      syncAudioUiState(video, { forceMutedLabel: autoplayMutedRef.current });
-      setAudioStatusMessage(
-        autoplayMutedRef.current ? "Muted by browser autoplay. Click the sound icon to unmute." : ""
-      );
-      if (!result?.started && !cancelled && !playbackStarted) {
-        setStatus("idle");
+      if (index >= sources.length) {
+        setFailoverInfo(null);
+        setErrorMessage(
+          sources.length > 1
+            ? "এই চ্যানেলের কোনো লিংক এখন আপনার নেটওয়ার্কে চলছে না"
+            : "Stream unavailable"
+        );
+        setStatus("error");
+        return;
       }
-    };
 
-    reportAttempt();
+      const token = ++attemptToken;
+      const src = sources[index];
+      const isCurrent = () => !cancelled && token === attemptToken;
+      let sourceStarted = false;
+      let sourceFailed = false;
+      let playbackStarted = false;
 
-    (async () => {
-      try {
-        // Some private-network .m3u8 sources work with native video tag faster/more reliably.
-        // Prefer native path first to match dashboard quick-preview behavior.
-        if (isPrivateSource && isHlsUrl(sourceForPlayback)) {
-          await startNativePlayback();
-          return;
+      setFailoverInfo(index > 0 ? { index, total: sources.length } : null);
+      setStatus("loading");
+      setErrorMessage("");
+      onPlaybackAttemptRef.current?.(basePayload(src, index));
+
+      const failSource = (reason, details = {}) => {
+        if (!isCurrent() || sourceFailed) return;
+        sourceFailed = true;
+        onPlaybackFailureRef.current?.({
+          ...basePayload(src, index),
+          reason: String(reason || "stream_unavailable"),
+          will_failover: index + 1 < sources.length,
+          ...details,
+        });
+        trySource(index + 1);
+      };
+
+      const confirmStarted = () => {
+        if (!isCurrent() || sourceStarted) return;
+        sourceStarted = true;
+        clearTimers();
+        setFailoverInfo(null);
+        rememberWorkingSource(channel?.id, src.url);
+        onPlaybackSuccessRef.current?.(basePayload(src, index));
+      };
+
+      const markPlaying = () => {
+        if (!isCurrent()) return;
+        playbackStarted = true;
+        setStatus("playing");
+      };
+      const markLoading = () => {
+        // Avoid fullscreen loading backdrop flash during transient buffering.
+        if (!isCurrent()) return;
+        if (!playbackStarted) setStatus("loading");
+        if (sourceStarted && index + 1 < sources.length && !stallTimer) {
+          stallTimer = setTimeout(() => failSource("stalled"), STALL_FAILOVER_MS);
         }
+      };
+      const onProgress = () => {
+        if (!isCurrent()) return;
+        if (stallTimer) {
+          clearTimeout(stallTimer);
+          stallTimer = null;
+        }
+        if (!sourceStarted && Number(video.currentTime || 0) > 0) confirmStarted();
+      };
+      const onPlayingEvent = () => {
+        markPlaying();
+        onProgress();
+      };
+      const onError = () => {
+        if (!isCurrent()) return;
+        failSource("video_tag_error");
+      };
 
-        if (isHlsUrl(sourceForPlayback)) {
-          const Hls = await loadHlsScript();
-          if (cancelled) return;
+      video.addEventListener("loadeddata", markPlaying);
+      video.addEventListener("loadedmetadata", markPlaying);
+      video.addEventListener("canplay", markPlaying);
+      video.addEventListener("playing", onPlayingEvent);
+      video.addEventListener("timeupdate", onProgress);
+      video.addEventListener("waiting", markLoading);
+      video.addEventListener("stalled", markLoading);
+      video.addEventListener("error", onError);
+      detachListeners = () => {
+        video.removeEventListener("loadeddata", markPlaying);
+        video.removeEventListener("loadedmetadata", markPlaying);
+        video.removeEventListener("canplay", markPlaying);
+        video.removeEventListener("playing", onPlayingEvent);
+        video.removeEventListener("timeupdate", onProgress);
+        video.removeEventListener("waiting", markLoading);
+        video.removeEventListener("stalled", markLoading);
+        video.removeEventListener("error", onError);
+      };
 
-          if (Hls?.isSupported?.()) {
-            const hls = new Hls({ lowLatencyMode: true, maxBufferLength: 30 });
-            hlsRef.current = hls;
-            hls.loadSource(sourceForPlayback);
-            hls.attachMedia(video);
-            hls.on(Hls.Events.MANIFEST_PARSED, async () => {
-              if (!cancelled) setStatus("playing");
-              const result = await tryStartPlayback(video, { allowMutedFallback: true });
-              autoplayMutedRef.current = Boolean(result?.usedMutedFallback) && !userMutedRef.current;
-              syncAudioUiState(video, { forceMutedLabel: autoplayMutedRef.current });
-              setAudioStatusMessage(
-                autoplayMutedRef.current ? "Muted by browser autoplay. Click the sound icon to unmute." : ""
-              );
-            });
-            hls.on(Hls.Events.ERROR, (_event, data) => {
-              if (!data?.fatal || cancelled) return;
-              hls.destroy();
-              hlsRef.current = null;
-              if (!hlsNativeFallbackTriedRef.current) {
-                hlsNativeFallbackTriedRef.current = true;
-                startNativePlayback().catch(() => {});
-                return;
-              }
-              setErrorMessage("Stream unavailable");
-              setStatus("error");
-              reportFailure("hls_fatal_error", {
-                hls_type: String(data?.type || ""),
-                hls_detail: String(data?.details || ""),
-              });
-            });
+      // A source that never starts playing within the window is treated as dead.
+      startupTimer = setTimeout(() => {
+        if (!sourceStarted) failSource("startup_timeout");
+      }, STARTUP_FAILOVER_MS);
+
+      const source = resolveBrowserPlaybackUrl(
+        src.url,
+        typeof window !== "undefined" ? window.location?.protocol : ""
+      );
+      const isPrivateSource = isPrivateNetworkUrl(source);
+      const forceProxy = process.env.NEXT_PUBLIC_FORCE_STREAM_PROXY === "1";
+      const sourceForPlayback = forceProxy ? resolveBrowserPlaybackUrl(source, "https:") : source;
+
+      const handleStartResult = (result) => {
+        if (!isCurrent()) return;
+        autoplayMutedRef.current = Boolean(result?.usedMutedFallback) && !userMutedRef.current;
+        syncAudioUiState(video, { forceMutedLabel: autoplayMutedRef.current });
+        setAudioStatusMessage(
+          autoplayMutedRef.current ? "Muted by browser autoplay. Click the sound icon to unmute." : ""
+        );
+        if (!result?.started) {
+          if (video.error) {
+            failSource("play_rejected");
             return;
           }
+          // Autoplay blocked by the browser is not a broken link: wait for the user.
+          clearTimers();
+          if (!playbackStarted) setStatus("idle");
         }
+      };
 
-        await startNativePlayback();
-      } catch {
-        if (cancelled) return;
-        if (!hlsNativeFallbackTriedRef.current) {
-          hlsNativeFallbackTriedRef.current = true;
-          startNativePlayback().catch(() => {});
-          return;
+      const startNativePlayback = async () => {
+        applyPreferredAudio(video);
+        video.src = sourceForPlayback;
+        video.load();
+        const result = await tryStartPlayback(video, { allowMutedFallback: true });
+        handleStartResult(result);
+      };
+
+      (async () => {
+        try {
+          // Some private-network .m3u8 sources work with native video tag faster/more reliably.
+          if (isPrivateSource && isHlsUrl(sourceForPlayback)) {
+            await startNativePlayback();
+            return;
+          }
+
+          if (isHlsUrl(sourceForPlayback)) {
+            const Hls = await loadHlsScript();
+            if (!isCurrent()) return;
+
+            if (Hls?.isSupported?.()) {
+              const hls = new Hls({ lowLatencyMode: true, maxBufferLength: 30 });
+              hlsRef.current = hls;
+              let mediaRecoveryTried = false;
+              hls.loadSource(sourceForPlayback);
+              hls.attachMedia(video);
+              hls.on(Hls.Events.MANIFEST_PARSED, async () => {
+                if (!isCurrent()) return;
+                setStatus("playing");
+                const result = await tryStartPlayback(video, { allowMutedFallback: true });
+                handleStartResult(result);
+              });
+              hls.on(Hls.Events.ERROR, (_event, data) => {
+                if (!data?.fatal || !isCurrent()) return;
+                if (data.type === Hls.ErrorTypes?.MEDIA_ERROR && !mediaRecoveryTried) {
+                  mediaRecoveryTried = true;
+                  try {
+                    hls.recoverMediaError();
+                    return;
+                  } catch {
+                    // fall through to failover
+                  }
+                }
+                hls.destroy();
+                hlsRef.current = null;
+                if (!hlsNativeFallbackTriedRef.current) {
+                  hlsNativeFallbackTriedRef.current = true;
+                  startNativePlayback().catch(() => failSource("playback_exception"));
+                  return;
+                }
+                failSource("hls_fatal_error", {
+                  hls_type: String(data?.type || ""),
+                  hls_detail: String(data?.details || ""),
+                });
+              });
+              return;
+            }
+          }
+
+          await startNativePlayback();
+        } catch {
+          if (!isCurrent()) return;
+          if (!hlsNativeFallbackTriedRef.current) {
+            hlsNativeFallbackTriedRef.current = true;
+            startNativePlayback().catch(() => failSource("playback_exception"));
+            return;
+          }
+          failSource("playback_exception");
         }
-        setErrorMessage("Stream unavailable");
-        setStatus("error");
-        reportFailure("playback_exception");
-      }
-    })();
+      })();
+    };
+
+    trySource(0);
 
     return () => {
       cancelled = true;
-      video.removeEventListener("loadeddata", markPlaying);
-      video.removeEventListener("loadedmetadata", markPlaying);
-      video.removeEventListener("canplay", markPlaying);
-      video.removeEventListener("playing", markPlaying);
-      video.removeEventListener("waiting", markLoading);
-      video.removeEventListener("stalled", markLoading);
-      video.removeEventListener("error", onError);
+      clearTimers();
+      detachListeners();
       if (hlsRef.current) {
         hlsRef.current.destroy();
         hlsRef.current = null;
@@ -448,7 +609,7 @@ export default function VideoPlayer({
         autoplayRecoveryTimerRef.current = null;
       }
     };
-  }, [channel?.id, channel?.name, channel?.streamUrl]);
+  }, [channel?.id, channel?.name, sourceListKey, retryNonce]);
 
   useEffect(() => {
     const adjustVolume = (delta) => {
@@ -1385,6 +1546,19 @@ export default function VideoPlayer({
             <p>{statusLabel}</p>
             {status === "loading" ? <Icon name="LoaderCircle" className={styles.spinner} size={20} /> : null}
             {status === "error" ? <span className={styles.errorPill}>{errorMessage || "Stream unavailable"}</span> : null}
+            {status === "error" ? (
+              <button
+                type="button"
+                className={styles.retryBtn}
+                onClick={() => setRetryNonce((n) => n + 1)}
+                data-tv-focusable={isTvMode ? "true" : undefined}
+                data-tv-focus-scope={isTvMode ? LIVE_PLAYER_SCOPE : undefined}
+                data-tv-focus-id={isTvMode ? "live-player-retry" : undefined}
+              >
+                <Icon name="RotateCcw" size={14} />
+                আবার চেষ্টা করুন
+              </button>
+            ) : null}
           </div>
         ) : null}
       </div>
