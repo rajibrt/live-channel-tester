@@ -1710,12 +1710,13 @@ export default function VideoPlayer({
               className={`${styles.favoriteBtn} ${isFavorite ? styles.favoriteBtnActive : styles.favoriteBtnInactive}`}
               onClick={() => onToggleFavorite(channel.id)}
               aria-pressed={isFavorite}
+              aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
               data-tv-focusable={isTvMode ? "true" : undefined}
               data-tv-focus-scope={isTvMode ? LIVE_PLAYER_SCOPE : undefined}
               data-tv-focus-id={isTvMode ? "live-inline-favorite" : undefined}
             >
               <Icon name="Heart" size={16} fill={isFavorite ? "currentColor" : "none"} />
-              {isFavorite ? "Favorited" : "Add Favorite"}
+              <span className={styles.favoriteBtnLabel}>{isFavorite ? "Favorited" : "Add Favorite"}</span>
             </button>
           </div>
         </article>

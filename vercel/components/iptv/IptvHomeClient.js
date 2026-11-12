@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import LeftSidebar from "./LeftSidebar";
 import RightPanel from "./RightPanel";
+import MobileCategoryChannels from "./MobileCategoryChannels";
 import TopNavbar from "./TopNavbar";
 import VideoPlayer from "./VideoPlayer";
 import CookieConsentBanner from "./CookieConsentBanner";
@@ -257,6 +258,7 @@ export default function IptvHomeClient({
   const [forceTvMode, setForceTvMode] = useState(false);
   const [clientPrefsReady, setClientPrefsReady] = useState(false);
   const [hasRestoredChannel, setHasRestoredChannel] = useState(false);
+  const centerColRef = useRef(null);
   const movieCatalogRequestRef = useRef(false);
   const lastLoadedMovieQueryRef = useRef("");
   const desiredMovieQueryRef = useRef("");
@@ -1741,6 +1743,28 @@ export default function IptvHomeClient({
     trackActivity("channel_select", { channel_id: channel.id, channel_name: channel.name || "" });
   };
 
+  // Channels listed under the player on phones: the playing channel's category,
+  // or the current list when nothing is playing yet.
+  const mobileCategoryList = useMemo(() => {
+    const playingCategoryId = String(selectedChannel?.categoryId || "").trim();
+    if (selectedChannel && playingCategoryId) {
+      return {
+        name: String(selectedChannel.category || "").trim(),
+        channels: allChannels.filter((channel) => String(channel?.categoryId || "").trim() === playingCategoryId),
+      };
+    }
+    const category = allCategories.find((item) => String(item?.id || "") === String(selectedCategory || ""));
+    return { name: String(category?.name || "All channels"), channels: visibleChannels };
+  }, [selectedChannel, allChannels, allCategories, selectedCategory, visibleChannels]);
+
+  const handleMobileListSelect = (channel) => {
+    handleSelectChannel(channel);
+    if (typeof window !== "undefined") {
+      centerColRef.current?.scrollTo?.({ top: 0, behavior: "smooth" });
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
+
   const handleChannelStep = (step) => {
     const total = visibleChannels.length;
     if (!total) return;
@@ -2031,7 +2055,7 @@ export default function IptvHomeClient({
           />
         )}
 
-        <section className={styles.centerCol}>
+        <section className={styles.centerCol} ref={centerColRef}>
           {homeMode === "tv" ? (
             <>
               <VideoPlayer
@@ -2059,6 +2083,14 @@ export default function IptvHomeClient({
                   trackActivity("playback_started", payload || {});
                 }}
               />
+              {!isTvMode ? (
+                <MobileCategoryChannels
+                  channels={mobileCategoryList.channels}
+                  categoryName={mobileCategoryList.name}
+                  selectedChannel={selectedChannel}
+                  onSelectChannel={handleMobileListSelect}
+                />
+              ) : null}
               <div className={`${styles.debugBadge} ${styles.debugBadgeMobile}`}>
                 <strong>Debug</strong>
                 <span>links: {debugStats.total}</span>
