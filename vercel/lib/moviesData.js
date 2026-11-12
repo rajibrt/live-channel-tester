@@ -1,3 +1,4 @@
+import { unstable_cache } from "next/cache";
 import { getSupabaseAdmin } from "./supabaseAdmin";
 import { isPrivateNetworkUrl, normalizeStreamUrl, toStreamProxyUrl } from "./streamUrl";
 import { deriveWatchState, isWatchedProgress, normalizeSeconds } from "./movieProgress";
@@ -385,18 +386,34 @@ async function loadMovieSourceRows(admin, movieIds) {
 }
 
 // Codec details written by scripts/scan-movie-media-info.mjs
-// (table from supabase/movie_media_info.sql). Missing table => empty map.
-async function loadSourceMediaInfo(admin, sourceRows) {
-  const urls = [...new Set((Array.isArray(sourceRows) ? sourceRows : []).map((row) => text(row?.source_url)).filter(Boolean))];
-  const byUrl = new Map();
-  for (const chunk of chunkArray(urls, 40)) {
+// (table from supabase/movie_media_info.sql). Only rows with a problem
+// (no browser-playable audio, or unreachable) matter to the player, so we
+// load just those — a couple of requests, cached — instead of looking up
+// every movie URL on each page render (that was ~115 sequential queries).
+async function loadProblemMediaInfoUncached() {
+  const admin = getSupabaseAdmin();
+  const rows = [];
+  for (let from = 0; from < 20000; from += 1000) {
     const { data, error } = await admin
       .from("movie_source_media_info")
       .select("source_url,status,audio_codecs,browser_audio_ok")
-      .in("source_url", chunk);
-    if (error) return byUrl;
-    for (const row of data || []) byUrl.set(text(row.source_url), row);
+      .or("browser_audio_ok.eq.false,status.neq.ok")
+      .order("source_url", { ascending: true })
+      .range(from, from + 999);
+    if (error) return [];
+    const chunk = Array.isArray(data) ? data : [];
+    rows.push(...chunk);
+    if (chunk.length < 1000) break;
   }
+  return rows;
+}
+
+const loadProblemMediaInfo = unstable_cache(loadProblemMediaInfoUncached, ["movie-problem-media-info"], { revalidate: 600 });
+
+async function loadSourceMediaInfo() {
+  const rows = await loadProblemMediaInfo().catch(() => []);
+  const byUrl = new Map();
+  for (const row of rows) byUrl.set(text(row.source_url), row);
   return byUrl;
 }
 
@@ -483,7 +500,7 @@ async function hydrateMoviesForUser(admin, userId, movieRows, options = {}) {
     categoriesByMovie.set(movieId, list);
   }
 
-  const mediaInfoByUrl = await loadSourceMediaInfo(admin, sourceRows).catch(() => new Map());
+  const mediaInfoByUrl = await loadSourceMediaInfo().catch(() => new Map());
   const sourcesByMovie = new Map();
   for (const row of sourceRows) {
     row.media_info = mediaInfoByUrl.get(text(row?.source_url)) || null;

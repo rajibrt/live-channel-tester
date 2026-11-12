@@ -108,6 +108,7 @@ curl -s -o /dev/null -m 10 -w "%{http_code}\n" https://storage.raishahost.com/mi
 3. `viewer_activity_events` missing → guest analytics empty.
 4. `transcode-gateway` service not running.
 5. `/api/stream-probe` returns raw ffmpeg error text to clients (minor info leak).
+6. `/watch/<id>` HTML is ~11 MB (1.5 MB gzip) because the whole movie catalog (~4,600 movies with synopsis/posters) is sent with every channel page; heavy for phones/iOS PWA. Measured 2026-11-12; fix would be loading movies only when the Movies view opens.
 
 ## Current external handoff
 
@@ -536,4 +537,12 @@ Re-check `git status` every time. This list is a historical snapshot, not permis
 - 108 groups, 155 channels merged into 108 kept channels (keeper = LIVE, has logo, best viewer success, lowest id). Per group: merged channels' links appended to the keeper's `channel_sources` (label `merged: <old name>`, inactive if the merged channel was DEAD), keeper added to any playlist only a merged channel was in (5), `client_favorites` moved (150) or dropped where the user already had the keeper (43), `client_recent_history` remapped (6,202 rows), keeper renamed to a clean name (e.g. "Somoy TV", "&TV HD", "Jamuna TV") and category fixed for Kappa TV/Khushboo Bangla/Ekushey TV/TRT World, merged channel rows deleted.
 - Old→new id map stored in `admin_settings` key `channel_merges` (`{ map: { oldId: keptId } }`). Backup: `backups/channel-merge-2026-11-12.json` (all involved channels, links, sources, favorites, remapped history row ids, previous setting).
 - Verified (data, live now): bdix 800 channels (was 953); no duplicate groups left except the 5 excluded; kept channels' `stream_url` = top active source; local M3U 793 live entries, 110 with smart links.
-- Code (uncommitted, build passed, NOT deployed — push needs user approval): new `lib/channelMerges.js`; `/watch/<oldId>` redirects to the kept channel (client-side redirect because the page streams; verified in a browser 564 → 865-somoy-tv); `/playlist/<token>/live/<oldId>` resolves to the kept channel. Until deployed, old `/watch/<mergedId>` links in production show "Channel not found".
+- Code deployed in `45ca69d` (user approved; live after ~50 s, verified `/watch/564-somoy-tv` → 865 and old smart link 564 → 302): new `lib/channelMerges.js`; `/watch/<oldId>` redirects to the kept channel (client-side redirect because the page streams; verified in a browser 564 → 865-somoy-tv); `/playlist/<token>/live/<oldId>` resolves to the kept channel.
+
+### 2026-11-12 - Fix: client /watch stuck on skeleton / white page on mobile
+
+- User report: after client login on mobile the page stayed on the skeleton; the iPhone PWA hung on "redirecting" and then showed a white page.
+- Checked: Dokploy Fullstack logs showed no errors. Reproduced locally (temporary local-only guest switch, removed afterwards) at mobile size: `/watch/<id>` took ~19 s in dev.
+- Root cause (regression from today): `lib/moviesData.js` `loadSourceMediaInfo` looked up codec info for every movie URL in chunks of 40 → ~114 sequential Supabase queries per page render. While the table did not exist the first query failed fast; once `movie_source_media_info` was created and filled today, every render paid ~11 s (measured: 114 queries 11.0 s).
+- Fix (uncommitted until user approves deploy): load only problem rows (`browser_audio_ok=false` or `status<>ok`, ~1.1k rows, 2 queries 0.3 s) via `unstable_cache` (10 min). Missing rows mean "unknown", so the player keeps its runtime check. Local production build: TTFB 0.1 s, full 11 MB page ~6 s on localhost.
+- Still open: the 11 MB page size (Known open issue 6).
