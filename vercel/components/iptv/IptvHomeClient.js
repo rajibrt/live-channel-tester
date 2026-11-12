@@ -608,7 +608,8 @@ export default function IptvHomeClient({
   useEffect(() => {
     const shouldLoadMovies =
       homeMode === "movies" || moviesViewVariant === "watch" || Boolean(String(initialSelectedMovieSlug || "").trim());
-    if (!routeStateReady || !shouldLoadMovies || movieCatalogStatus === "ready") return;
+    // Do not auto-retry after an error: that looped requests endlessly. The viewer retries with the button.
+    if (!routeStateReady || !shouldLoadMovies || movieCatalogStatus === "ready" || movieCatalogStatus === "error") return;
     ensureMovieCatalogLoaded();
   }, [ensureMovieCatalogLoaded, homeMode, initialSelectedMovieSlug, movieCatalogStatus, moviesViewVariant, routeStateReady]);
 
@@ -2105,9 +2106,31 @@ export default function IptvHomeClient({
                 aria-live="polite"
                 style={{ minHeight: "40dvh", display: "grid", placeItems: "center", padding: "24px" }}
               >
-                <p style={{ margin: 0, color: "var(--muted-foreground)" }}>
-                  {movieCatalogStatus === "error" ? "Movies failed to load. Please try again." : "Loading movies..."}
-                </p>
+                <div style={{ display: "grid", gap: "12px", justifyItems: "center" }}>
+                  <p style={{ margin: 0, color: "var(--muted-foreground)" }}>
+                    {movieCatalogStatus === "error" ? "Movies failed to load. Please try again." : "Loading movies..."}
+                  </p>
+                  {movieCatalogStatus === "error" ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        movieCatalogRequestRef.current = false;
+                        setMovieCatalogStatus("idle");
+                      }}
+                      style={{
+                        border: "1px solid var(--border)",
+                        borderRadius: "10px",
+                        padding: "8px 14px",
+                        background: "var(--card)",
+                        color: "var(--foreground)",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Try again
+                    </button>
+                  ) : null}
+                </div>
               </section>
             ) : (
               <MoviesView

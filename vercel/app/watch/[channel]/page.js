@@ -189,6 +189,10 @@ export default async function WatchChannelPage({ params, searchParams }) {
   const { id } = parseChannelParam(resolved?.channel);
   const channel = await getChannelById(id);
   const locale = await getLocaleFromRequest();
+  // The movie catalog (~4,600 movies) made every channel page ~11 MB. Send it only when the
+  // URL opens the Movies view; otherwise the client loads it from /api/client/movies/bootstrap
+  // when the viewer switches to Movies.
+  const wantsMovies = String(query?.mode || "").trim().toLowerCase() === "movies";
 
   if (!channel) {
     // Merged duplicate: send old links to the channel that was kept.
@@ -212,7 +216,7 @@ export default async function WatchChannelPage({ params, searchParams }) {
   const publicGuestAccessEnabled = accessSettings?.public_guest_access_enabled === true;
   if (!current) {
     if (publicGuestAccessEnabled) {
-      const boot = await getClientHomeData("", { includeMovies: true });
+      const boot = await getClientHomeData("", { includeMovies: wantsMovies });
       return (
         <IptvHomeClient
           initialChannels={boot.channels}
@@ -280,7 +284,7 @@ export default async function WatchChannelPage({ params, searchParams }) {
     );
   }
 
-  const boot = await getClientHomeData(current.user.id, { includeMovies: true });
+  const boot = await getClientHomeData(current.user.id, { includeMovies: wantsMovies });
   return (
     <IptvHomeClient
       initialChannels={boot.channels}

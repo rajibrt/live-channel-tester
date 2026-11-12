@@ -108,7 +108,7 @@ curl -s -o /dev/null -m 10 -w "%{http_code}\n" https://storage.raishahost.com/mi
 3. `viewer_activity_events` missing → guest analytics empty.
 4. `transcode-gateway` service not running.
 5. `/api/stream-probe` returns raw ffmpeg error text to clients (minor info leak).
-6. `/watch/<id>` HTML is ~11 MB (1.5 MB gzip) because the whole movie catalog (~4,600 movies with synopsis/posters) is sent with every channel page; heavy for phones/iOS PWA. Measured 2026-11-12; fix would be loading movies only when the Movies view opens.
+6. `/watch/<id>` HTML was ~11 MB because the whole movie catalog was sent with every channel page. Fixed locally 2026-11-12 (not deployed yet): the catalog is sent only for `?mode=movies`; otherwise the client loads it from `/api/client/movies/bootstrap` when the viewer opens Movies.
 
 ## Current external handoff
 
@@ -556,3 +556,21 @@ Re-check `git status` every time. This list is a historical snapshot, not permis
 - Phones (≤640px) CSS: controls in one row (volume slider and % hidden, mute kept), smaller now-playing card with icon-only favorite (`favoriteBtnLabel`), "Debug" badge hidden.
 - Verified locally at 375×812 (temporary local-only guest switch, removed): grid renders under the player, tapping ATN News switched to `/watch/12-atn-news` and scrolled to top; `npm run build` passed. Not deployed.
 - Planned (not started): more backup links for BD channels — see Pending item D.
+- Deployed in `0943f19` (user approved; build 2026-11-12T053101Z live ~50 s after push; `/` 200, `/watch` 200, `/dashboard` 307). Mobile layout on production not yet seen by the user/agent while logged in.
+
+### 2026-11-12 - Bangla link collection, round 1 (review only, nothing written)
+
+- Sources: iptv-org `countries/bd.m3u` (44), `languages/ben.m3u` (104), iptv-org API streams for `.bd` channels → 117 unique URLs; 34 already in our DB. Matched by normalized name / tvg-id to our channels; probed from the user's Mac (ISP network): 41 of 68 played; frame grabs to confirm identity.
+- APPLIED (user: "Yes, add all"): 14 backup links (Banglavision, Duronto TV, Zee Bangla, BHI Channel, Maasranga TV, DD Bangla, Republic Bangla, Khushboo Bangla, KTV Bangla, Sangeet Bangla, R Plus, R Plus Gold, TV9 Bangla, DD Sports) and 15 new channels (Dhoom Music, Akhon Kolkata, Globe TV, Headlines Tripura, Madani Channel Bangla, AK Bangla, Friends TV, Sony Aath, Raatdin Bangla, Rupasi Bangla, Sonar Bangla, U Bangla, News Live Bangla, Deen TV, Doyel TV). List: `backups/imports/bangla-links-review-2026-11-12.json`.
+- Rejected: ATN Bangla ("No signal" slate), Orange Bangla TV (placeholder), Shiksha TV (Gujarati), tokenized jagobd/ncare links (expire; commercial apps), Gazi TV/JonmoBhumi/Nexus/NAN/Rupashi Bangla TV links that stopped answering.
+- Gap: public lists have few working links for the big BD channels (Somoy, Jamuna, Ekattor, Channel 24, Independent, NTV, ATN). Next sources: user's own M3U/captures and BDIX/ISP IPTV portals.
+- Applied 2026-11-12: 14 backup `channel_sources` (label `iptv-org`, appended after existing links) and 15 new channels in `bdix` (ids 2587-2591, 2593-2602; each with an `iptv-org` primary source, 14 with iptv-org logos, AK Bangla without logo because the tvg-id said Bangla Jago). Two failed runs (`channels.playlist_slug` and `logo_url` are NOT NULL) created no partial rows (2586/2592 do not exist). Backups: `backups/bangla-links-applied-2026-11-12*.json`. bdix now 815 channels.
+
+### 2026-11-12 - Lighter /watch page: movie catalog loaded on demand (local, not deployed)
+
+- User asked to make the channel page lighter. `app/watch/[channel]/page.js` now calls `getClientHomeData(..., { includeMovies: wantsMovies })`, where `wantsMovies` is true only for `?mode=movies`. The client already had a lazy path (`ensureMovieCatalogLoaded` → `/api/client/movies/bootstrap`, paged, 24 per page) used when no initial movies are given.
+- Found and fixed a pre-existing bug in `components/iptv/IptvHomeClient.js`: when the bootstrap request failed, the effect retried immediately in an endless loop (seen as ~100 requests in a few seconds). It now stops on error and shows a "Try again" button.
+- Measured on the local dev server (temporary local-only guest switch, removed afterwards; dev HTML is a bit larger than production): `/watch/865-somoy-tv` 1.7 MB raw / 123 KB gzip (with movies: 16.1 MB raw / 2.0 MB gzip). Clicking Movies loaded the catalog through the API (4,581 movies, categories shown). `npm run build` passed.
+- Seen, not fixed: a React hydration-mismatch warning on `/watch` in dev (RightPanel, `selectedChannel` null on the server); not caused by this change.
+- Pending: user approval to commit and push (Dokploy autodeploys).
+
