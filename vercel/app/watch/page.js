@@ -6,7 +6,9 @@ import { buildWatchPath } from "../../lib/channelSlug";
 
 export const dynamic = "force-dynamic";
 
-export default async function WatchEntryPage() {
+export default async function WatchEntryPage({ searchParams }) {
+  const query = await searchParams;
+  const wantsMovies = String(query?.mode || "").toLowerCase() === "movies";
   const [currentClient, accessSettings] = await Promise.all([
     getCurrentClient().catch(() => null),
     loadClientAccessSettingsCached().catch(() => null),
@@ -21,5 +23,6 @@ export default async function WatchEntryPage() {
 
   const homeData = await getHomeIptvData().catch(() => null);
   const firstChannel = Array.isArray(homeData?.channels) ? homeData.channels[0] : null;
-  redirect(firstChannel ? buildWatchPath(firstChannel) : "/");
+  const target = firstChannel ? buildWatchPath(firstChannel) : "/";
+  redirect(firstChannel && wantsMovies ? `${target}?mode=movies` : target);
 }

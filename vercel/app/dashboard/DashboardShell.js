@@ -18,8 +18,7 @@ import {
   Settings,
   Tv,
   Users,
-  X,
-} from 'lucide-react'
+  X, Radio} from 'lucide-react'
 import styles from './dashboard-shell.module.css'
 import { useI18n } from '../../components/i18n/LanguageProvider'
 
@@ -39,6 +38,7 @@ function createNavGroups(t) {
         { href: '/dashboard/playlists', label: t('dashboardShell.navPlaylists'), icon: ListVideo },
         { href: '/dashboard/channels', label: t('dashboardShell.navAddChannel'), icon: Tv },
         { href: '/dashboard/movies', label: t('dashboardShell.navMovies'), icon: Film },
+        { href: '/dashboard/radio', label: t('dashboardShell.navRadio'), icon: Radio },
         { href: '/dashboard/articles', label: t('dashboardShell.navArticles'), icon: Newspaper },
         { href: '/dashboard/announcements', label: t('dashboardShell.navAnnouncements'), icon: Megaphone },
       ],

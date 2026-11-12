@@ -1,0 +1,38 @@
+/* Radio admin: station table + side drawer. Uses dashboard theme tokens. */
+.table { display: grid; gap: 6px; }
+.row {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1.6fr) 110px 120px 120px auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+}
+.head { background: transparent; border-color: transparent; font-size: 12px; color: var(--muted-foreground); padding-block: 0; }
+.inactive { opacity: 0.55; }
+.logo { width: 44px; height: 44px; border-radius: 12px; object-fit: cover; background: var(--muted); display: grid; place-items: center; font-weight: 700; font-size: 13px; color: var(--foreground); }
+.name { min-width: 0; }
+.name strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.name span { color: var(--muted-foreground); font-size: 13px; }
+.freq { font-variant-numeric: tabular-nums; font-weight: 600; }
+.actions { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+@media (max-width: 760px) {
+  .row { grid-template-columns: 44px minmax(0, 1fr) auto; }
+  .row > :nth-child(3), .row > :nth-child(4), .row > :nth-child(5) { display: none; }
+  .head { display: none; }
+}
+.linkRow { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 8px; align-items: start; padding: 10px; border: 1px solid var(--border); border-radius: 12px; }
+.linkRow input[type="text"], .linkRow input[type="url"] { width: 100%; min-width: 0; }
+.linkFields { display: grid; gap: 6px; min-width: 0; }
+.linkMeta { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; font-size: 12px; color: var(--muted-foreground); }
+.linkBtns { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.order { font-weight: 700; color: var(--muted-foreground); padding-top: 8px; text-align: center; }
+.testOk { color: #22c55e; font-weight: 600; }
+.testBad { color: var(--destructive); font-weight: 600; }
+.formGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 560px) { .formGrid { grid-template-columns: minmax(0, 1fr); } }
+.check { display: flex; gap: 8px; align-items: center; font-size: 14px; }
+.section { display: grid; gap: 10px; }
+.section h4 { margin: 0; font-size: 14px; }

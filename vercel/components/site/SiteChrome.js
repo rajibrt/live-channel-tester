@@ -10,10 +10,10 @@ const MONETIZABLE_PREFIXES = ["/articles"];
 function shouldHidePublicChrome(pathname, hasClientSession) {
   const path = String(pathname || "");
   if (!hasClientSession) return false;
-  return path.startsWith("/watch/") || path.startsWith("/movie/");
+  return path.startsWith("/watch/") || path.startsWith("/movie/") || path === "/radio";
 }
 
-export default function SiteChrome({ hasClientSession = false, viewerEntryHref = "/client-login", children }) {
+export default function SiteChrome({ hasClientSession = false, viewerEntryHref = "/client-login", radioHref = "/client-login?next=%2Fradio", children }) {
   const pathname = usePathname();
   const path = String(pathname || "");
   const hidePublicChrome = shouldHidePublicChrome(pathname, hasClientSession);
@@ -21,7 +21,7 @@ export default function SiteChrome({ hasClientSession = false, viewerEntryHref =
 
   return (
     <>
-      {!hidePublicChrome ? <PublicSiteHeader viewerEntryHref={viewerEntryHref} /> : null}
+      {!hidePublicChrome ? <PublicSiteHeader viewerEntryHref={viewerEntryHref} radioHref={radioHref} /> : null}
       {children}
       {!hidePublicChrome ? <PublicSiteFooter /> : null}
       {!hidePublicChrome ? <PublicConsentManager enableAds={isEditorialContent} /> : null}

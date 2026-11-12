@@ -50,6 +50,7 @@ export default async function RootLayout({ children }) {
   const hasPublicGuestAccess = !currentClient && accessSettings?.public_guest_access_enabled === true;
   const hasViewerAccess = hasApprovedClientSession || hasPublicGuestAccess;
   const viewerEntryHref = hasViewerAccess ? "/watch" : "/client-login";
+  const radioHref = hasViewerAccess ? "/radio" : "/client-login?next=%2Fradio";
   const themeInitScript = `
     (function () {
       try {
@@ -108,7 +109,7 @@ export default async function RootLayout({ children }) {
       <body>
         <LanguageProvider initialLocale={initialLocale}>
           <PublicSmoothScroll hasClientSession={hasViewerAccess} />
-          <SiteChrome hasClientSession={hasViewerAccess} viewerEntryHref={viewerEntryHref}>
+          <SiteChrome hasClientSession={hasViewerAccess} viewerEntryHref={viewerEntryHref} radioHref={radioHref}>
             {children}
           </SiteChrome>
         </LanguageProvider>

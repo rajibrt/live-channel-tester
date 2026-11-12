@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { getRadioStations } from "../../../lib/radioData";
 
 function m3uHeader() {
   return "#EXTM3U\n\n";
@@ -214,6 +215,16 @@ export async function GET(request, context) {
     out += `#EXTINF:-1 tvg-name="${name}" group-title="${category}" tvg-logo="${logo}",${name}\n`;
     const smart = origin && multiSourceIds.has(Number(c.id));
     out += `${smart ? `${origin}/playlist/${normalizedToken}/live/${c.id}` : (c.stream_url || "").trim()}\n`;
+  }
+
+  // Radio stations (separate tables; empty until supabase/radio_stations.sql is applied).
+  for (const st of await getRadioStations().catch(() => [])) {
+    const url = st.sources[0]?.url;
+    if (!url) continue;
+    const freq = st.frequency != null && st.band !== "Online" ? ` ${st.band === "AM" ? Math.round(st.frequency) : st.frequency.toFixed(1)}` : "";
+    const name = sanitizeAttr(`${st.name}${freq}`);
+    out += `#EXTINF:-1 tvg-name="${name}" group-title="Radio" tvg-logo="${sanitizeAttr(st.logoUrl || "")}" radio="true",${name}\n`;
+    out += `${url}\n`;
   }
 
   for (const movie of movies || []) {

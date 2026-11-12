@@ -135,6 +135,21 @@ export default function LeftSidebar({
             <Icon name="Film" size={16} />
             <span>Movies</span>
           </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              window.location.assign("/radio");
+            }}
+            className={`justify-start ${styles.linkBtn}`}
+            data-tv-focusable={isTvMode ? "true" : undefined}
+            data-tv-focus-scope={isTvMode ? "left-nav" : undefined}
+            data-tv-focus-id={isTvMode ? "leftnav-home-radio" : undefined}
+          >
+            <Icon name="Radio" size={16} />
+            <span>Radio</span>
+          </Button>
         </div>
       </div>
 

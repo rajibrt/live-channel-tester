@@ -33,7 +33,7 @@ const SOCIAL_LINKS = [
   },
 ];
 
-export default function PublicSiteHeader({ viewerEntryHref = "/client-login", homeHref = "/" }) {
+export default function PublicSiteHeader({ viewerEntryHref = "/client-login", radioHref = "/client-login?next=%2Fradio", homeHref = "/" }) {
   const pathname = usePathname();
   const path = String(pathname || "");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -82,6 +82,9 @@ export default function PublicSiteHeader({ viewerEntryHref = "/client-login", ho
         <div className={styles.siteHeaderTopRow}>
           <Link href={homeHref} className={styles.siteBrand} aria-label="WEBTVBD home">
             <Image src="/logo.png" alt="WEBTVBD" width={156} height={49} className={styles.siteBrandLogo} priority />
+          </Link>
+          <Link href={radioHref} className={styles.mobileTopRadioLink}>
+            {t("publicSite.radioLink")}
           </Link>
           <Link href={viewerEntryHref} className={styles.mobileTopLoginLink}>
             {t("publicSite.clientLogin")}
@@ -146,6 +149,9 @@ export default function PublicSiteHeader({ viewerEntryHref = "/client-login", ho
               <PublicLocaleToggle className={styles.headerLocaleButton} />
               <Link href={viewerEntryHref} className={styles.headerLoginLink}>
                 {t("publicSite.clientLogin")}
+              </Link>
+              <Link href={radioHref} className={styles.headerRadioLink}>
+                {t("publicSite.radioLink")}
               </Link>
             </div>
             <footer className={styles.mobileDrawerFooter}>
