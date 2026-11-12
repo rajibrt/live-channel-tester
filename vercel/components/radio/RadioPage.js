@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { resolveBrowserPlaybackUrl, toStreamProxyUrl } from "../../lib/streamUrl";
 import styles from "./radio.module.css";
-import { startShadowAnalyser } from "./shadowAnalyser";
+import { startHlsShadowAnalyser, startShadowAnalyser } from "./shadowAnalyser";
 import { VIZ_MODES, createBandReader, createRing3d, drawDots, drawHalo, drawHills, drawHorizon, drawMesh, drawPeaks, drawPrism, drawWave } from "./visualizers";
 
 const FMIN = 87.5;
@@ -152,7 +152,9 @@ export default function RadioPage({ stations = [], initialFavorites = [], signed
   const playingRef = useRef(null); // { url, analysed, hls } of the link that is playing
   const shadowRef = useRef(null); // analysis-only copy (see shadowAnalyser.js)
   const zeroFramesRef = useRef(0);
+  const zeroDeviceRef = useRef(false); // this browser hands the analyser only zeros (iPhone): start the copy at once
   const loadWallRef = useRef(0); // when the audible player started loading its stream
+  const playerDataWallRef = useRef(0); // when the audible player received its first audio
   const [noLive, setNoLive] = useState(false);
   const noLiveRef = useRef(false);
   const debugRef = useRef(null);
@@ -410,6 +412,14 @@ export default function RadioPage({ stations = [], initialFavorites = [], signed
         el.addEventListener("stalled", onWaiting);
         el.addEventListener("error", onError);
         timersRef.current.start = setTimeout(fail, STARTUP_TIMEOUT_MS);
+        // Some stations answer only seconds after the request. The analysis copy is aligned on the
+        // moment each connection received its first audio, so that waiting time cancels out.
+        playerDataWallRef.current = 0;
+        const markFirstData = () => {
+          if (attempt === attemptRef.current && !playerDataWallRef.current) playerDataWallRef.current = performance.now();
+        };
+        el.addEventListener("progress", markFirstData, { once: true });
+        el.addEventListener("loadedmetadata", markFirstData, { once: true });
 
         try {
           if (isHls(source.url) && !el.canPlayType("application/vnd.apple.mpegurl")) {
@@ -606,7 +616,10 @@ export default function RadioPage({ stations = [], initialFavorites = [], signed
     el?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
   }, [index, list]);
 
-  const wakeNav = () => {
+  const wakeNav = (e) => {
+    // iPhone treats content that appears on touch as a hover and drops the tap on a button,
+    // so a touch on a button (full screen, arrows) does not reveal anything first
+    if (e?.pointerType && e.pointerType !== "mouse" && e.target?.closest?.("button")) return;
     setNavOn(true);
     clearTimeout(navTimer.current);
     navTimer.current = setTimeout(() => setNavOn(false), 2200);
@@ -680,7 +693,7 @@ export default function RadioPage({ stations = [], initialFavorites = [], signed
       const main = analyserRef.current;
       // Also when the stream had to fall back to the plain player (no analyser at all), which is
       // common on iPhone: the analysis copy may still be readable.
-      if (status === "playing" && main && !shadowRef.current && playingRef.current && !playingRef.current.hls) {
+      if (status === "playing" && main && !shadowRef.current && playingRef.current) {
         if (!glowBuf.current || glowBuf.current.length !== main.frequencyBinCount) glowBuf.current = new Uint8Array(main.frequencyBinCount);
         main.getByteFrequencyData(glowBuf.current);
         let peak = 0;
@@ -692,13 +705,28 @@ export default function RadioPage({ stations = [], initialFavorites = [], signed
           // storage blocked
         }
         zeroFramesRef.current = peak === 0 || forced || simulated ? zeroFramesRef.current + 1 : 0;
-        if (zeroFramesRef.current > 90 && acRef.current) {
+        // first station: wait ~1.5 s to be sure; after that this device is known, ~0.15 s is enough
+        const need = zeroDeviceRef.current ? 10 : 90;
+        if (zeroFramesRef.current > need) zeroDeviceRef.current = true;
+        if (zeroFramesRef.current > need && acRef.current && playingRef.current.hls) {
+          const el = playingRef.current.analysed ? analysedRef.current : plainRef.current;
+          playingRef.current.viaProxy = true; // the HLS copy handles its own proxy fallback
+          shadowRef.current = startHlsShadowAnalyser(acRef.current, playingRef.current.raw, el, toStreamProxyUrl, (seq, probe) => {
+            // hls.js knows exactly where each segment sits on the player's timeline
+            const details = hlsRef.current?.levels?.[hlsRef.current.currentLevel]?.details || hlsRef.current?.levels?.[0]?.details;
+            if (!details?.fragments?.length) return NaN;
+            if (probe) return 0;
+            const f = details.fragments.find((x) => x.sn === seq);
+            return f ? f.start : NaN;
+          });
+        } else if (zeroFramesRef.current > need && acRef.current) {
           const el = playingRef.current.analysed ? analysedRef.current : plainRef.current;
           shadowRef.current = startShadowAnalyser(
             acRef.current,
             playingRef.current.url,
             () => el.currentTime,
-            (performance.now() - loadWallRef.current) / 1000
+            (performance.now() - loadWallRef.current) / 1000,
+            () => playerDataWallRef.current
           );
         }
       }
@@ -711,7 +739,7 @@ export default function RadioPage({ stations = [], initialFavorites = [], signed
           // the station does not allow reading its stream directly: read the copy through our proxy
           pr.viaProxy = true;
           const el = pr.analysed ? analysedRef.current : plainRef.current;
-          shadowRef.current = startShadowAnalyser(acRef.current, proxied, () => el.currentTime, (performance.now() - loadWallRef.current) / 1000);
+          shadowRef.current = startShadowAnalyser(acRef.current, proxied, () => el.currentTime, (performance.now() - loadWallRef.current) / 1000, () => playerDataWallRef.current);
         } else {
           // nothing else to try: keep the beat motion
           shadowRef.current = { failed: true, final: true, working: false, info, stop() {} };
@@ -775,7 +803,7 @@ export default function RadioPage({ stations = [], initialFavorites = [], signed
         const sh = shadowRef.current?.info;
         debugRef.current.el.textContent = `ctx:${acRef.current?.state || "-"} main peak:${peak} simulated:${simulated} zero:${zeroFramesRef.current}` +
           (sh
-            ? ` | copy:${sh.state} ${Math.round(sh.bytes / 1024)}KB ok:${sh.decoded} ${Math.round(sh.seconds || 0)}s ahead:${sh.ahead ?? "-"} err:${sh.failures} ${sh.lastError} copyPeak:${(() => {
+            ? ` | copy:${sh.state} ${Math.round(sh.bytes / 1024)}KB ok:${sh.decoded} ${Math.round(sh.seconds || 0)}s ahead:${sh.ahead ?? "-"} off:${sh.offset ?? "-"} anc:${sh.anchored ?? "-"} pt:${(() => { const e = playingRef.current?.analysed ? analysedRef.current : plainRef.current; return e ? e.currentTime.toFixed(1) : "-"; })()} drop:${sh.drops || 0}/${sh.reanchored || 0} err:${sh.failures} ${sh.lastError} copyPeak:${(() => {
                 const an = shadowRef.current?.analyser;
                 if (!an) return "-";
                 const tmp = new Uint8Array(an.frequencyBinCount);
@@ -859,6 +887,28 @@ export default function RadioPage({ stations = [], initialFavorites = [], signed
       // nothing to exit
     }
   };
+  // Phones: turning to landscape shows the spectrum full screen; back to portrait restores the page.
+  const autoFullRef = useRef(false);
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return undefined;
+    const mq = window.matchMedia("(orientation: landscape) and (max-height: 540px) and (pointer: coarse)");
+    const apply = () => {
+      if (mq.matches) {
+        if (!fullRef.current && modeRef.current !== "off") {
+          autoFullRef.current = true;
+          setFull(true); // fixed full-window layer (fullscreen API needs a tap, and iPhone has none)
+        }
+      } else if (autoFullRef.current) {
+        autoFullRef.current = false;
+        setFull(false);
+        setBare(false);
+      }
+    };
+    apply();
+    mq.addEventListener?.("change", apply);
+    return () => mq.removeEventListener?.("change", apply);
+  }, []);
+
   useEffect(() => {
     const onChange = () => {
       if (!document.fullscreenElement && !document.webkitFullscreenElement) {

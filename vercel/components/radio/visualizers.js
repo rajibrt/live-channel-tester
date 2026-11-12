@@ -18,13 +18,15 @@ export const VIZ_MODES = [
 export function createBandReader() {
   let freqData = null;
   // Some browsers (notably iPhone Safari with live streams) play the sound but hand the
-  // analyser only zeros. After ~1.5 s of silence-while-playing we switch to the beat motion.
+  // analyser only zeros. After ~1.5 s of silence-while-playing we show the calm idle motion.
+  // The analyser keeps being read meanwhile, so real data takes over again the moment it
+  // arrives (e.g. the analysis copy starts a few seconds after a station switch).
   let silentFrames = 0;
   return function read(analyser, n, { playing, simulated, sampleRate, tuneProgress }) {
     const out = new Float32Array(n);
     const t = performance.now() / 1000;
     if (!playing) silentFrames = 0;
-    let useAnalyser = playing && analyser && !simulated && silentFrames < 90;
+    let useAnalyser = playing && analyser && !simulated;
     if (useAnalyser) {
       if (!freqData || freqData.length !== analyser.frequencyBinCount) freqData = new Uint8Array(analyser.frequencyBinCount);
       analyser.getByteFrequencyData(freqData);
