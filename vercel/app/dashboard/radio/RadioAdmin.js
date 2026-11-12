@@ -5,6 +5,7 @@ import { ArrowDown, ArrowUp, Pencil, Play, Plus, Radio, Trash2, X } from "lucide
 import ws from "../playlists/workspace.module.css";
 import styles from "./radio-admin.module.css";
 import { resolveBrowserPlaybackUrl } from "../../../lib/streamUrl";
+import SpectrumMessages from "./SpectrumMessages";
 
 const REGIONS = ["Bangladesh", "India · Bangla", "India · Hindi", "International"];
 const EMPTY = { name: "", name_bn: "", band: "FM", frequency: "", city: "", logo_url: "", region: "Bangladesh", is_active: true };
@@ -375,6 +376,7 @@ export default function RadioAdmin() {
           </button>
         </div>
       </div>
+      <SpectrumMessages />
       {notice ? <p className={ws.notice}>{notice}</p> : null}
       {error ? <p className={ws.errorText}>{error}</p> : null}
       {loading ? <p className={ws.muted}>Loading stations…</p> : null}

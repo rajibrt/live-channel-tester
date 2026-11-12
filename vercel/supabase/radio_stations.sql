@@ -60,4 +60,14 @@ $$;
 revoke all on function public.record_radio_source_result(bigint, boolean) from public, anon, authenticated;
 grant execute on function public.record_radio_source_result(bigint, boolean) to service_role;
 
+-- Added 2026-11-12: signed-in viewers' favourite radio stations.
+create table if not exists public.client_radio_favorites (
+  user_id uuid not null references public.client_users(user_id) on delete cascade,
+  station_id bigint not null references public.radio_stations(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (user_id, station_id)
+);
+alter table public.client_radio_favorites enable row level security;
+revoke all on public.client_radio_favorites from anon, authenticated;
+
 notify pgrst, 'reload schema';
