@@ -30,6 +30,8 @@ process.env.NEXT_PUBLIC_BUILD_VERSION = buildVersion;
 const nextConfig = {
   reactStrictMode: true,
   output: "standalone",
+  // Dev only: let phones on the same Wi-Fi open the local dev server (no effect in production).
+  allowedDevOrigins: ["192.168.*.*", "10.*.*.*", "172.16.*.*"],
   images: {
     localPatterns: [
       { pathname: "/editorial/**" },

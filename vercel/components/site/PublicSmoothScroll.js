@@ -14,6 +14,7 @@ const DISABLED_PREFIXES = [
   "/playlist/",
   "/watch/",
   "/movie/",
+  "/radio", // the station list scrolls on its own; smooth scroll would swallow the wheel
 ];
 
 export default function PublicSmoothScroll({ hasClientSession = false }) {

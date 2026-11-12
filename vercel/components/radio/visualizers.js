@@ -43,16 +43,15 @@ export function createBandReader() {
         const b = Math.max(a + 1, Math.floor((f1 / ny) * len));
         let s = 0;
         for (let k = a; k < b && k < len; k++) s = Math.max(s, freqData[k]);
-        out[i] = Math.pow(s / 255, 1.35);
+        // noise gate: hiss / near-silence (below ~60 of 255) stays flat instead of lighting up
+        out[i] = Math.pow(Math.max(0, (s - 60) / 195), 1.3);
       }
     } else if (playing) {
-      // Beat-shaped motion for streams the browser is not allowed to analyse.
-      const beat = Math.pow(Math.max(0, Math.sin(t * Math.PI * 2 * 1.9)), 6);
+      // No real audio data for this station: a slow, calm swell that clearly is not a beat
+      // (user feedback: a fake rhythm looked the same for music, speech and hiss).
       for (let i = 0; i < n; i++) {
         const p = i / n;
-        const tilt = 1 - p * 0.55;
-        const wob = 0.5 + 0.5 * Math.sin(t * (2.3 + p * 3) + i * 0.7) * Math.sin(t * 0.9 + i * 0.31);
-        out[i] = Math.min(1, tilt * (0.18 + 0.42 * wob + (p < 0.2 ? beat * 0.45 : beat * 0.12)));
+        out[i] = 0.1 + 0.07 * Math.sin(t * 0.6 + p * 5) + 0.04 * Math.sin(t * 0.35 + p * 11);
       }
     } else {
       for (let i = 0; i < n; i++) out[i] = 0.08 + 0.06 * Math.sin(t * 1.3 + i * 0.35) + 0.05 * Math.sin(t * 2.1 + i * 0.9);

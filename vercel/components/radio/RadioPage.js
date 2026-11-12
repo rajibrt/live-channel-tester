@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { resolveBrowserPlaybackUrl } from "../../lib/streamUrl";
+import { resolveBrowserPlaybackUrl, toStreamProxyUrl } from "../../lib/streamUrl";
 import styles from "./radio.module.css";
+import { startShadowAnalyser } from "./shadowAnalyser";
 import { VIZ_MODES, createBandReader, createRing3d, drawDots, drawHalo, drawHills, drawHorizon, drawMesh, drawPeaks, drawPrism, drawWave } from "./visualizers";
 
 const FMIN = 87.5;
@@ -147,13 +148,25 @@ export default function RadioPage({ stations = [], initialFavorites = [], signed
   const vizStateRef = useRef({});
   const toastTimer = useRef(null);
   const readBands = useMemo(() => createBandReader(), []);
+  const readShadowBands = useMemo(() => createBandReader(), []);
+  const playingRef = useRef(null); // { url, analysed, hls } of the link that is playing
+  const shadowRef = useRef(null); // analysis-only copy (see shadowAnalyser.js)
+  const zeroFramesRef = useRef(0);
+  const loadWallRef = useRef(0); // when the audible player started loading its stream
+  const [noLive, setNoLive] = useState(false);
+  const noLiveRef = useRef(false);
+  const debugRef = useRef(null);
+  const [debugOn, setDebugOn] = useState(false);
+  const modeRef = useRef("prism");
   const msgRef = useRef(null);
+  const pageRef = useRef(null);
+  const deckRef = useRef(null);
   const glowBuf = useRef(null);
 
   // Restore preferences after hydration.
   useEffect(() => {
     const m = store(true, MODE_KEY);
-    if (m && VIZ_MODES.some((x) => x.id === m)) setMode(m);
+    if (m && (m === "off" || VIZ_MODES.some((x) => x.id === m))) setMode(m);
     const sid = store(true, STATION_KEY);
     const i = Math.max(0, list.findIndex((s) => s.id === sid));
     setIndex(i);
@@ -256,9 +269,17 @@ export default function RadioPage({ stations = [], initialFavorites = [], signed
     clearTimeout(timersRef.current.stall);
   };
 
+  const stopShadow = () => {
+    shadowRef.current?.stop();
+    shadowRef.current = null;
+    zeroFramesRef.current = 0;
+  };
+
   const stopAll = useCallback(() => {
     clearTimers();
     attemptRef.current += 1;
+    playingRef.current = null;
+    stopShadow();
     if (hlsRef.current) {
       hlsRef.current.destroy();
       hlsRef.current = null;
@@ -271,6 +292,17 @@ export default function RadioPage({ stations = [], initialFavorites = [], signed
     }
   }, []);
 
+  const volGainRef = useRef(null);
+  const volumeRef = useRef(80);
+  // analysed element: keep it at full level and use the gain node; plain element: its own volume
+  const applyVolume = (v) => {
+    volumeRef.current = v;
+    const level = Math.max(0, Math.min(1, v / 100));
+    if (analysedRef.current) analysedRef.current.volume = volGainRef.current ? 1 : level;
+    if (volGainRef.current) volGainRef.current.gain.value = level;
+    if (plainRef.current) plainRef.current.volume = level;
+  };
+
   const ensureAudioGraph = useCallback(() => {
     if (acRef.current) return;
     const Ctx = window.AudioContext || window.webkitAudioContext;
@@ -280,10 +312,16 @@ export default function RadioPage({ stations = [], initialFavorites = [], signed
     analyser.fftSize = 2048;
     analyser.smoothingTimeConstant = 0.78;
     const src = ac.createMediaElementSource(analysedRef.current);
+    // Volume is applied AFTER the analyser, so turning the sound down (even to 0) does not
+    // starve the spectrum: the analyser always sees the full signal.
+    const vol = ac.createGain();
+    vol.gain.value = volumeRef.current / 100;
     src.connect(analyser);
-    analyser.connect(ac.destination);
+    analyser.connect(vol);
+    vol.connect(ac.destination);
     acRef.current = ac;
     analyserRef.current = analyser;
+    volGainRef.current = vol;
   }, []);
 
   // Plays station links in order. Each link is tried on the analysed element first and,
@@ -320,7 +358,7 @@ export default function RadioPage({ stations = [], initialFavorites = [], signed
         const el = analysed ? analysedRef.current : plainRef.current;
         const other = analysed ? plainRef.current : analysedRef.current;
         other.pause();
-        el.volume = volume / 100;
+        applyVolume(volume);
         const url = resolveBrowserPlaybackUrl(source.url, window.location.protocol);
         let settled = false;
 
@@ -345,6 +383,8 @@ export default function RadioPage({ stations = [], initialFavorites = [], signed
           clearTimeout(timersRef.current.start);
           setStatus("playing");
           setSimulated(!analysed);
+          playingRef.current = { url, raw: source.url, analysed, hls: isHls(source.url), viaProxy: false };
+          zeroFramesRef.current = 0;
           report(source.id, true);
           store(false, SOURCE_KEY + st.id, source.id);
         };
@@ -379,9 +419,11 @@ export default function RadioPage({ stations = [], initialFavorites = [], signed
             const hls = new Hls({ lowLatencyMode: false, xhrSetup: (xhr) => (xhr.withCredentials = false) });
             hlsRef.current = hls;
             hls.on(Hls.Events.ERROR, (_e, data) => data?.fatal && fail());
+            loadWallRef.current = performance.now();
             hls.loadSource(url);
             hls.attachMedia(el);
           } else {
+            loadWallRef.current = performance.now();
             el.src = url;
           }
           await el.play();
@@ -510,7 +552,7 @@ export default function RadioPage({ stations = [], initialFavorites = [], signed
   );
 
   useEffect(() => {
-    for (const el of [analysedRef.current, plainRef.current]) if (el) el.volume = volume / 100;
+    applyVolume(volume);
   }, [volume]);
 
   useEffect(() => () => stopAll(), [stopAll]);
@@ -535,6 +577,35 @@ export default function RadioPage({ stations = [], initialFavorites = [], signed
   }, [station, play, pause, step]);
 
   // ---------- visualizer loop ----------
+  // Phones: the player sticks to the top; the station search sticks right under it.
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.location.hash.includes("radio-debug")) setDebugOn(true);
+  }, []);
+  modeRef.current = mode;
+
+  useEffect(() => {
+    const deck = deckRef.current;
+    const page = pageRef.current;
+    if (!deck || !page || typeof ResizeObserver === "undefined") return undefined;
+    const ro = new ResizeObserver(() => page.style.setProperty("--deckH", `${Math.round(deck.getBoundingClientRect().height)}px`));
+    ro.observe(deck);
+    return () => ro.disconnect();
+  }, []);
+
+  // Keep the playing station's tile in view when it changes (next/previous, keys, dial),
+  // like the TV channel list. Skipped on first load so the page does not jump.
+  const firstScrollRef = useRef(true);
+  useEffect(() => {
+    if (firstScrollRef.current) {
+      firstScrollRef.current = false;
+      return;
+    }
+    const id = list[index]?.id;
+    if (!id) return;
+    const el = pageRef.current?.querySelector(`[data-sid="${id}"]`);
+    el?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+  }, [index, list]);
+
   const wakeNav = () => {
     setNavOn(true);
     clearTimeout(navTimer.current);
@@ -576,6 +647,12 @@ export default function RadioPage({ stations = [], initialFavorites = [], signed
     ro.observe(stage);
     ro.observe(scaleWrapRef.current);
     resize();
+    if (mode === "off") {
+      // spectrum switched off: no drawing, no analysis copy
+      shadowRef.current?.stop?.();
+      shadowRef.current = null;
+      return () => ro.disconnect();
+    }
 
     if (mode === "ring3d" && !ringRef.current) {
       createRing3d(stage)
@@ -598,13 +675,63 @@ export default function RadioPage({ stations = [], initialFavorites = [], signed
     const st = list[index];
     const loop = () => {
       const tuneProgress = Math.min(1, (performance.now() - tunedAtRef.current) / 600);
+      // iPhone Safari plays live streams but its analyser only returns zeros. When that
+      // happens for ~1.5 s, start an analysis-only copy of the stream (muted) and use it.
+      const main = analyserRef.current;
+      // Also when the stream had to fall back to the plain player (no analyser at all), which is
+      // common on iPhone: the analysis copy may still be readable.
+      if (status === "playing" && main && !shadowRef.current && playingRef.current && !playingRef.current.hls) {
+        if (!glowBuf.current || glowBuf.current.length !== main.frequencyBinCount) glowBuf.current = new Uint8Array(main.frequencyBinCount);
+        main.getByteFrequencyData(glowBuf.current);
+        let peak = 0;
+        for (let k = 0; k < glowBuf.current.length; k += 8) if (glowBuf.current[k] > peak) peak = glowBuf.current[k];
+        let forced = false;
+        try {
+          forced = window.localStorage.getItem("webtvbd:radio-force-shadow") === "1"; // test switch
+        } catch {
+          // storage blocked
+        }
+        zeroFramesRef.current = peak === 0 || forced || simulated ? zeroFramesRef.current + 1 : 0;
+        if (zeroFramesRef.current > 90 && acRef.current) {
+          const el = playingRef.current.analysed ? analysedRef.current : plainRef.current;
+          shadowRef.current = startShadowAnalyser(
+            acRef.current,
+            playingRef.current.url,
+            () => el.currentTime,
+            (performance.now() - loadWallRef.current) / 1000
+          );
+        }
+      }
+      if (shadowRef.current?.failed && !shadowRef.current.final) {
+        const info = shadowRef.current.info;
+        shadowRef.current.stop();
+        const pr = playingRef.current;
+        const proxied = pr && !pr.viaProxy && !String(pr.url).startsWith("/") ? toStreamProxyUrl(pr.raw) : "";
+        if (proxied && acRef.current) {
+          // the station does not allow reading its stream directly: read the copy through our proxy
+          pr.viaProxy = true;
+          const el = pr.analysed ? analysedRef.current : plainRef.current;
+          shadowRef.current = startShadowAnalyser(acRef.current, proxied, () => el.currentTime, (performance.now() - loadWallRef.current) / 1000);
+        } else {
+          // nothing else to try: keep the beat motion
+          shadowRef.current = { failed: true, final: true, working: false, info, stop() {} };
+        }
+      }
+      const shadow = shadowRef.current?.working ? shadowRef.current : null;
       const bands = (n) =>
-        readBands(analyserRef.current, n, {
-          playing: status === "playing",
-          simulated,
-          sampleRate: acRef.current?.sampleRate,
-          tuneProgress,
-        });
+        shadow
+          ? readShadowBands(shadow.analyser, n, {
+              playing: status === "playing",
+              simulated: false,
+              sampleRate: acRef.current?.sampleRate,
+              tuneProgress,
+            })
+          : readBands(analyserRef.current, n, {
+              playing: status === "playing",
+              simulated,
+              sampleRate: acRef.current?.sampleRate,
+              tuneProgress,
+            });
       const hue = st?.hue ?? 180;
       const state = vizStateRef.current;
       state.dialText = dialText(st);
@@ -621,10 +748,49 @@ export default function RadioPage({ stations = [], initialFavorites = [], signed
         ctx.clearRect(0, 0, W, H);
         ringRef.current?.frame(bands, hue);
       }
+      // tell the listener when this station gives no real audio data (calm idle motion instead)
+      {
+        const pr = playingRef.current;
+        const working = !!shadowRef.current?.working;
+        const nl =
+          status === "playing" &&
+          !working &&
+          (simulated || zeroFramesRef.current > 90) &&
+          (shadowRef.current?.final || pr?.hls || simulated);
+        if (nl !== noLiveRef.current) {
+          noLiveRef.current = nl;
+          setNoLive(nl);
+        }
+      }
+      // #radio-debug: small readout to diagnose phones (what the analysers are doing)
+      if (debugRef.current && performance.now() - (debugRef.current.t || 0) > 500) {
+        debugRef.current.t = performance.now();
+        let peak = -1;
+        if (main) {
+          const tmp = new Uint8Array(main.frequencyBinCount);
+          main.getByteFrequencyData(tmp);
+          peak = 0;
+          for (let k = 0; k < tmp.length; k += 4) if (tmp[k] > peak) peak = tmp[k];
+        }
+        const sh = shadowRef.current?.info;
+        debugRef.current.el.textContent = `ctx:${acRef.current?.state || "-"} main peak:${peak} simulated:${simulated} zero:${zeroFramesRef.current}` +
+          (sh
+            ? ` | copy:${sh.state} ${Math.round(sh.bytes / 1024)}KB ok:${sh.decoded} ${Math.round(sh.seconds || 0)}s ahead:${sh.ahead ?? "-"} err:${sh.failures} ${sh.lastError} copyPeak:${(() => {
+                const an = shadowRef.current?.analyser;
+                if (!an) return "-";
+                const tmp = new Uint8Array(an.frequencyBinCount);
+                an.getByteFrequencyData(tmp);
+                let pk = 0;
+                for (let k = 0; k < tmp.length; k += 4) if (tmp[k] > pk) pk = tmp[k];
+                return pk;
+              })()}`
+            : " | copy:none") +
+          ` | ${playingRef.current?.hls ? "hls" : "stream"} | player:${playingRef.current?.analysed ? "analysed" : "plain"} | ${(navigator.userAgent.match(/(iPhone|Android|Mac OS X)[^;)]*/) || [""])[0]}`;
+      }
       // let the message glow breathe with the music (bass energy)
       if (msgRef.current) {
         let g = 0.15;
-        const an = analyserRef.current;
+        const an = shadow ? shadow.analyser : analyserRef.current;
         if (an && status === "playing") {
           if (!glowBuf.current || glowBuf.current.length !== an.frequencyBinCount) glowBuf.current = new Uint8Array(an.frequencyBinCount);
           an.getByteFrequencyData(glowBuf.current);
@@ -724,7 +890,7 @@ export default function RadioPage({ stations = [], initialFavorites = [], signed
       }
       if (e.code === "KeyF" || key === "f" || key === "F" || key === "ফ") {
         e.preventDefault();
-        toggleFullRef.current?.();
+        if (modeRef.current !== "off") toggleFullRef.current?.();
       } else if (e.code === "KeyI" || key === "i" || key === "I" || key === "ই" || key === "ি") {
         if (!fullRef.current) return;
         e.preventDefault();
@@ -767,12 +933,12 @@ export default function RadioPage({ stations = [], initialFavorites = [], signed
         ? "Tap anywhere to start listening"
         : status === "idle"
         ? "Press play to listen"
-        : simulated && status === "playing"
-          ? "This station does not share its audio data, so the spectrum follows the beat"
+        : (simulated || noLive) && status === "playing" && !shadowRef.current?.working
+          ? "Live spectrum is not available for this station"
           : "";
 
   return (
-    <div className={styles.page}>
+    <div className={styles.page} ref={pageRef}>
       <div className={styles.wrap}>
         <header className={styles.topbar}>
           <a href="/" className={styles.brand}>
@@ -800,7 +966,7 @@ export default function RadioPage({ stations = [], initialFavorites = [], signed
           </div>
         ) : (
           <section className={styles.app} aria-label="Radio player">
-            <div className={styles.deck}>
+            <div className={styles.deck} ref={deckRef}>
               {regions.length > 1 || favIds.length ? (
                 <div className={styles.regions} role="tablist" aria-label="Station groups">
                   <button type="button" role="tab" aria-selected={favTab} className={styles.regionTab} onClick={() => setFavTab(true)}>
@@ -859,7 +1025,7 @@ export default function RadioPage({ stations = [], initialFavorites = [], signed
               </div>
 
               <div
-                className={`${styles.stage} ${full ? styles.stageFull : ""} ${full && bare ? styles.stageBare : ""} ${navOn ? styles.navOn : ""}`}
+                className={`${styles.stage} ${mode === "off" ? styles.stageOff : ""} ${full ? styles.stageFull : ""} ${full && bare ? styles.stageBare : ""} ${navOn ? styles.navOn : ""}`}
                 ref={stageRef}
                 onPointerMove={wakeNav}
                 onPointerDown={wakeNav}
@@ -871,6 +1037,14 @@ export default function RadioPage({ stations = [], initialFavorites = [], signed
               >
                 <canvas ref={vizRef} aria-hidden="true" />
                 <SpectrumMessage messages={messages} glowRef={msgRef} />
+                {debugOn ? (
+                  <div
+                    className={styles.debugLine}
+                    ref={(el) => {
+                      debugRef.current = el ? { el, t: 0 } : null;
+                    }}
+                  />
+                ) : null}
                 <button type="button" className={`${styles.styleNav} ${styles.styleNavPrev}`} onClick={() => {
                     cycleMode(-1);
                     wakeNav();
@@ -966,6 +1140,12 @@ export default function RadioPage({ stations = [], initialFavorites = [], signed
               </div>
 
               <div className={styles.modes} role="group" aria-label="Spectrum style">
+                <button type="button" className={`${styles.chip} ${styles.chipOff}`} aria-pressed={mode === "off"} onClick={() => chooseMode("off")} title="Turn the spectrum off">
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true">
+                    <path d="M12 3v9M6.3 6.3a8 8 0 1 0 11.4 0" />
+                  </svg>
+                  Off
+                </button>
                 {VIZ_MODES.map((m) => (
                   <button key={m.id} type="button" className={styles.chip} aria-pressed={mode === m.id} onClick={() => chooseMode(m.id)}>
                     {m.label}
@@ -1010,7 +1190,9 @@ export default function RadioPage({ stations = [], initialFavorites = [], signed
 
             <aside className={styles.rack} aria-label="Stations">
               <h2>{q ? "Search results" : favTab ? "Favourites" : region}</h2>
+              <div className={styles.searchBar}>
               <input className={styles.search} type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search name or frequency" aria-label="Search stations" />
+              </div>
               <div className={styles.list}>
                 {favTab && !q && !favStations.length ? (
                   <p className={styles.emptyList}>No favourites yet. Tap the heart next to a station name to keep it here{signedIn ? "" : " on this device"}.</p>
@@ -1019,7 +1201,7 @@ export default function RadioPage({ stations = [], initialFavorites = [], signed
                   const i = list.indexOf(s);
                   const fav = favSet.has(s.id);
                   return (
-                    <div key={s.id} className={styles.stationWrap}>
+                    <div key={s.id} className={styles.stationWrap} data-sid={s.id}>
                     <button type="button" className={styles.station} aria-current={i === index ? "true" : "false"} onClick={() => tune(i)}>
                       {s.logoUrl ? (
                         <img className={styles.logo} src={s.logoUrl} alt="" loading="lazy" />
