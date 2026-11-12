@@ -108,7 +108,7 @@ curl -s -o /dev/null -m 10 -w "%{http_code}\n" https://storage.raishahost.com/mi
 3. `viewer_activity_events` missing → guest analytics empty.
 4. `transcode-gateway` service not running.
 5. `/api/stream-probe` returns raw ffmpeg error text to clients (minor info leak).
-6. `/watch/<id>` HTML was ~11 MB because the whole movie catalog was sent with every channel page. Fixed locally 2026-11-12 (not deployed yet): the catalog is sent only for `?mode=movies`; otherwise the client loads it from `/api/client/movies/bootstrap` when the viewer opens Movies.
+6. `/watch/<id>` HTML was ~11 MB because the whole movie catalog was sent with every channel page. Fixed 2026-11-12 in `37b6392`: the catalog is sent only for `?mode=movies`; otherwise the client loads it from `/api/client/movies/bootstrap` when the viewer opens Movies.
 
 ## Current external handoff
 
@@ -572,5 +572,32 @@ Re-check `git status` every time. This list is a historical snapshot, not permis
 - Found and fixed a pre-existing bug in `components/iptv/IptvHomeClient.js`: when the bootstrap request failed, the effect retried immediately in an endless loop (seen as ~100 requests in a few seconds). It now stops on error and shows a "Try again" button.
 - Measured on the local dev server (temporary local-only guest switch, removed afterwards; dev HTML is a bit larger than production): `/watch/865-somoy-tv` 1.7 MB raw / 123 KB gzip (with movies: 16.1 MB raw / 2.0 MB gzip). Clicking Movies loaded the catalog through the API (4,581 movies, categories shown). `npm run build` passed.
 - Seen, not fixed: a React hydration-mismatch warning on `/watch` in dev (RightPanel, `selectedChannel` null on the server); not caused by this change.
-- Pending: user approval to commit and push (Dokploy autodeploys).
+- Deployed in `37b6392` (user approved): build 2026-11-12T071025Z live ~36 s after push; `/` 200, `/watch` 200, `/dashboard` 307, bootstrap API 401 signed out, public audit clean. Logged-in check on the user's phone pending.
 
+
+### 2026-11-12 - skym3u playlist + link health review (review only, nothing written)
+
+- User supplied `skym3u.dev.12.nov.26.m3u` (copied to git-excluded `backups/imports/skym3u-2026-11-12.m3u`): 365 entries, all `go.skym3u.dev` redirect links (Cloudflare blocks curl's default UA; a player UA gets a 302 to the real upstream, mostly `tvsen5/6/7.aynaott.com`, cloudfront, tangotv). Resolved every redirect and probed the upstream from the user's Mac: 327 play.
+- Probed all 970 active `channel_sources` of bdix: 636 ok, 334 fail here. Frame grabs found slates that "play" but show no picture: Somoy TV primary (aynaott, "NO SIGNAL" test card) and ATN Bangla (aynaott, "No signal!"), the same in skym3u. The player cannot fail over from these because they are valid live streams. Somoy's 2nd link (`116.204.149.16`, http) shows real content.
+- Also checked a public GitHub gist (973 links): only 31 play, few new.
+- Plan prepared: `backups/imports/skym3u-review-2026-11-12.csv` (232 links: 55 backup, 21 backup placed first, 152 new channels + 4 extra links; 7 duplicate merges e.g. INDEPENDENT 10 → Independent TV 905; deactivate the 2 slate links; remove 211 channels whose every link fails here and that never played for a viewer). Scripts in session scratchpad `sky/`.
+
+### 2026-11-12 - Applied skym3u review (production data)
+
+- User approved ("Yes, apply all"). Full backup first: `backups/bdix-full-before-skym3u-2026-11-12.json` (815 bdix links, 815 channels, 996 sources, 13 other-playlist links, 16 groups, merge setting). Merge backup: `backups/channel-merge-skym3u-2026-11-12.json`. Apply log (ids of everything added/removed): `backups/skym3u-applied-2026-11-12.json`.
+- Merged 7 duplicates (INDEPENDENT 10 → Independent TV 905; Channel 24HD 510 + Channel 24 1 866 → Channel 24 902; Jumuna TV 901 → Jamuna TV 541; Ekattor HD 71 903 → Ekattor TV 8; Deepto TV (BDIX) 869 + Deepto 1081 → Deepto TV 1267); favorites/history remapped, ids added to `channel_merges`.
+- Deactivated the 2 "NO SIGNAL" slate sources (Somoy TV aynaott → main link now `116.204.149.16`, http, so web playback goes through `/api/stream-proxy` on Hetzner — not verified from there; ATN Bangla had no other working link → channel 16 set DEAD/hidden).
+- Added 80 `channel_sources` (label `skym3u`; 21 placed first with `channels.stream_url` updated, e.g. Independent TV, Channel 24, Ekhon TV, Bijoy TV, Mohona TV, Channel 9, T Sports). Created 145 new channels (no logos yet) + linked 7 existing orphan rows into bdix (renamed, e.g. NDTV 24x7, Dunya News, DD Urdu).
+- Removed 210 channels from bdix whose every link failed from the user's ISP and never played for a viewer (208 rows deleted, 2 kept for other playlists); includes BTV News, Sangsad TV HD, NEWS 21, Channel S, Colors Bangla HD.
+- Verified: bdix 750 channels, all categories are existing groups; `/`, `/watch/865-somoy-tv`, `/watch/905-independent-tv` 200. Follow-ups: logos for the 145 new channels; aynaott-hosted links come from a third-party OTT and may stop; ATN Bangla, BTV News, Sangsad TV, NEWS 21 need new sources (official YouTube live is an option).
+
+
+### 2026-11-12 - Logos for the skym3u channels
+
+- User asked to add logos to the 145 new channels (+7 linked rows). Matched by same-name channels in our DB that have a logo and by iptv-org main/alt name with a country check (plus 9 hand-checked single candidates, e.g. MBC Bollywood, Iqra Bangla, beIN Sports). Checked each URL with curl (HTTP 200 + real image bytes); imgur links are unreachable from the user's ISP, so they were skipped.
+- Applied 114 (only where `logo_url` was empty). Backup: `backups/channel-logos-round3-before-2026-11-12.json`. Result: 121 of the 152 have a logo; 31 still without (e.g. G TV, SNB Cinema, JA TV, Zodiak TV, Zindagi TV, HGTV). Script: session scratchpad `logos3/`.
+
+### 2026-11-12 - ATN Bangla official-site stream: not used
+
+- User asked to use the live stream on atnbangla.tv/live-tv. It runs in an mcaster.tv player that obfuscates the HLS URL and blocks use outside the site, so the link was not extracted. ATN's YouTube channels (@ATNBanglanews, @atnbangla) had no live stream at the time.
+- A "Watch on atnbangla.tv" button was started and then dropped at the user's request; all code reverted, nothing deployed or written to the DB. ATN Bangla (id 16) stays DEAD/hidden.
