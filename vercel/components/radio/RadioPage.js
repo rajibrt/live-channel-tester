@@ -68,10 +68,16 @@ export default function RadioPage({ stations = [] }) {
       })),
     [stations]
   );
-  const fmStations = list.filter((s) => s.band !== "Online" && s.frequency != null && s.band === "FM");
-  const webStations = list.filter((s) => !(s.band === "FM" && s.frequency != null));
-
+  const regions = useMemo(() => {
+    const order = ["Bangladesh", "India · Bangla", "India · Hindi", "International"];
+    const present = [...new Set(list.map((s) => s.region || "Bangladesh"))];
+    return present.sort((a, b) => (order.indexOf(a) + 99) % 99 - (order.indexOf(b) + 99) % 99 || a.localeCompare(b));
+  }, [list]);
   const [index, setIndex] = useState(0);
+  const region = list[index]?.region || regions[0] || "Bangladesh";
+  const view = useMemo(() => list.filter((s) => (s.region || "Bangladesh") === region), [list, region]);
+  const fmStations = view.filter((s) => s.band === "FM" && s.frequency != null);
+  const webStations = view.filter((s) => !(s.band === "FM" && s.frequency != null));
   const [playing, setPlaying] = useState(false);
   const [status, setStatus] = useState("idle"); // idle | loading | playing | error
   const [linkInfo, setLinkInfo] = useState({ index: 0, total: 0 });
@@ -170,13 +176,13 @@ export default function RadioPage({ stations = [] }) {
       ctx.textAlign = "left";
       ctx.fillText("WEB", ox + 6, 48);
     }
-    list.forEach((s, i) => {
+    view.forEach((s) => {
       ctx.fillStyle = `hsl(${s.hue} 90% 62%)`;
       ctx.beginPath();
-      ctx.arc(posOf(s) * w, 62, i === index ? 4 : 2.6, 0, Math.PI * 2);
+      ctx.arc(posOf(s) * w, 62, s === list[index] ? 4 : 2.6, 0, Math.PI * 2);
       ctx.fill();
     });
-  }, [list, index, posOf, webStations.length]);
+  }, [view, list, index, posOf, webStations.length]);
 
   const needleLeft = station ? `${posOf(station) * 100}%` : "0%";
 
@@ -345,13 +351,29 @@ export default function RadioPage({ stations = [] }) {
   const tune = useCallback(
     (i) => {
       const next = (i + list.length) % list.length;
+      if (next === index && list.length > 1) return;
       setIndex(next);
       tunedAtRef.current = performance.now();
       if (list[next]) store(false, STATION_KEY, list[next].id);
       if (playing) startStation(list[next]);
     },
-    [list, playing, startStation]
+    [list, playing, startStation, index]
   );
+
+  // Previous / next stay inside the selected group.
+  const step = useCallback(
+    (delta) => {
+      if (!view.length) return;
+      const at = Math.max(0, view.indexOf(list[index]));
+      tune(list.indexOf(view[(at + delta + view.length) % view.length]));
+    },
+    [view, list, index, tune]
+  );
+  const chooseRegion = (r) => {
+    if (r === region) return;
+    const first = list.findIndex((s) => (s.region || "Bangladesh") === r);
+    if (first >= 0) tune(first);
+  };
 
   useEffect(() => {
     for (const el of [analysedRef.current, plainRef.current]) if (el) el.volume = volume / 100;
@@ -371,12 +393,12 @@ export default function RadioPage({ stations = [] }) {
       });
       navigator.mediaSession.setActionHandler("play", play);
       navigator.mediaSession.setActionHandler("pause", pause);
-      navigator.mediaSession.setActionHandler("previoustrack", () => tune(index - 1));
-      navigator.mediaSession.setActionHandler("nexttrack", () => tune(index + 1));
+      navigator.mediaSession.setActionHandler("previoustrack", () => step(-1));
+      navigator.mediaSession.setActionHandler("nexttrack", () => step(1));
     } catch {
       // Media Session is optional
     }
-  }, [station, play, pause, tune, index]);
+  }, [station, play, pause, step]);
 
   // ---------- visualizer loop ----------
   const chooseMode = (m) => {
@@ -474,20 +496,20 @@ export default function RadioPage({ stations = [] }) {
   const onScaleClick = (e) => {
     const r = scaleWrapRef.current.getBoundingClientRect();
     const p = (e.clientX - r.left) / r.width;
-    let best = 0;
+    let best = index;
     let bd = 9;
-    list.forEach((s, i) => {
+    view.forEach((s) => {
       const d = Math.abs(posOf(s) - p);
       if (d < bd) {
         bd = d;
-        best = i;
+        best = list.indexOf(s);
       }
     });
     tune(best);
   };
 
   const q = query.trim().toLowerCase();
-  const shown = list.filter((s) => !q || `${s.name} ${s.nameBn} ${s.frequency ?? "online"}`.toLowerCase().includes(q));
+  const shown = (q ? list : view).filter((s) => !q || `${s.name} ${s.nameBn} ${s.frequency ?? "online"}`.toLowerCase().includes(q));
   const liveLabel = status === "playing" ? "ON AIR" : status === "loading" ? "TUNING" : status === "error" ? "NO SIGNAL" : playing ? "TUNING" : "STANDBY";
   const hint =
     status === "error"
@@ -528,6 +550,16 @@ export default function RadioPage({ stations = [] }) {
         ) : (
           <section className={styles.app} aria-label="Radio player">
             <div className={styles.deck}>
+              {regions.length > 1 ? (
+                <div className={styles.regions} role="tablist" aria-label="Station groups">
+                  {regions.map((r) => (
+                    <button key={r} type="button" role="tab" aria-selected={r === region} className={styles.regionTab} onClick={() => chooseRegion(r)}>
+                      {r}
+                      <span>{list.filter((s) => (s.region || "Bangladesh") === r).length}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
               <div className={styles.dial}>
                 <div className={styles.readout}>
                   <div className={styles.freq} aria-live="polite">
@@ -570,7 +602,7 @@ export default function RadioPage({ stations = [] }) {
               </div>
 
               <div className={styles.transport}>
-                <button type="button" className={styles.btn} onClick={() => tune(index - 1)} aria-label="Previous station">
+                <button type="button" className={styles.btn} onClick={() => step(-1)} aria-label="Previous station">
                   <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                     <path d="M6 5h2v14H6zM20 5v14L9 12z" />
                   </svg>
@@ -580,7 +612,7 @@ export default function RadioPage({ stations = [] }) {
                     {playing ? <path d="M7 5h4v14H7zM13 5h4v14h-4z" /> : <path d="M8 5v14l11-7z" />}
                   </svg>
                 </button>
-                <button type="button" className={styles.btn} onClick={() => tune(index + 1)} aria-label="Next station">
+                <button type="button" className={styles.btn} onClick={() => step(1)} aria-label="Next station">
                   <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                     <path d="M16 5h2v14h-2zM4 5v14l11-7z" />
                   </svg>
@@ -602,7 +634,7 @@ export default function RadioPage({ stations = [] }) {
             </div>
 
             <aside className={styles.rack} aria-label="Stations">
-              <h2>Stations</h2>
+              <h2>{q ? "Search results" : region}</h2>
               <input className={styles.search} type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search name or frequency" aria-label="Search stations" />
               <div className={styles.list}>
                 {shown.map((s) => {

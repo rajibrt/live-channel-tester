@@ -2,6 +2,7 @@ import { revalidateTag } from "next/cache";
 import { normalizeStreamUrl } from "./streamUrl";
 
 export const RADIO_BANDS = ["FM", "AM", "Online"];
+export const RADIO_REGIONS = ["Bangladesh", "India · Bangla", "India · Hindi", "International"];
 export const MAX_RADIO_SOURCES = 20;
 
 export function isMissingRadioTable(error) {
@@ -47,6 +48,7 @@ export function cleanStationInput(body, { partial = false } = {}) {
     }
   }
   if (body.city !== undefined) out.city = String(body.city || "").trim().slice(0, 60);
+  if (body.region !== undefined) out.region = RADIO_REGIONS.includes(body.region) ? body.region : "Bangladesh";
   if (body.logo_url !== undefined) {
     const logo = String(body.logo_url || "").trim();
     if (logo && !/^https?:\/\//i.test(logo) && !logo.startsWith("/")) return { error: "Logo must be an http(s) URL." };

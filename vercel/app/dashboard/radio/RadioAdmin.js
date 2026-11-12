@@ -6,7 +6,8 @@ import ws from "../playlists/workspace.module.css";
 import styles from "./radio-admin.module.css";
 import { resolveBrowserPlaybackUrl } from "../../../lib/streamUrl";
 
-const EMPTY = { name: "", name_bn: "", band: "FM", frequency: "", city: "", logo_url: "", is_active: true };
+const REGIONS = ["Bangladesh", "India · Bangla", "India · Hindi", "International"];
+const EMPTY = { name: "", name_bn: "", band: "FM", frequency: "", city: "", logo_url: "", region: "Bangladesh", is_active: true };
 
 async function api(path, options = {}) {
   const res = await fetch(path, { headers: { "content-type": "application/json" }, ...options });
@@ -166,6 +167,16 @@ function StationDrawer({ station, onClose, onSaved }) {
                   onChange={(e) => set("frequency", e.target.value)}
                   placeholder={form.band === "AM" ? "693" : "88.0"}
                 />
+              </label>
+              <label className={ws.field} htmlFor="rs-region">
+                <span>Group</span>
+                <select id="rs-region" className={ws.select} value={form.region || "Bangladesh"} onChange={(e) => set("region", e.target.value)}>
+                  {REGIONS.map((r) => (
+                    <option key={r} value={r}>
+                      {r}
+                    </option>
+                  ))}
+                </select>
               </label>
               <label className={ws.field} htmlFor="rs-city">
                 <span>City (optional)</span>
@@ -391,7 +402,7 @@ export default function RadioAdmin() {
                 {s.logo_url ? <img src={s.logo_url} alt="" className={styles.logo} loading="lazy" /> : <span className={styles.logo}>{initials(s.name)}</span>}
                 <div className={styles.name}>
                   <strong>{s.name}</strong>
-                  <span>{[s.name_bn, s.city].filter(Boolean).join(" · ") || "—"}</span>
+                  <span>{[s.region || "Bangladesh", s.name_bn, s.city].filter(Boolean).join(" · ")}</span>
                 </div>
                 <span className={styles.freq}>{freqLabel(s)}</span>
                 <span className={s.stats.active ? "" : ws.bad}>

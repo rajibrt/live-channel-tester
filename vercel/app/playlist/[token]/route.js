@@ -223,7 +223,7 @@ export async function GET(request, context) {
     if (!url) continue;
     const freq = st.frequency != null && st.band !== "Online" ? ` ${st.band === "AM" ? Math.round(st.frequency) : st.frequency.toFixed(1)}` : "";
     const name = sanitizeAttr(`${st.name}${freq}`);
-    out += `#EXTINF:-1 tvg-name="${name}" group-title="Radio" tvg-logo="${sanitizeAttr(st.logoUrl || "")}" radio="true",${name}\n`;
+    out += `#EXTINF:-1 tvg-name="${name}" group-title="Radio · ${sanitizeAttr(st.region || "Bangladesh")}" tvg-logo="${sanitizeAttr(st.logoUrl || "")}" radio="true",${name}\n`;
     out += `${url}\n`;
   }
 

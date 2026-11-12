@@ -18,7 +18,7 @@ export default async function RadioRoute() {
     loadClientAccessSettingsCached().catch(() => null),
   ]);
   const approved = !!currentClient && String(currentClient?.client?.approval_status || "approved").toLowerCase() === "approved";
-  const guest = (!currentClient && accessSettings?.public_guest_access_enabled === true);
+  const guest = !currentClient && accessSettings?.public_guest_access_enabled === true;
   if (!approved && !guest) redirect(`/client-login?next=${encodeURIComponent("/radio")}`);
 
   const stations = await getRadioStations().catch(() => []);

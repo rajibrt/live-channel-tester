@@ -16,6 +16,9 @@ create table if not exists public.radio_stations (
   updated_at timestamptz not null default now()
 );
 
+-- Added 2026-11-12: station group shown as tabs on /radio (e.g. Bangladesh, India · Bangla, India · Hindi).
+alter table public.radio_stations add column if not exists region text not null default 'Bangladesh';
+
 create table if not exists public.radio_station_sources (
   id bigint generated always as identity primary key,
   station_id bigint not null references public.radio_stations(id) on delete cascade,

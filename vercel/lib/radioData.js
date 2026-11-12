@@ -6,13 +6,17 @@ import { normalizeStreamUrl } from "./streamUrl";
 // Missing tables (SQL not applied yet) => empty list.
 async function loadRadioStations() {
   const supabase = getSupabaseAdmin();
-  const { data: stations, error } = await supabase
-    .from("radio_stations")
-    .select("id,name,name_bn,band,frequency,city,logo_url,position")
-    .eq("is_active", true)
-    .order("position", { ascending: true })
-    .order("frequency", { ascending: true, nullsFirst: false })
-    .order("id", { ascending: true });
+  const query = (columns) =>
+    supabase
+      .from("radio_stations")
+      .select(columns)
+      .eq("is_active", true)
+      .order("position", { ascending: true })
+      .order("frequency", { ascending: true, nullsFirst: false })
+      .order("id", { ascending: true });
+  let { data: stations, error } = await query("id,name,name_bn,band,frequency,city,logo_url,position,region");
+  // Before the region column exists, fall back to the original columns.
+  if (error) ({ data: stations, error } = await query("id,name,name_bn,band,frequency,city,logo_url,position"));
   if (error || !stations?.length) return [];
 
   const ids = stations.map((s) => s.id);
@@ -42,6 +46,7 @@ async function loadRadioStations() {
       band: s.band || "FM",
       frequency: s.frequency === null || s.frequency === undefined ? null : Number(s.frequency),
       city: String(s.city || "").trim(),
+      region: String(s.region || "Bangladesh").trim() || "Bangladesh",
       logoUrl: String(s.logo_url || "").trim(),
       sources: byStation.get(s.id) || [],
     }))
