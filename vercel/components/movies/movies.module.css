@@ -1325,7 +1325,11 @@
   --movie-grid-min: 170px;
   --movie-grid-gap: 10px;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(var(--movie-grid-min), 1fr));
+  /* at most 6 columns, so a 60-movie page always ends with a full row */
+  grid-template-columns: repeat(
+    auto-fill,
+    minmax(max(var(--movie-grid-min), calc((100% - 5 * var(--movie-grid-gap)) / 6)), 1fr)
+  );
   gap: var(--movie-grid-gap);
 }
 
@@ -3384,7 +3388,7 @@
   }
 
   .grid {
-    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(max(120px, calc((100% - 5 * var(--movie-grid-gap, 10px)) / 6)), 1fr));
     gap: 8px;
   }
 
@@ -3585,7 +3589,7 @@
   }
 
   .grid {
-    grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(max(108px, calc((100% - 5 * var(--movie-grid-gap, 10px)) / 6)), 1fr));
     gap: 7px;
   }
 

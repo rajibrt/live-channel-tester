@@ -192,7 +192,10 @@ export default async function WatchChannelPage({ params, searchParams }) {
   // The movie catalog (~4,600 movies) made every channel page ~11 MB. Send it only when the
   // URL opens the Movies view; otherwise the client loads it from /api/client/movies/bootstrap
   // when the viewer switches to Movies.
-  const wantsMovies = String(query?.mode || "").trim().toLowerCase() === "movies";
+  // The movie list is never embedded in the page any more: the client loads it page by page
+  // (with the URL's filters) from /api/client/movies/bootstrap. Embedding the whole catalog made
+  // the page huge and broke paging (all 994 Bangla movies on one page).
+  const wantsMovies = false;
 
   if (!channel) {
     // Merged duplicate: send old links to the channel that was kept.

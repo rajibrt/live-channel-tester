@@ -22,7 +22,8 @@ import { deriveWatchState } from "../../lib/movieProgress";
 const LAST_MODE_KEY = "iptv:v1:last-mode";
 const LAST_MOVIE_SLUG_KEY = "iptv:v1:last-movie-slug";
 const TV_RECENT_SEARCHES_KEY = "iptv:v1:tv-recent-movie-searches";
-const DEFAULT_MOVIES_PAGE_SIZE = 24;
+// 60 divides evenly by 2–6 columns (the grid is capped at 6), so every row is full.
+const DEFAULT_MOVIES_PAGE_SIZE = 60;
 const CONTINUE_PAGE_SIZE = 6;
 const MOVIES_GRID_MAX_PAGE_SIZE = 60;
 const TV_SEARCH_RECENT_LIMIT = 8;
@@ -865,18 +866,9 @@ export default function MoviesView({
     window.scrollTo({ top, behavior });
   }, []);
 
-  const handleGridMetricsChange = useCallback((metrics) => {
-    const columns = Math.max(1, Number(metrics?.columns || 1));
-    const rows = Math.max(1, Math.ceil(DEFAULT_MOVIES_PAGE_SIZE / columns));
-    const nextPageSize = Math.max(
-      columns,
-      Math.min(MOVIES_GRID_MAX_PAGE_SIZE, columns * rows)
-    );
-
-    startTransition(() => {
-      setMoviesPageSize((prev) => (prev === nextPageSize ? prev : nextPageSize));
-    });
-  }, []);
+  // Page size is fixed (see DEFAULT_MOVIES_PAGE_SIZE); the grid's column count no longer changes it,
+  // which used to trigger extra page requests.
+  const handleGridMetricsChange = useCallback(() => {}, []);
 
   const hasLocalClientFilters =
     showInlineFilters ? String(categorySlug || "").trim().toLowerCase() !== "all" : false;
@@ -1178,15 +1170,6 @@ export default function MoviesView({
     !normalizedYear &&
     !String(search || "").trim() &&
     !String(searchDraft || "").trim();
-  // The grid fits N cards per row; load pages in a multiple of N so the last row is full.
-  // The first page arrives with the default size, so re-request it once the columns are known.
-  useEffect(() => {
-    if (variant !== "browse" || isTvMode || isHomeBrowse || hasLocalClientFilters) return;
-    if (Number(initialPageSize || 0) === moviesPageSize) return;
-    onPageChange?.(currentPage, moviesPageSize);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [moviesPageSize, initialPageSize, isHomeBrowse]);
-
   const backToMoviesHome = () => {
     setShowAllGrid(false);
     clearAllFilters();

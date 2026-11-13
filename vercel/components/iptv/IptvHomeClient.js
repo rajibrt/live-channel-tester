@@ -23,7 +23,7 @@ const DEVICE_KEY_STORAGE = "iptv:v1:device-key";
 const FORCE_TV_MODE_KEY = "iptv:v1:force-tv-mode";
 const COOKIE_CONSENT_KEY = "iptv:v1:cookie-consent";
 const COOKIE_LANGUAGE_KEY = "iptv:v1:cookie-language";
-const DEFAULT_MOVIES_PAGE_SIZE = 24;
+const DEFAULT_MOVIES_PAGE_SIZE = 60; // divisible by 2–6 grid columns
 
 function normalizeChannelId(value) {
   return String(value || "").trim();
