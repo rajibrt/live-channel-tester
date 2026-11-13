@@ -150,6 +150,14 @@ Always end with:
 - `11-remove-bad-links.mjs <urls.json> <ids.json> <out.json> dry|apply` deactivates bad links, moves
   `channels.stream_url` to the next active link, and deletes (from bdix; row only if in no other
   playlist) or marks DEAD a channel left with no active link.
+- **Official YouTube live as a source** (needs the YouTube-capable player, `lib/youtubeSource.js`):
+  when a channel has no working HLS link with video, check the channel's official website — NTV,
+  ATN News and Channel 24 embed YouTube. Store the channel's always-on URL
+  `https://www.youtube.com/channel/<UC…>/live` (label `youtube-official`); the player shows YouTube's
+  own embed and fails over on embed errors. Never extract the stream behind a YouTube video. YouTube
+  links are left out of the M3U (IPTV apps cannot play them) and are skipped by the health cron.
+  Known ids: NTV `UC0V3IJCnr6ZNjB9t_GLhFFA` (@NTVDigitalLive), ATN News `UC9Rgo0CrNyd7OWliLekqqGA`
+  (@atnnewsltd), Channel 24 `UCHLqIOMPk20w-6cFgkA90jw` (@channel24digital).
 - Name-only matching fails for short names ("S", "Zee", "Colors", "Time"); map those by hand.
 
 ## 7. Radio and movies (planned, same method)
@@ -163,6 +171,8 @@ Always end with:
 - When starting either, extend this file with its own section and scripts.
 
 ## Change log
+
+- 2026-11-13: official YouTube live sources (rule + channel ids).
 
 - 2026-11-13: created after the sky.m3u import (rules from the user: trace real links, backup links
   for existing channels, dead links to the bottom, remove/mark DEAD channels without a working link,

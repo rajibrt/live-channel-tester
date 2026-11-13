@@ -1,3 +1,5 @@
+import { isYouTubeUrl } from "./youtubeSource";
+
 // Choose the link an IPTV app should get for a channel with several links.
 // Keeps the admin's order (priority, id) but moves a link to the back when
 // website viewers recently reported it failing: at least 3 failures in total,
@@ -15,7 +17,8 @@ export function isSourceRecentlyFailing(source, now = Date.now()) {
 
 export function pickBestChannelSource(sources, now = Date.now()) {
   const active = (Array.isArray(sources) ? sources : [])
-    .filter((s) => s && s.is_active !== false && String(s.stream_url || "").trim())
+    // YouTube embeds are website-only; IPTV apps get a real stream link.
+    .filter((s) => s && s.is_active !== false && String(s.stream_url || "").trim() && !isYouTubeUrl(s.stream_url))
     .sort((a, b) => Number(a.priority || 0) - Number(b.priority || 0) || Number(a.id || 0) - Number(b.id || 0));
   return active.find((s) => !isSourceRecentlyFailing(s, now)) || active[0] || null;
 }

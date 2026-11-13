@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "../../../../lib/supabaseAdmin";
 import { normalizeStreamUrl } from "../../../../lib/streamUrl";
+import { isYouTubeUrl } from "../../../../lib/youtubeSource";
 
 export const runtime = "nodejs";
 
@@ -122,6 +123,10 @@ async function checkStream(url, timeoutSec) {
   const target = normalizeStreamUrl(url);
   if (!target) {
     return { isLive: false, reason: "empty_url" };
+  }
+  // Official YouTube live embeds are checked by the viewer's player, not here.
+  if (isYouTubeUrl(target)) {
+    return { isLive: true, reason: "youtube_embed" };
   }
 
   const controller = new AbortController();

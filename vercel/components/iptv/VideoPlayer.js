@@ -5,6 +5,34 @@ import { Icon } from "./icons";
 import { useI18n } from "../i18n/LanguageProvider";
 import styles from "./iptv.module.css";
 import { isPrivateNetworkUrl, resolveBrowserPlaybackUrl } from "../../lib/streamUrl";
+import { isYouTubeUrl, youTubeEmbedUrl } from "../../lib/youtubeSource";
+
+function loadYouTubeApi() {
+  if (typeof window === "undefined") return Promise.resolve(null);
+  if (window.YT?.Player) return Promise.resolve(window.YT);
+  if (!window.__webtvbdYtApi) {
+    window.__webtvbdYtApi = new Promise((resolve, reject) => {
+      const prev = window.onYouTubeIframeAPIReady;
+      window.onYouTubeIframeAPIReady = () => {
+        try {
+          prev?.();
+        } catch {
+          // ignore other listeners
+        }
+        resolve(window.YT);
+      };
+      const script = document.createElement("script");
+      script.src = "https://www.youtube.com/iframe_api";
+      script.async = true;
+      script.onerror = () => {
+        window.__webtvbdYtApi = null;
+        reject(new Error("Failed to load YouTube API."));
+      };
+      document.head.appendChild(script);
+    });
+  }
+  return window.__webtvbdYtApi;
+}
 
 function isHlsUrl(url) {
   return /\.m3u8(\?|$)/i.test(String(url || ""));
@@ -179,6 +207,11 @@ export default function VideoPlayer({
   const [fsChannelSearch, setFsChannelSearch] = useState("");
   const [videoFitMode, setVideoFitMode] = useState("contain");
   const [logoFailed, setLogoFailed] = useState(false);
+  // Official YouTube live source: embed URL shown instead of the <video> element.
+  const [youTubeEmbed, setYouTubeEmbed] = useState("");
+  const ytIframeRef = useRef(null);
+  const ytPlayerRef = useRef(null);
+  const ytHandlersRef = useRef(null);
 
   const isFullscreenActive = () => {
     if (typeof document === "undefined") return false;
@@ -363,6 +396,8 @@ export default function VideoPlayer({
         hlsRef.current.destroy();
         hlsRef.current = null;
       }
+      ytHandlersRef.current = null;
+      setYouTubeEmbed("");
       video.pause();
       video.removeAttribute("src");
       video.load();
@@ -512,6 +547,36 @@ export default function VideoPlayer({
       startupTimer = setTimeout(() => {
         if (!sourceStarted) failSource("startup_timeout");
       }, STARTUP_FAILOVER_MS);
+
+      // Official YouTube live: show YouTube's embed; its own events drive failover.
+      if (isYouTubeUrl(src.url)) {
+        const embed = youTubeEmbedUrl(src.url, {
+          origin: typeof window !== "undefined" ? window.location.origin : "",
+        });
+        if (!embed) {
+          failSource("youtube_bad_url");
+          return;
+        }
+        ytHandlersRef.current = {
+          onReady: () => {
+            if (!isCurrent()) return;
+            // Autoplay with sound may be blocked; a ready embed is a working link.
+            if (startupTimer) clearTimeout(startupTimer);
+            startupTimer = null;
+            markPlaying();
+          },
+          onStateChange: (state) => {
+            if (!isCurrent()) return;
+            if (state === 1) {
+              markPlaying();
+              confirmStarted();
+            }
+          },
+          onError: (code) => failSource("youtube_error", { youtube_error: String(code ?? "") }),
+        };
+        setYouTubeEmbed(embed);
+        return;
+      }
 
       const source = resolveBrowserPlaybackUrl(
         src.url,
@@ -1091,6 +1156,35 @@ export default function VideoPlayer({
     setVideoFitMode((prev) => (prev === "cover" ? "contain" : "cover"));
   };
 
+  // Attach the YouTube IFrame API to the embed so ready/playing/error drive the failover.
+  useEffect(() => {
+    if (!youTubeEmbed) return undefined;
+    let disposed = false;
+    loadYouTubeApi()
+      .then((YT) => {
+        if (disposed || !YT?.Player || !ytIframeRef.current) return;
+        ytPlayerRef.current = new YT.Player(ytIframeRef.current, {
+          events: {
+            onReady: () => ytHandlersRef.current?.onReady?.(),
+            onStateChange: (event) => ytHandlersRef.current?.onStateChange?.(event?.data),
+            onError: (event) => ytHandlersRef.current?.onError?.(event?.data),
+          },
+        });
+      })
+      .catch(() => {
+        // API blocked: the plain embed still plays; the startup timer decides failover.
+      });
+    return () => {
+      disposed = true;
+      try {
+        ytPlayerRef.current?.destroy?.();
+      } catch {
+        // iframe already gone
+      }
+      ytPlayerRef.current = null;
+    };
+  }, [youTubeEmbed]);
+
   const hasStream = Boolean(channel?.streamUrl);
   const isPlayingActive = hasStream && status === "playing" && !isPaused;
   const isPauseActive = hasStream && isPaused;
@@ -1212,7 +1306,20 @@ export default function VideoPlayer({
           className={`${styles.videoElement} ${videoFitMode === "contain" ? styles.videoElementContain : ""}`}
           playsInline
           preload="metadata"
+          style={youTubeEmbed ? { visibility: "hidden" } : undefined}
         />
+        {youTubeEmbed ? (
+          <iframe
+            key={youTubeEmbed}
+            ref={ytIframeRef}
+            src={youTubeEmbed}
+            title={`${channel?.name || "Live"} (YouTube)`}
+            allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+            allowFullScreen
+            referrerPolicy="strict-origin-when-cross-origin"
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: 0, zIndex: 2, background: "#000" }}
+          />
+        ) : null}
 
         {showVolumeHud ? <div className={styles.volumeHud}>Volume {volumePercent}%</div> : null}
         {hasStream && audioStatusMessage ? (
@@ -1220,7 +1327,7 @@ export default function VideoPlayer({
             {audioStatusMessage}
           </div>
         ) : null}
-        {hasStream && isMuted ? (
+        {hasStream && isMuted && !youTubeEmbed ? (
           <button
             type="button"
             className={styles.videoMuteOverlayBtn}

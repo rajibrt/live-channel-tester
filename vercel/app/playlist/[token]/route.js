@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { getRadioStations } from "../../../lib/radioData";
+import { isYouTubeUrl } from "../../../lib/youtubeSource";
 
 function m3uHeader() {
   return "#EXTM3U\n\n";
@@ -63,20 +64,30 @@ function requestOrigin(request) {
 
 // Channel ids that have two or more active links: these get the smart
 // redirect URL (/playlist/<token>/live/<id>) instead of a fixed stream URL.
+// YouTube links (website-only) are not counted; firstStreamById holds each channel's first
+// non-YouTube link for channels whose main link is a YouTube embed.
 async function loadMultiSourceIds(supabase, ids) {
   const counts = new Map();
+  const firstStreamById = new Map();
   for (let i = 0; i < ids.length; i += 200) {
     const part = ids.slice(i, i + 200);
     const { data, error } = await supabase
       .from("channel_sources")
-      .select("channel_id")
+      .select("id,channel_id,stream_url,priority")
       .in("channel_id", part)
       .eq("is_active", true)
+      .order("priority", { ascending: true })
+      .order("id", { ascending: true })
       .limit(5000);
-    if (error) return new Set();
-    for (const row of data || []) counts.set(Number(row.channel_id), (counts.get(Number(row.channel_id)) || 0) + 1);
+    if (error) return { multi: new Set(), firstStreamById };
+    for (const row of data || []) {
+      if (isYouTubeUrl(row.stream_url)) continue;
+      const id = Number(row.channel_id);
+      counts.set(id, (counts.get(id) || 0) + 1);
+      if (!firstStreamById.has(id)) firstStreamById.set(id, String(row.stream_url || "").trim());
+    }
   }
-  return new Set([...counts.entries()].filter(([, n]) => n > 1).map(([id]) => id));
+  return { multi: new Set([...counts.entries()].filter(([, n]) => n > 1).map(([id]) => id)), firstStreamById };
 }
 
 export async function GET(request, context) {
@@ -128,7 +139,10 @@ export async function GET(request, context) {
     channels = Array.isArray(data) ? data : [];
   }
   const channelById = Object.fromEntries(channels.map((c) => [c.id, c]));
-  const multiSourceIds = await loadMultiSourceIds(supabase, channels.map((c) => Number(c.id)));
+  const { multi: multiSourceIds, firstStreamById } = await loadMultiSourceIds(
+    supabase,
+    channels.map((c) => Number(c.id))
+  );
   const origin = requestOrigin(request);
 
   let movies = [];
@@ -209,12 +223,16 @@ export async function GET(request, context) {
   for (const l of links || []) {
     const c = channelById[l.channel_id];
     if (!c) continue;
+    // IPTV apps cannot play YouTube embeds: use the channel's first other link, or skip it.
+    let directUrl = (c.stream_url || "").trim();
+    if (isYouTubeUrl(directUrl)) directUrl = firstStreamById.get(Number(c.id)) || "";
+    if (!directUrl) continue;
     const name = sanitizeAttr(c.name || "Stream");
     const category = sanitizeAttr(c.category || "");
     const logo = sanitizeAttr(c.logo_url || "");
     out += `#EXTINF:-1 tvg-name="${name}" group-title="${category}" tvg-logo="${logo}",${name}\n`;
     const smart = origin && multiSourceIds.has(Number(c.id));
-    out += `${smart ? `${origin}/playlist/${normalizedToken}/live/${c.id}` : (c.stream_url || "").trim()}\n`;
+    out += `${smart ? `${origin}/playlist/${normalizedToken}/live/${c.id}` : directUrl}\n`;
   }
 
   // Radio stations (separate tables; empty until supabase/radio_stations.sql is applied).
