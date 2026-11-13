@@ -13,14 +13,14 @@ const buildVersion = String(process.env.NEXT_PUBLIC_BUILD_VERSION || "dev").trim
 const ADSENSE_CLIENT = "ca-pub-3010934061489506";
 const PUBLIC_LOCALE_COOKIE = "site_lang";
 export const metadata = {
-  title: "WEBTVBD || TV Beyond Borders",
-  description: "WEBTVBD live streaming platform for channels, categories, and on-demand viewer access.",
+  title: "WEBTVBD | Guides to TV, Streaming and Radio in Bangladesh",
+  description: "Practical guides and explainers about TVs, streaming, home internet and radio for viewers in Bangladesh.",
   metadataBase: new URL(baseUrl),
   openGraph: {
     type: "website",
     url: baseUrl,
-    title: "WEBTVBD || TV Beyond Borders",
-    description: "Watch live channels on WEBTVBD.",
+    title: "WEBTVBD | Guides to TV, Streaming and Radio",
+    description: "Practical guides and explainers about TVs, streaming, home internet and radio for viewers in Bangladesh.",
     images: [{ url: "/android-chrome-512x512.png", width: 512, height: 512, alt: "WEBTVBD" }],
   },
   icons: {
@@ -51,6 +51,7 @@ export default async function RootLayout({ children }) {
   const hasViewerAccess = hasApprovedClientSession || hasPublicGuestAccess;
   const viewerEntryHref = hasViewerAccess ? "/watch" : "/client-login";
   const radioHref = hasViewerAccess ? "/radio" : "/client-login?next=%2Fradio";
+  const moviesHref = hasViewerAccess ? "/watch?mode=movies" : "/client-login?next=%2Fwatch%3Fmode%3Dmovies";
   const themeInitScript = `
     (function () {
       try {
@@ -109,7 +110,7 @@ export default async function RootLayout({ children }) {
       <body>
         <LanguageProvider initialLocale={initialLocale}>
           <PublicSmoothScroll hasClientSession={hasViewerAccess} />
-          <SiteChrome hasClientSession={hasViewerAccess} viewerEntryHref={viewerEntryHref} radioHref={radioHref}>
+          <SiteChrome hasClientSession={hasViewerAccess} viewerEntryHref={viewerEntryHref} radioHref={radioHref} moviesHref={moviesHref}>
             {children}
           </SiteChrome>
         </LanguageProvider>

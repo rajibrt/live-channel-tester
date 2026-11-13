@@ -24,5 +24,12 @@ export default async function WatchEntryPage({ searchParams }) {
   const homeData = await getHomeIptvData().catch(() => null);
   const firstChannel = Array.isArray(homeData?.channels) ? homeData.channels[0] : null;
   const target = firstChannel ? buildWatchPath(firstChannel) : "/";
-  redirect(firstChannel && wantsMovies ? `${target}?mode=movies` : target);
+  // keep every query parameter (mode=movies, movie filters) through the redirect
+  const qs = new URLSearchParams();
+  for (const [key, value] of Object.entries(query || {})) {
+    if (Array.isArray(value)) value.forEach((v) => qs.append(key, String(v)));
+    else if (value != null) qs.set(key, String(value));
+  }
+  const search = qs.toString();
+  redirect(firstChannel && search ? `${target}?${search}` : wantsMovies ? `${target}?mode=movies` : target);
 }

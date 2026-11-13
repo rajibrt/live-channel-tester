@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getPublicArticles } from "../../lib/publicArticles";
+import { getPublicArticles, localizeArticle } from "../../lib/publicArticles";
 import { getLocaleFromRequest } from "../../lib/i18n/server";
 import styles from "../../components/site/public-pages.module.css";
 
@@ -15,13 +15,17 @@ export async function generateMetadata({ searchParams }) {
   };
 }
 
-const PAGE_SIZE = 9;
+const PAGE_SIZE = 12;
 
 const COPY = {
   en: {
     latestLead: "Articles",
-    title: "Research, guides, and context for better digital viewing",
-    intro: "Explore practical device help, Bangladesh broadcasting context, and streaming explainers reviewed by the WEBTVBD Editorial Desk.",
+    kicker: "WEBTVBD Guides",
+    title: "Guides and explainers for better viewing",
+    intro: "Practical help with TVs, streaming, radio and home networks, plus the story of broadcasting in Bangladesh — written and reviewed by the WEBTVBD Editorial Desk.",
+    featured: "Featured",
+    latest: "Latest articles",
+    count: "articles",
     standards: "How we publish",
     readMore: "Read article",
     readingTime: "min read",
@@ -31,7 +35,11 @@ const COPY = {
   },
   bn: {
     latestLead: "আর্টিকেল",
-    title: "ডিজিটাল দেখার অভিজ্ঞতার জন্য গবেষণা, গাইড ও প্রেক্ষাপট",
+    kicker: "WEBTVBD গাইড",
+    featured: "নির্বাচিত",
+    latest: "সাম্প্রতিক আর্টিকেল",
+    count: "টি আর্টিকেল",
+    title: "ভালোভাবে দেখার জন্য গাইড ও ব্যাখ্যা",
     intro: "WEBTVBD Editorial Desk-এর review করা device help, বাংলাদেশের broadcasting context এবং streaming explainer পড়ুন।",
     standards: "আমরা যেভাবে প্রকাশ করি",
     readMore: "আর্টিকেল পড়ুন",
@@ -58,108 +66,120 @@ function buildArticlesPageHref(pageNumber) {
 }
 
 export default async function ArticlesPage({ searchParams }) {
-  const [locale, params, articles] = await Promise.all([
+  const [locale, params, allArticles] = await Promise.all([
     getLocaleFromRequest(),
     searchParams,
     getPublicArticles(),
   ]);
+  // each article in the viewer's language when that edition exists
+  const articles = allArticles.map((item) => localizeArticle(item, locale));
   const copy = COPY[locale] || COPY.en;
   const totalPages = Math.max(1, Math.ceil(articles.length / PAGE_SIZE));
   const currentPage = Math.min(totalPages, Math.max(1, Number.parseInt(String(params?.page || "1"), 10) || 1));
   const paginatedArticles = articles.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
   const pageNumbers = Array.from({ length: totalPages }, (_, index) => index + 1);
 
+  const showFeatured = currentPage === 1 && paginatedArticles.length > 3;
+  const lead = showFeatured ? paginatedArticles[0] : null;
+  const side = showFeatured ? paginatedArticles.slice(1, 3) : [];
+  const gridItems = showFeatured ? paginatedArticles.slice(3) : paginatedArticles;
+  const meta = (article) => (
+    <span className={styles.alMeta}>
+      {formatDate(article.updatedAt || article.publishedAt, locale)} · {article.readingMinutes} {copy.readingTime}
+    </span>
+  );
+
   return (
-    <main className={styles.shell}>
-      <section className={styles.articleShell}>
-        <header className={styles.articleLandingHero}>
-          <div className={styles.articleLandingCopy}>
-            <p className={styles.eyebrow}>{copy.latestLead}</p>
-            <h1 className={styles.title}>{copy.title}</h1>
-            <p className={styles.intro}>{copy.intro}</p>
-            <div className={styles.actions}>
-              <Link href="/editorial-policy" className={styles.secondaryLink}>{copy.standards}</Link>
+    <main className={styles.alShell}>
+      <header className={styles.alHeader}>
+        <p className={styles.adKicker}>{copy.kicker}</p>
+        <h1 className={styles.alTitle}>{copy.title}</h1>
+        <p className={styles.alIntro}>{copy.intro}</p>
+        <p className={styles.alHeaderMeta}>
+          <span>{articles.length} {copy.count}</span>
+          <span aria-hidden="true">·</span>
+          <Link href="/editorial-policy">{copy.standards}</Link>
+        </p>
+      </header>
+
+      {lead ? (
+        <section className={styles.alFeatured} aria-label={copy.featured}>
+          <Link href={lead.path} className={styles.alLead} lang={lead.language}>
+            {lead.featuredImageUrl ? (
+              <img src={lead.featuredImageUrl} alt="" width="1600" height="900" fetchPriority="high" decoding="async" />
+            ) : <span className={styles.adCardNoImage} />}
+            <div className={styles.alLeadCopy}>
+              <span className={styles.alBadge}>{copy.featured}</span>
+              <h2>{lead.title}</h2>
+              <p>{lead.description}</p>
+              {meta(lead)}
             </div>
-          </div>
-          <aside className={styles.articleLandingPanel}>
-            <p className={styles.articleLandingLabel}>{copy.latestLead}</p>
-            <div className={styles.articleLandingStats}>
-              <div className={styles.articleLandingStat}>
-                <span>{locale === "bn" ? "প্রকাশিত আর্টিকেল" : "Published articles"}</span>
-                <strong>{articles.length}</strong>
-              </div>
-              <div className={styles.articleLandingStat}>
-                <span>{locale === "bn" ? "সম্পাদনা নীতিমালা" : "Editorial standards"}</span>
-                <strong>{locale === "bn" ? "সবার জন্য উন্মুক্ত" : "Open to readers"}</strong>
-              </div>
-            </div>
-          </aside>
-        </header>
-        <section className={styles.section}>
-          <div className={styles.sectionHeading}>
-            <h2>{copy.latestLead}</h2>
-          </div>
-          <div className={styles.articleLatestGrid}>
-            {paginatedArticles.map((article) => (
-              <Link key={article.slug} href={article.path} className={styles.articleLatestCard} lang={article.language}>
+          </Link>
+          <div className={styles.alSide}>
+            {side.map((article) => (
+              <Link key={article.slug} href={article.path} className={styles.alSideCard} lang={article.language}>
                 {article.featuredImageUrl ? (
-                  <img
-                    src={article.featuredImageUrl}
-                    alt={article.title}
-                    width="1000"
-                    height="562"
-                    className={styles.articleLatestImage}
-                    loading="lazy"
-                    decoding="async"
-                  />
-                ) : null}
-                <div className={styles.articleLatestCopy}>
-                  <p className={styles.articleMeta}>
-                    <span>{formatDate(article.updatedAt || article.publishedAt, locale)}</span>
-                    <span>{article.readingMinutes} {copy.readingTime}</span>
-                  </p>
+                  <img src={article.featuredImageUrl} alt="" width="640" height="360" loading="lazy" decoding="async" />
+                ) : <span className={styles.adCardNoImage} />}
+                <div>
                   <h3>{article.title}</h3>
-                  <p>{article.excerpt}</p>
+                  {meta(article)}
                 </div>
-                <span className={styles.secondaryLink}>
-                  {copy.readMore}
-                </span>
               </Link>
             ))}
           </div>
-          {totalPages > 1 ? (
-            <nav className={styles.paginationNav} aria-label="Articles pagination">
-              <Link
-                href={buildArticlesPageHref(currentPage - 1)}
-                className={`${styles.paginationLink} ${currentPage <= 1 ? styles.paginationDisabled : ""}`}
-                aria-disabled={currentPage <= 1}
-                tabIndex={currentPage <= 1 ? -1 : undefined}
-              >
-                {copy.previous}
-              </Link>
-              <div className={styles.paginationPages}>
-                {pageNumbers.map((pageNumber) => (
-                  <Link
-                    key={pageNumber}
-                    href={buildArticlesPageHref(pageNumber)}
-                    className={`${styles.paginationLink} ${pageNumber === currentPage ? styles.paginationActive : ""}`}
-                    aria-current={pageNumber === currentPage ? "page" : undefined}
-                  >
-                    <span className={styles.paginationLabel}>{copy.pageLabel}</span> {pageNumber}
-                  </Link>
-                ))}
-              </div>
-              <Link
-                href={buildArticlesPageHref(currentPage + 1)}
-                className={`${styles.paginationLink} ${currentPage >= totalPages ? styles.paginationDisabled : ""}`}
-                aria-disabled={currentPage >= totalPages}
-                tabIndex={currentPage >= totalPages ? -1 : undefined}
-              >
-                {copy.next}
-              </Link>
-            </nav>
-          ) : null}
         </section>
+      ) : null}
+
+      <section className={styles.alLatest}>
+        <h2 className={styles.alSectionTitle}>{copy.latest}</h2>
+        <div className={styles.adRelatedGrid}>
+          {gridItems.map((article) => (
+            <Link key={article.slug} href={article.path} className={styles.adCard} lang={article.language}>
+              {article.featuredImageUrl ? (
+                <img src={article.featuredImageUrl} alt="" width="640" height="360" loading="lazy" decoding="async" />
+              ) : <span className={styles.adCardNoImage} />}
+              <div>
+                {meta(article)}
+                <h3>{article.title}</h3>
+                <p>{article.excerpt}</p>
+              </div>
+            </Link>
+          ))}
+        </div>
+        {totalPages > 1 ? (
+          <nav className={styles.alPager} aria-label="Articles pagination">
+            <Link
+              href={buildArticlesPageHref(currentPage - 1)}
+              className={currentPage <= 1 ? styles.alPagerOff : undefined}
+              aria-disabled={currentPage <= 1}
+              tabIndex={currentPage <= 1 ? -1 : undefined}
+            >
+              ← {copy.previous}
+            </Link>
+            <div>
+              {pageNumbers.map((pageNumber) => (
+                <Link
+                  key={pageNumber}
+                  href={buildArticlesPageHref(pageNumber)}
+                  className={pageNumber === currentPage ? styles.alPagerOn : undefined}
+                  aria-current={pageNumber === currentPage ? "page" : undefined}
+                  aria-label={`${copy.pageLabel} ${pageNumber}`}
+                >
+                  {pageNumber}
+                </Link>
+              ))}
+            </div>
+            <Link
+              href={buildArticlesPageHref(currentPage + 1)}
+              className={currentPage >= totalPages ? styles.alPagerOff : undefined}
+              aria-disabled={currentPage >= totalPages}
+              tabIndex={currentPage >= totalPages ? -1 : undefined}
+            >
+              {copy.next} →
+            </Link>
+          </nav>
+        ) : null}
       </section>
     </main>
   );

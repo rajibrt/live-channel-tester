@@ -152,6 +152,17 @@ export default function IptvHomeClient({
   initialSelectedChannelId = "",
   isGuest = false,
 }) {
+  // Debug counters are for admins only: add ?debug=1 once (remembered) to see them.
+  const [showDebugBadge, setShowDebugBadge] = useState(false);
+  useEffect(() => {
+    try {
+      if (new URLSearchParams(window.location.search).get("debug") === "1") window.localStorage.setItem("webtvbd:debug", "1");
+      if (new URLSearchParams(window.location.search).get("debug") === "0") window.localStorage.removeItem("webtvbd:debug");
+      setShowDebugBadge(window.localStorage.getItem("webtvbd:debug") === "1");
+    } catch {
+      // storage blocked: keep hidden
+    }
+  }, []);
   const hasInitialMovieBootstrap =
     (Array.isArray(initialMovies) && initialMovies.length > 0) ||
     (Array.isArray(initialMovieCategories) && initialMovieCategories.length > 0) ||
@@ -655,7 +666,8 @@ export default function IptvHomeClient({
     }
 
     if (path.startsWith("/watch/")) {
-      setHomeMode("tv");
+      // /watch/<channel>?mode=movies is the Movies list (so a reload stays in Movies)
+      setHomeMode(queryMode === "movies" ? "movies" : "tv");
       setMovieViewMode("browse");
       setActiveMovieSlug("");
       setRouteStateReady(true);
@@ -1508,7 +1520,12 @@ export default function IptvHomeClient({
     if (String(nextFilterView || "").trim().toLowerCase() === "genres") params.set("movie_filter_view", "genres");
     if (Math.max(1, Number(nextPage || 1)) > 1) params.set("movie_page", String(Math.max(1, Number(nextPage || 1))));
     const qs = params.toString();
-    return qs ? `/?${qs}` : "/";
+    // stay inside the app: "/" is the public home page, so a reload there would leave the app
+    const path =
+      typeof window !== "undefined" && String(window.location.pathname || "").startsWith("/watch/")
+        ? window.location.pathname
+        : "/watch";
+    return `${path}?${qs}`;
   }, []);
 
   const pushMovieListUrl = useCallback(
@@ -1612,8 +1629,19 @@ export default function IptvHomeClient({
 
     const nextPath = buildWatchPath({ id: selectedId, name: selectedChannel?.name || "" });
     if (!nextPath || window.location.pathname === nextPath) return;
-    window.history.replaceState(window.history.state, "", nextPath);
+    // while Movies is open keep its query (mode=movies + filters), so a reload stays in Movies
+    const keep = new URLSearchParams(window.location.search).get("mode") === "movies" ? window.location.search : "";
+    window.history.replaceState(window.history.state, "", nextPath + keep);
   }, [selectedChannel?.id, selectedChannel?.name]);
+
+  // Back on TV: drop the Movies query so a reload opens TV, not Movies.
+  useEffect(() => {
+    if (typeof window === "undefined" || homeMode !== "tv") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("mode") !== "movies") return;
+    const path = String(window.location.pathname || "").startsWith("/watch") ? window.location.pathname : "/watch";
+    window.history.replaceState(window.history.state, "", path);
+  }, [homeMode]);
 
   useEffect(() => {
     if (!hasRestoredChannel && cookieConsent === "accepted") return;
@@ -2092,6 +2120,7 @@ export default function IptvHomeClient({
                   onSelectChannel={handleMobileListSelect}
                 />
               ) : null}
+              {showDebugBadge ? (
               <div className={`${styles.debugBadge} ${styles.debugBadgeMobile}`}>
                 <strong>Debug</strong>
                 <span>links: {debugStats.total}</span>
@@ -2099,6 +2128,7 @@ export default function IptvHomeClient({
                 <span>home: {debugStats.home}</span>
                 <span>categories: {debugStats.categories}</span>
               </div>
+              ) : null}
             </>
           ) : (
             movieCatalogStatus !== "ready" ? (

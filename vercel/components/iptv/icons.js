@@ -17,6 +17,7 @@ import {
   Film,
   Globe,
   Grid3X3,
+  House,
   Heart,
   LoaderCircle,
   LogOut,
@@ -84,6 +85,7 @@ const iconMap = {
   ChevronRight,
   Settings,
   LoaderCircle,
+  House,
 };
 
 export function Icon({ name, size = 20, className = "", fill = "none", stroke = "currentColor", strokeWidth = 2 }) {

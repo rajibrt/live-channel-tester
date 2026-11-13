@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Icon } from "./icons";
@@ -52,6 +53,19 @@ export default function LeftSidebar({
   const filteredMovieYears = movieYears.filter((yearRow) =>
     String(yearRow?.name || "").toLowerCase().includes(search.toLowerCase())
   );
+  // Movies menu: keep it short. Empty categories are hidden; only the main languages and genres
+  // show until "More" is opened (or the viewer searches); years live in the Filters panel.
+  const searching = Boolean(String(search || "").trim());
+  const [moreLanguages, setMoreLanguages] = useState(false);
+  const [moreGenres, setMoreGenres] = useState(false);
+  const visibleMovieCategories = filteredMovieCategories.filter((c) => searching || Number(c?.count || 0) >= 5);
+  const languagesByCount = [...filteredMovieLanguages].sort((a, b) => Number(b?.count || 0) - Number(a?.count || 0));
+  const genresByCount = [...filteredMovieGenres].sort((a, b) => Number(b?.count || 0) - Number(a?.count || 0));
+  const LANG_TOP = 5;
+  const GENRE_TOP = 8;
+  const visibleMovieLanguages = searching || moreLanguages ? languagesByCount : languagesByCount.slice(0, LANG_TOP);
+  const visibleMovieGenres = searching || moreGenres ? genresByCount : genresByCount.slice(0, GENRE_TOP);
+  const visibleMovieYears = searching ? filteredMovieYears : [];
   const tvAllCount = Number(tvStats?.all || 0);
   const tvFavoriteCount = Number(tvStats?.favorites || 0);
   const tvRecentCount = Number(tvStats?.recent || 0);
@@ -117,7 +131,7 @@ export default function LeftSidebar({
             data-tv-active={isTvMode && homeMode === "tv" ? "true" : undefined}
           >
             <Icon name="MonitorPlay" size={16} />
-            <span>Live TV Channels</span>
+            <span>Live TV</span>
           </Button>
           <Button
             type="button"
@@ -308,7 +322,7 @@ export default function LeftSidebar({
               <span className={countClass}>{movieWatchedCount}</span>
             </Button>
             <h3 className={labelClass}>Movie Categories</h3>
-            {filteredMovieCategories.map((category) => (
+            {visibleMovieCategories.map((category) => (
               <Button
                 key={category.id || category.slug}
                 type="button"
@@ -328,8 +342,8 @@ export default function LeftSidebar({
                 <span className={countClass}>{Number(category.count || 0)}</span>
               </Button>
             ))}
-            <h3 className={labelClass}>Language List</h3>
-            {filteredMovieLanguages.map((language) => (
+            <h3 className={labelClass}>Languages</h3>
+            {visibleMovieLanguages.map((language) => (
               <Button
                 key={language.key || language.name}
                 type="button"
@@ -349,8 +363,14 @@ export default function LeftSidebar({
                 <span className={countClass}>{Number(language.count || 0)}</span>
               </Button>
             ))}
+            {!searching && languagesByCount.length > LANG_TOP ? (
+              <Button type="button" variant="ghost" size="sm" className={`justify-start ${rowClass}`} onClick={() => setMoreLanguages((v) => !v)}>
+                <Icon name={moreLanguages ? "ChevronLeft" : "ChevronRight"} size={16} />
+                <span className={styles.linkText}>{moreLanguages ? "Fewer languages" : `More languages (${languagesByCount.length - LANG_TOP})`}</span>
+              </Button>
+            ) : null}
             <h3 className={labelClass}>Genres</h3>
-            {filteredMovieGenres.map((genre) => (
+            {visibleMovieGenres.map((genre) => (
               <Button
                 key={genre.key || genre.name}
                 type="button"
@@ -370,8 +390,14 @@ export default function LeftSidebar({
                 <span className={countClass}>{Number(genre.count || 0)}</span>
               </Button>
             ))}
-            <h3 className={labelClass}>Years</h3>
-            {filteredMovieYears.map((yearRow) => (
+            {!searching && genresByCount.length > GENRE_TOP ? (
+              <Button type="button" variant="ghost" size="sm" className={`justify-start ${rowClass}`} onClick={() => setMoreGenres((v) => !v)}>
+                <Icon name={moreGenres ? "ChevronLeft" : "ChevronRight"} size={16} />
+                <span className={styles.linkText}>{moreGenres ? "Fewer genres" : `More genres (${genresByCount.length - GENRE_TOP})`}</span>
+              </Button>
+            ) : null}
+            {visibleMovieYears.length ? <h3 className={labelClass}>Years</h3> : null}
+            {visibleMovieYears.map((yearRow) => (
               <Button
                 key={yearRow.key || yearRow.name}
                 type="button"

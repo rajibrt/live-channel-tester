@@ -991,13 +991,16 @@ export default function RadioPage({ stations = [], initialFavorites = [], signed
     <div className={styles.page} ref={pageRef}>
       <div className={styles.wrap}>
         <header className={styles.topbar}>
-          <a href="/" className={styles.brand}>
+          <a href="/radio" className={styles.brand}>
             <img src="/logo.png" alt="" />
             <span>
               WEBTVBD <b>Radio</b>
             </span>
           </a>
           <nav className={styles.nav} aria-label="Sections">
+            <a className={styles.navLink} href="/" title="Home page">
+              Home
+            </a>
             <a className={styles.navLink} href="/watch">
               Live TV
             </a>

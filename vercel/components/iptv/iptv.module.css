@@ -3063,3 +3063,22 @@
     display: none;
   }
 }
+
+/* Home page link in the app top bar (icon on phones, icon + label on wider screens) */
+.homeLinkBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: auto;
+  min-width: 40px;
+  padding: 0 12px;
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 700;
+}
+.homeLinkBtn:hover { background: color-mix(in oklab, var(--muted) 70%, var(--primary) 30%); }
+@media (max-width: 640px) {
+  .homeLinkBtn { padding: 0; width: 40px; }
+  .homeLinkText { display: none; }
+}

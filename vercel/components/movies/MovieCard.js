@@ -49,6 +49,7 @@ export default function MovieCard({
   const genres = Array.isArray(movie?.imdbGenres) ? movie.imdbGenres.filter(Boolean).slice(0, 2).join(" • ") : "";
   const summary = clampSummary(movie?.synopsis);
   const qualityLabel = String(movie?.videoQuality || "").trim() || "HD";
+  const progress = Math.max(0, Math.min(100, Number(movie?.progressPercent ?? movie?.progress?.progressPercent ?? 0)));
   const cardRef = useRef(null);
   const [isTouchUi, setIsTouchUi] = useState(false);
   const [touchOverlayActive, setTouchOverlayActive] = useState(false);
@@ -117,9 +118,30 @@ export default function MovieCard({
         )}
 
         <div className={styles.cardTopChips}>
-          {rating ? <span className={styles.ratingChip}>IMDb {rating}</span> : null}
-          <span className={styles.qualityChip}>{qualityLabel}</span>
+          {rating ? <span className={styles.ratingChip}>{isTvMode ? "IMDb " : "★ "}{rating}</span> : null}
+          {isTvMode ? <span className={styles.qualityChip}>{qualityLabel}</span> : null}
         </div>
+        {!isTvMode ? (
+          <button
+            type="button"
+            className={`${styles.cardHeart} ${movie?.isFavorite ? styles.cardHeartOn : ""}`}
+            aria-label={movie?.isFavorite ? "Remove from favourites" : "Add to favourites"}
+            title={movie?.isFavorite ? "Remove from favourites" : "Add to favourites"}
+            onClick={(event) => {
+              event.stopPropagation();
+              onToggleFavorite(movie);
+            }}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 20.5s-7.5-4.6-9.3-9.2C1.4 7.9 3.6 4.5 7 4.5c2 0 3.6 1.1 5 2.9 1.4-1.8 3-2.9 5-2.9 3.4 0 5.6 3.4 4.3 6.8-1.8 4.6-9.3 9.2-9.3 9.2z" />
+            </svg>
+          </button>
+        ) : null}
+        {!isTvMode && progress > 0 && progress < 100 ? (
+          <span className={styles.cardProgress} aria-hidden="true">
+            <span style={{ width: `${progress}%` }} />
+          </span>
+        ) : null}
 
         <div className={styles.hoverOverlay} aria-hidden="true">
           <div className={styles.playCircle}>
@@ -129,6 +151,14 @@ export default function MovieCard({
         </div>
       </div>
 
+      {!isTvMode ? (
+        <div className={`${styles.cardBody} ${styles.cardBodySlim}`}>
+          <h3 className={styles.movieTitle}>{movie?.title || "Untitled"}</h3>
+          <span className={styles.metaText}>
+            {[movie?.releaseYear, genres.split(" • ")[0]].filter(Boolean).join(" · ") || "\u00a0"}
+          </span>
+        </div>
+      ) : (
       <div className={styles.cardBody}>
         <h3 className={styles.movieTitle}>{movie?.title || "Untitled"}</h3>
         <div className={styles.metaRow}>
@@ -153,6 +183,7 @@ export default function MovieCard({
           </button>
         </div>
       </div>
+      )}
     </article>
   );
 }

@@ -1,6 +1,7 @@
 import PendingApprovalCard from "../components/client/PendingApprovalCard";
 import PublicHomePage from "../components/site/PublicHomePage";
-import { getFeaturedPublicArticles } from "../lib/publicArticles";
+import { getFeaturedPublicArticles, localizeArticle } from "../lib/publicArticles";
+import { getLocaleFromRequest } from "../lib/i18n/server";
 import { buildHomePageMetadata, loadSiteSeoSettingsCached } from "../lib/siteSeoSettings";
 import { getCurrentClient } from "../lib/clientAuth";
 import { loadClientAccessSettingsCached } from "../lib/clientAccessSettings";
@@ -24,6 +25,7 @@ export default async function HomePage() {
     getFeaturedPublicArticles(21),
   ]);
 
+  const homeLocale = await getLocaleFromRequest();
   const approvalStatus = String(current?.client?.approval_status || "approved").toLowerCase();
   if (current && approvalStatus !== "approved") {
     const isRejected = approvalStatus === "rejected";
@@ -85,7 +87,7 @@ export default async function HomePage() {
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(publicSiteJsonLd) }} />
-      <PublicHomePage featuredArticles={featuredArticles} />
+      <PublicHomePage featuredArticles={featuredArticles.map((item) => localizeArticle(item, homeLocale))} />
     </>
   );
 }

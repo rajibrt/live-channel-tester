@@ -5,6 +5,12 @@ import { getSupabaseAdmin } from "./supabaseAdmin";
 import { toAbsoluteUrl } from "./siteUrl";
 import { getEditorialOverride } from "./editorialOverrides";
 import { STATIC_EDITORIAL_ARTICLES } from "./staticEditorialArticles";
+import { STATIC_EDITORIAL_ARTICLES_PHASE3 } from "./staticEditorialArticlesPhase3";
+import { EDITORIAL_EN_1 } from "./editorialTranslationsEn1";
+import { EDITORIAL_EN_2 } from "./editorialTranslationsEn2";
+
+// English editions of the older Bangla articles, keyed by article id.
+const ENGLISH_EDITIONS = { ...EDITORIAL_EN_1, ...EDITORIAL_EN_2 };
 
 const TABLE = "admin_announcements";
 
@@ -127,7 +133,43 @@ async function normalizeArticle(row) {
     featuredImageFallbackUrl: cleanUrl(row?.featured_image_url),
     path,
     canonicalUrl: toAbsoluteUrl(path),
+    translations: buildTranslations({
+      ...(row?.translations || {}),
+      ...(ENGLISH_EDITIONS[String(row?.id || "")] ? { en: ENGLISH_EDITIONS[String(row?.id || "")] } : {}),
+    }),
   };
+}
+
+// Hand-written editions in other languages (same URL; shown when the viewer picks that language).
+function buildTranslations(raw) {
+  const out = {};
+  if (!raw || typeof raw !== "object") return out;
+  for (const [locale, t] of Object.entries(raw)) {
+    if (!t || !t.title || !t.content_html) continue;
+    const html = normalizeArticleHtml(t.content_html);
+    const plain = stripHtml(html);
+    const title = cleanText(t.title);
+    const excerpt = plain.slice(0, 190);
+    out[locale] = {
+      title,
+      seoTitle: cleanText(t.seo_title) || title,
+      description: cleanText(t.seo_description) || excerpt || title,
+      excerpt,
+      html,
+      readingMinutes: estimateReadingMinutes(plain),
+      language: locale,
+    };
+  }
+  return out;
+}
+
+// The article as it should be shown in `locale`: its own edition when one exists, otherwise
+// the original. `hasEdition` tells the page whether the requested language is available.
+export function localizeArticle(article, locale) {
+  if (!article) return article;
+  const edition = article.translations?.[locale];
+  if (edition) return { ...article, ...edition, hasEdition: true };
+  return { ...article, hasEdition: article.language === locale };
 }
 
 function isArticleRow(row) {
@@ -175,7 +217,7 @@ async function loadPublishedAnnouncementArticles(limit = 24) {
 const getCachedPublicArticles = unstable_cache(async () => {
   const [dbArticles, staticArticles] = await Promise.all([
     loadPublishedAnnouncementArticles(32),
-    Promise.all(STATIC_EDITORIAL_ARTICLES.map(normalizeArticle)),
+    Promise.all([...STATIC_EDITORIAL_ARTICLES, ...STATIC_EDITORIAL_ARTICLES_PHASE3].map(normalizeArticle)),
   ]);
   const merged = [...staticArticles, ...dbArticles].sort((a, b) => {
     return new Date(b.updatedAt || b.publishedAt || 0).getTime() - new Date(a.updatedAt || a.publishedAt || 0).getTime();

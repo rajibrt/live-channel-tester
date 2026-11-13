@@ -314,6 +314,17 @@ export default function TopNavbar({
   language = 'en',
   isGuest = false,
 }) {
+  // Debug counters are for admins only: add ?debug=1 once (remembered) to see them.
+  const [showDebugBadge, setShowDebugBadge] = useState(false);
+  useEffect(() => {
+    try {
+      if (new URLSearchParams(window.location.search).get("debug") === "1") window.localStorage.setItem("webtvbd:debug", "1");
+      if (new URLSearchParams(window.location.search).get("debug") === "0") window.localStorage.removeItem("webtvbd:debug");
+      setShowDebugBadge(window.localStorage.getItem("webtvbd:debug") === "1");
+    } catch {
+      // storage blocked: keep hidden
+    }
+  }, []);
   const [open, setOpen] = useState(false)
   const [showNewPassword, setShowNewPassword] = useState(false)
   const [showCurrentPassword, setShowCurrentPassword] = useState(false)
@@ -929,7 +940,7 @@ export default function TopNavbar({
           <Icon name='Menu' size={18} />
         </Button>
         <Link
-          href='/'
+          href='/watch'
           className={styles.brandWrap}
           data-tv-focusable='true'
           data-tv-focus-scope='top-nav'
@@ -954,6 +965,7 @@ export default function TopNavbar({
           tickerIconText={tickerIconText}
           onSelectItem={setActiveTickerArticle}
         />
+        {showDebugBadge ? (
         <div className={`${styles.debugBadge} ${styles.debugBadgeDesktop}`}>
           <strong>Debug</strong>
           <span>links: {debugStats.total}</span>
@@ -961,9 +973,23 @@ export default function TopNavbar({
           <span>home: {debugStats.home}</span>
           <span>categories: {debugStats.categories}</span>
         </div>
+        ) : null}
       </div>
 
       <div className={styles.topRight}>
+        {/* The only way from the app to the public home page (logo, reload and Back stay in the app). */}
+        <Link
+          href='/'
+          className={`${styles.iconBtn} ${styles.homeLinkBtn}`}
+          title='Home page'
+          aria-label='Home page'
+          data-tv-focusable='true'
+          data-tv-focus-scope='top-nav'
+          data-tv-focus-id='topnav-home'
+        >
+          <Icon name='House' size={18} />
+          <span className={styles.homeLinkText}>Home</span>
+        </Link>
         {showChannelMenu ? (
           <Button
             type='button'

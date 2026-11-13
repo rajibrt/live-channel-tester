@@ -101,7 +101,7 @@
   box-shadow:
     inset 0 0 0 1px color-mix(in oklab, var(--primary) 16%, transparent),
     var(--shadow-sm);
-  min-height: calc(100svh - 108px);
+  min-height: min(460px, calc(100svh - 108px));
 }
 
 .heroBackdrop {
@@ -138,7 +138,7 @@
   transform: scale(1.14);
   filter: blur(28px) saturate(1.1) brightness(0.6);
   opacity: 0.52;
-  animation: hero-backdrop-in 900ms ease both;
+  animation: hero-backdrop-in 1100ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .heroStage {
@@ -183,10 +183,10 @@
 .heroPoster {
   width: 100%;
   height: 100%;
-  min-height: calc(100svh - 108px);
+  min-height: min(460px, calc(100svh - 108px));
   object-fit: cover;
   display: block;
-  animation: hero-poster-in 760ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: hero-poster-in 1000ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .heroBody {
@@ -233,7 +233,7 @@
   transform: scale(1.01);
   filter: blur(2px) saturate(1.12) brightness(1.02);
   opacity: 0.94;
-  animation: hero-backdrop-in 900ms ease both;
+  animation: hero-backdrop-in 1100ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .heroKickerRow {
@@ -1617,7 +1617,7 @@
 @keyframes hero-poster-in {
   from {
     opacity: 0;
-    transform: translateX(-28px) scale(1.04);
+    transform: scale(1.035);
   }
   to {
     opacity: 1;
@@ -2993,7 +2993,7 @@
 
   .heroPosterCol,
   .heroPoster {
-    min-height: calc(100svh - 112px);
+    min-height: min(400px, calc(100svh - 112px));
   }
 
   .heroBody {
@@ -3063,8 +3063,8 @@
   }
 
   .heroSection {
-    min-height: calc(100dvh - 96px);
-    height: calc(100dvh - 96px);
+    min-height: min(56svh, 460px);
+    height: min(56svh, 460px);
   }
 
   .heroStage {
@@ -3656,4 +3656,144 @@
 
 .audioNoticeActions a {
   text-decoration: none;
+}
+
+/* ---- Simplified movies home (rows, slim cards, compact toolbar) ---- */
+.cardHeart {
+  position: absolute; right: 8px; top: 8px; z-index: 2; width: 30px; height: 30px; border-radius: 50%;
+  display: grid; place-items: center; border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(8, 10, 18, 0.55); color: #fff; cursor: pointer; opacity: 0; transition: opacity 0.18s ease, transform 0.18s ease;
+  backdrop-filter: blur(4px);
+}
+.cardHeart svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; }
+.cardHeartOn { opacity: 1; color: #ff4d6d; }
+.cardHeartOn svg { fill: currentColor; }
+.card:hover .cardHeart, .card:focus-visible .cardHeart, .cardTouchActive .cardHeart { opacity: 1; }
+.cardHeart:hover { transform: scale(1.08); }
+@media (hover: none) { .cardHeart { opacity: 1; } }
+.cardProgress { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: rgba(255, 255, 255, 0.18); z-index: 1; }
+.cardProgress span { display: block; height: 100%; background: var(--primary); }
+.cardBodySlim { padding: 8px 9px 10px; gap: 3px; }
+.cardBodySlim .movieTitle { font-size: 13.5px; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+.cardBodySlim .metaText { font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.rowsStack { display: grid; gap: 22px; padding: 4px 0 12px; }
+.movieRow { min-width: 0; }
+.movieRowHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 2px 10px; }
+.movieRowTitle { margin: 0; font-size: 17px; font-weight: 800; letter-spacing: 0.01em; display: flex; align-items: baseline; gap: 8px; }
+.movieRowTitle small { font-size: 12px; font-weight: 600; color: var(--muted-foreground); }
+.movieRowSeeAll { border: 0; background: none; color: var(--primary); font-weight: 700; font-size: 13px; cursor: pointer; padding: 4px 2px; white-space: nowrap; }
+.movieRowSeeAll:hover { text-decoration: underline; }
+.movieRowBody { position: relative; }
+.movieRowStrip {
+  display: grid; grid-auto-flow: column; grid-auto-columns: 158px; gap: 12px; overflow-x: auto; overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity; scrollbar-width: none; padding: 2px 2px 6px;
+}
+.movieRowStrip::-webkit-scrollbar { display: none; }
+.movieRowStrip > * { scroll-snap-align: start; }
+.movieRowArrow {
+  position: absolute; top: 34%; z-index: 3; width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--card) 80%, black 20%); color: var(--foreground); display: grid; place-items: center;
+  cursor: pointer; opacity: 0; transition: opacity 0.2s ease; box-shadow: var(--shadow-lg);
+}
+.movieRowArrow svg { width: 18px; height: 18px; }
+.movieRowArrowPrev { left: -6px; }
+.movieRowArrowNext { right: -6px; }
+.movieRowBody:hover .movieRowArrow { opacity: 1; }
+.movieRowArrow[disabled] { display: none; }
+@media (hover: none) { .movieRowArrow { display: none; } }
+.rowSkeleton { display: grid; grid-auto-flow: column; grid-auto-columns: 158px; gap: 12px; overflow: hidden; }
+.rowSkeleton span { aspect-ratio: 3 / 5; border-radius: 16px; background: color-mix(in oklab, var(--muted) 60%, transparent); animation: rowPulse 1.2s ease-in-out infinite; }
+@keyframes rowPulse { 50% { opacity: 0.55; } }
+.rowsError { color: var(--muted-foreground); font-size: 14px; display: flex; gap: 10px; align-items: center; }
+
+.browseToolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.browseToolbar .searchRow { flex: 1 1 280px; min-width: 0; }
+.browseToolbarBtn {
+  display: inline-flex; align-items: center; gap: 7px; height: 40px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--card) 86%, transparent); color: var(--foreground); font-weight: 700; font-size: 13px; cursor: pointer;
+}
+.browseToolbarBtn svg { width: 16px; height: 16px; }
+.browseToolbarBtnOn { border-color: color-mix(in oklab, var(--primary) 60%, var(--border)); color: var(--primary); }
+.browseToolbarCount { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--primary); color: var(--primary-foreground); font-size: 11px; display: inline-grid; place-items: center; }
+.browseFilterPanel { margin-top: 12px; }
+.browseBackBtn { border: 0; background: none; color: var(--muted-foreground); font-weight: 700; font-size: 13px; cursor: pointer; padding: 0; display: inline-flex; align-items: center; gap: 6px; }
+.browseBackBtn:hover { color: var(--foreground); }
+.loadMoreRow { display: flex; justify-content: center; padding: 14px 0 4px; }
+
+@media (max-width: 640px) {
+  .movieRowStrip, .rowSkeleton { grid-auto-columns: 118px; gap: 9px; }
+  .movieRowTitle { font-size: 15px; }
+  .rowsStack { gap: 18px; }
+}
+
+
+/* ---- Hero: cross-fade, paused state on hover, progress bar, Play hover ---- */
+.heroSection { position: relative; transition: box-shadow 0.35s ease, border-color 0.35s ease; }
+@media (min-width: 641px) { .heroPosterCol { position: relative; overflow: hidden; } }
+.heroPosterCol { overflow: hidden; }
+.heroPosterPrev {
+  position: absolute; inset: 0; z-index: 0;
+  animation: hero-fade-out 1000ms cubic-bezier(0.4, 0, 0.2, 1) forwards !important;
+}
+.heroPosterCol > img:not(.heroPosterPrev) { position: relative; z-index: 1; }
+.heroFadeOut { animation: hero-backdrop-out 1000ms cubic-bezier(0.4, 0, 0.2, 1) forwards !important; }
+@keyframes hero-fade-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes hero-backdrop-out { from { opacity: 0.52; transform: scale(1.14); } to { opacity: 0; transform: scale(1.12); } }
+
+.heroHeld {
+  border-color: color-mix(in oklab, var(--primary) 55%, var(--border)) !important;
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--primary) 40%, transparent),
+    0 18px 48px color-mix(in oklab, var(--primary) 18%, transparent),
+    var(--shadow-lg);
+}
+.heroHeld .heroPoster:not(.heroPosterPrev) { transform: scale(1.025); transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1); }
+.heroPoster { transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1); }
+
+.heroPausedBadge {
+  position: absolute; top: 14px; right: 14px; z-index: 5;
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px 6px 9px; border-radius: 999px;
+  font-size: 12px; font-weight: 700; letter-spacing: 0.04em; color: #fff;
+  background: rgba(10, 12, 20, 0.55); border: 1px solid rgba(255, 255, 255, 0.2);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  opacity: 0; transform: translateY(-6px); pointer-events: none;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.heroPausedBadge svg { width: 13px; height: 13px; fill: currentColor; }
+.heroHeld .heroPausedBadge { opacity: 1; transform: translateY(0); }
+
+.heroProgress { position: absolute; left: 0; right: 0; bottom: 0; z-index: 5; height: 3px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
+.heroProgress > span {
+  display: block; height: 100%; width: 100%; transform-origin: left center;
+  background: linear-gradient(90deg, var(--primary), color-mix(in oklab, var(--primary) 60%, #ffb36b));
+  animation: hero-progress 6000ms linear forwards;
+}
+.heroHeld .heroProgress > span { animation-play-state: paused; }
+@keyframes hero-progress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+.heroActionRow .primaryBtn {
+  position: relative; overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.25s ease, filter 0.2s ease;
+}
+.heroActionRow .primaryBtn::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.35) 50%, transparent 70%);
+  transform: translateX(-120%); transition: transform 0.6s ease;
+}
+.heroActionRow .primaryBtn:hover,
+.heroActionRow .primaryBtn:focus-visible {
+  transform: translateY(-2px) scale(1.03);
+  filter: saturate(1.1) brightness(1.06);
+  box-shadow: 0 10px 26px color-mix(in oklab, var(--primary) 45%, transparent);
+}
+.heroActionRow .primaryBtn:hover::after { transform: translateX(120%); }
+.heroActionRow .primaryBtn svg { transition: transform 0.2s ease; }
+.heroActionRow .primaryBtn:hover svg { transform: scale(1.18); }
+.heroActionRow .primaryBtn:active { transform: translateY(0) scale(0.99); }
+.heroActionRow .secondaryBtn { transition: transform 0.2s ease, border-color 0.2s ease, background-color 0.2s ease; }
+.heroActionRow .secondaryBtn:hover { transform: translateY(-2px); background: color-mix(in oklab, var(--card) 70%, var(--primary) 12%); }
+
+@media (prefers-reduced-motion: reduce) {
+  .heroPosterPrev, .heroFadeOut { animation-duration: 1ms !important; }
 }

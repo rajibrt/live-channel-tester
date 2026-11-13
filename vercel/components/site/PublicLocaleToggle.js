@@ -1,28 +1,31 @@
 "use client";
 
+import { Languages } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useI18n } from "../i18n/LanguageProvider";
+import styles from "./public-pages.module.css";
 
-function nextLocale(locale) {
-  return locale === "bn" ? "en" : "bn";
-}
-
+// Language switch in the Camera Bazar style: a translate icon plus the name of the other
+// language ("বাংলা" while English is shown, "English" while Bengali is shown).
 export default function PublicLocaleToggle({ className = "" }) {
   const router = useRouter();
   const { locale, setLocale, t } = useI18n();
+  const target = locale === "bn" ? { code: "en", label: "English" } : { code: "bn", label: "বাংলা" };
 
   return (
     <button
       type="button"
-      className={className}
-      aria-label={`${t("publicSite.languageLabel")}: ${locale.toUpperCase()}`}
+      className={`${styles.localeSwitch} ${className}`}
+      lang={target.code}
+      aria-label={`${t("publicSite.languageLabel")}: ${target.label}`}
+      title={target.label}
       onClick={() => {
-        const selected = nextLocale(locale);
-        setLocale(selected);
+        setLocale(target.code);
         router.refresh();
       }}
     >
-      <span>{locale === "bn" ? "বাংলা" : "EN"}</span>
+      <Languages size={17} strokeWidth={2} aria-hidden="true" />
+      <span>{target.label}</span>
     </button>
   );
 }

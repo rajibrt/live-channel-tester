@@ -60,6 +60,7 @@ export default function PublicSmoothScroll({ hasClientSession = false }) {
       touchMultiplier: 1,
     });
 
+    window.__webtvbdLenis = lenis; // used by in-page links (article "On this page")
     let frameId = 0;
 
     const onFrame = (time) => {
@@ -73,6 +74,7 @@ export default function PublicSmoothScroll({ hasClientSession = false }) {
       if (frameId) {
         window.cancelAnimationFrame(frameId);
       }
+      if (window.__webtvbdLenis === lenis) window.__webtvbdLenis = null;
       lenis.destroy();
     };
   }, [isViewerShell, path]);

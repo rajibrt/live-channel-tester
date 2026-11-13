@@ -4,6 +4,7 @@ import { startTransition, useCallback, useEffect, useMemo, useRef, useState } fr
 import { ArrowLeft, ChevronLeft, ChevronRight, Heart, Play, RotateCcw, Search, SlidersHorizontal, X } from "lucide-react";
 import MovieDetail from "./MovieDetail";
 import MovieCard from "./MovieCard";
+import MovieRows from "./MovieRows";
 import MovieGrid from "./MovieGrid";
 import MoviePlayer from "./MoviePlayer";
 import styles from "./movies.module.css";
@@ -284,6 +285,8 @@ export default function MoviesView({
   const pendingPageScrollRef = useRef(false);
   const initialBrowseHeroScrollDoneRef = useRef(false);
   const [categorySlug, setCategorySlug] = useState("all");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [showAllGrid, setShowAllGrid] = useState(false);
   const [selectedMovieId, setSelectedMovieId] = useState(() => {
     const normalizedSelectedSlug = text(initialSelectedMovieSlug).toLowerCase();
     const preferredBySlug =
@@ -700,13 +703,27 @@ export default function MoviesView({
     };
   }, [heroSourceMovies]);
 
+  // The featured slider pauses while the pointer is over it (or a control in it has keyboard
+  // focus), so the viewer can read the text or press Play; it continues when the pointer leaves.
+  // The slide changes when the progress bar under the hero finishes its run, so pausing the bar
+  // (pointer over the hero) pauses the slider at exactly the same point.
+  const [heroHold, setHeroHold] = useState(false);
+  // previous slide stays underneath and fades out, so slides cross-fade instead of popping in
+  const [heroPrev, setHeroPrev] = useState(null);
+  const heroShownRef = useRef(null);
   useEffect(() => {
-    if (heroMovies.length <= 1) return undefined;
-    const timer = window.setInterval(() => {
-      setHeroIndex((prev) => (prev + 1) % heroMovies.length);
-    }, 5200);
-    return () => window.clearInterval(timer);
-  }, [heroMovies]);
+    const current = heroMovies[heroIndex] || null;
+    const before = heroShownRef.current;
+    heroShownRef.current = current;
+    if (!before || !current || String(before.id) === String(current.id)) return undefined;
+    setHeroPrev(before);
+    const t = window.setTimeout(() => setHeroPrev(null), 1100);
+    // warm the next poster so the following change does not wait for the image
+    const next = heroMovies[(heroIndex + 1) % heroMovies.length];
+    if (next?.posterUrl) preloadImage(next.posterUrl);
+    if (next?.backdropUrl) preloadImage(next.backdropUrl);
+    return () => window.clearTimeout(t);
+  }, [heroIndex, heroMovies]);
 
   const activeHeroMovie = heroMovies[heroIndex] || null;
 
@@ -1149,6 +1166,24 @@ export default function MoviesView({
     if (showInlineFilters) setCategorySlug("all");
     onResetFilters?.();
   }, [onResetFilters, onSearchChange, showInlineFilters]);
+
+  // Movies home (rows) when nothing narrows the list; any filter/search/"See all" shows the grid.
+  const isHomeBrowse =
+    !isTvMode &&
+    !showAllGrid &&
+    (normalizedMode === "all" || !normalizedMode) &&
+    !normalizedCategory &&
+    !normalizedGenre &&
+    !normalizedLanguage &&
+    !normalizedYear &&
+    !String(search || "").trim() &&
+    !String(searchDraft || "").trim();
+  const backToMoviesHome = () => {
+    setShowAllGrid(false);
+    clearAllFilters();
+    onSelectModeFilter?.("all");
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   const clearSearchOnly = useCallback(() => {
     setSearchDraft("");
@@ -2769,11 +2804,29 @@ export default function MoviesView({
         {!isTvMode && activeHeroMovie ? (
           <section
             ref={heroSectionRef}
-            className={`${styles.sectionCard} ${styles.heroSection}`}
+            className={`${styles.sectionCard} ${styles.heroSection} ${heroHold ? styles.heroHeld : ""}`}
+            onPointerEnter={(event) => {
+              if (event.pointerType === "mouse") setHeroHold(true);
+            }}
+            onPointerLeave={(event) => {
+              if (event.pointerType === "mouse") setHeroHold(false);
+            }}
+            onFocus={() => setHeroHold(true)}
+            onBlur={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget)) setHeroHold(false);
+            }}
             onTouchStart={handleHeroTouchStart}
             onTouchEnd={handleHeroTouchEnd}
           >
             <div className={styles.heroBackdrop} aria-hidden="true">
+              {heroPrev ? (
+                <img
+                  key={`hero-backdrop-prev-${heroPrev.id}`}
+                  className={`${styles.heroBackdropImage} ${styles.heroFadeOut}`}
+                  src={heroPrev.backdropUrl || heroPrev.posterUrl}
+                  alt=""
+                />
+              ) : null}
               <img
                 key={`hero-backdrop-${activeHeroMovie.id}`}
                 className={styles.heroBackdropImage}
@@ -2783,6 +2836,15 @@ export default function MoviesView({
             </div>
             <div className={styles.heroStage}>
               <div className={styles.heroPosterCol}>
+                {heroPrev ? (
+                  <img
+                    key={`hero-poster-prev-${heroPrev.id}`}
+                    className={`${styles.heroPoster} ${styles.heroPosterPrev}`}
+                    src={heroPrev.posterUrl}
+                    alt=""
+                    aria-hidden="true"
+                  />
+                ) : null}
                 <img
                   key={`hero-poster-${activeHeroMovie.id}`}
                   className={styles.heroPoster}
@@ -2875,94 +2937,68 @@ export default function MoviesView({
                 ) : null}
               </div>
             </div>
+            {heroMovies.length > 1 ? (
+              <>
+                <span className={styles.heroPausedBadge} aria-hidden={!heroHold}>
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="6" y="5" width="4" height="14" rx="1.2" />
+                    <rect x="14" y="5" width="4" height="14" rx="1.2" />
+                  </svg>
+                  Paused
+                </span>
+                <span className={styles.heroProgress} aria-hidden="true">
+                  <span
+                    key={`hero-progress-${heroIndex}`}
+                    onAnimationEnd={() => setHeroIndex((prev) => (prev + 1) % heroMovies.length)}
+                  />
+                </span>
+              </>
+            ) : null}
           </section>
         ) : null}
-        {continueWatching.length ? (
-          <section className={`${styles.sectionCard} ${styles.sectionContinue} ${isTvMode ? styles.sectionCardTv : ""}`}>
-            <header className={styles.sectionTop}>
-              <h3 className={styles.sectionTitle}>Continue Watching</h3>
-              <span className={styles.sectionCount}>{continueWatching.length}</span>
-            </header>
-            <div className={styles.continueBody}>
-              <div className={`${styles.continueStrip} ${isTouchContinueUi ? styles.continueStripTouch : ""}`}>
-                {continueStripMovies.map((movie) => (
-                  <div key={movie.id} className={styles.continueCardSlot}>
-                    <MovieCard
-                      movie={movie}
-                      isActive={String(selectedMovieId || "") === String(movie.id || "")}
-                      onSelect={handleSelectMovie}
-                      onToggleFavorite={handleToggleFavorite}
-                      isTvMode={isTvMode}
-                      tvFocusScope="movie-content"
-                      tvFocusId={`movie-continue-${String(movie.id || "")}`}
-                    />
-                  </div>
-                ))}
-              </div>
-              {totalContinuePages > 1 && !isTouchContinueUi ? (
-                <div className={styles.continuePagination}>
-                  <Pagination className={styles.paginationNav}>
-                    <PaginationContent>
-                      <PaginationItem>
-                        <PaginationPrevious
-                          disabled={currentContinuePage <= 1}
-                          onClick={() => setContinuePage((prev) => Math.max(1, prev - 1))}
-                          data-tv-focusable={isTvMode ? "true" : undefined}
-                          data-tv-focus-scope={isTvMode ? "movie-content" : undefined}
-                          data-tv-focus-id={isTvMode ? "movie-continue-prev" : undefined}
-                        />
-                      </PaginationItem>
-                      {continuePageItems.map((item) => (
-                        <PaginationItem key={`continue-${String(item)}`}>
-                          {typeof item === "number" ? (
-                            <PaginationLink
-                              isActive={item === currentContinuePage}
-                              size="icon"
-                              onClick={() => setContinuePage(item)}
-                              data-tv-focusable={isTvMode ? "true" : undefined}
-                              data-tv-focus-scope={isTvMode ? "movie-content" : undefined}
-                              data-tv-focus-id={isTvMode ? `movie-continue-page-${item}` : undefined}
-                              data-tv-active={isTvMode && item === currentContinuePage ? "true" : undefined}
-                            >
-                              {item}
-                            </PaginationLink>
-                          ) : (
-                            <PaginationEllipsis />
-                          )}
-                        </PaginationItem>
-                      ))}
-                      <PaginationItem>
-                        <PaginationNext
-                          disabled={currentContinuePage >= totalContinuePages}
-                          onClick={() => setContinuePage((prev) => Math.min(totalContinuePages, prev + 1))}
-                          data-tv-focusable={isTvMode ? "true" : undefined}
-                          data-tv-focus-scope={isTvMode ? "movie-content" : undefined}
-                          data-tv-focus-id={isTvMode ? "movie-continue-next" : undefined}
-                        />
-                      </PaginationItem>
-                    </PaginationContent>
-                  </Pagination>
-                </div>
-              ) : null}
-            </div>
-          </section>
-        ) : null}
-
-        <section className={`${styles.sectionCard} ${styles.sectionControls} ${isTvMode ? styles.sectionCardTv : ""}`}>
-          <header className={styles.sectionTop}>
-            <h3 className={styles.sectionTitle}>Search & Filtering</h3>
-            <span className={styles.sectionHint}>
-              {isSearchSyncing ? "Typing..." : isSearchLoading ? "Searching..." : "Live results"}
-            </span>
-          </header>
-          {searchControls}
-          {filterControls}
-          {activeFilterControls}
+        <section className={`${styles.sectionCard} ${styles.sectionControls}`}>
+          <div className={styles.browseToolbar}>
+            {searchControls}
+            <button
+              type="button"
+              className={`${styles.browseToolbarBtn} ${filtersOpen ? styles.browseToolbarBtnOn : ""}`}
+              onClick={() => setFiltersOpen((v) => !v)}
+              aria-expanded={filtersOpen}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+                <path d="M4 6h16M7 12h10M10 18h4" />
+              </svg>
+              Filters
+              {activeFilterTags.length ? <span className={styles.browseToolbarCount}>{activeFilterTags.length}</span> : null}
+            </button>
+          </div>
+          {filtersOpen ? <div className={styles.browseFilterPanel}>{filterControls}</div> : null}
+          {activeFilterTags.length ? activeFilterControls : null}
         </section>
 
+        {isHomeBrowse ? (
+          <section className={`${styles.sectionCard} ${styles.sectionMovies}`}>
+            <MovieRows
+              continueWatching={continueWatching}
+              selectedMovieId={selectedMovieId}
+              onSelectMovie={handleSelectMovie}
+              onToggleFavorite={handleToggleFavorite}
+              onSeeContinue={() => onSelectModeFilter?.("recent")}
+              onSeeAll={(row) => {
+                const f = row?.filter || {};
+                if (f.category) onSelectCategoryFilter?.(f.category);
+                else if (f.genre) onSelectGenreFilter?.(f.genre);
+                else setShowAllGrid(true);
+                if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+            />
+          </section>
+        ) : (
         <section className={`${styles.sectionCard} ${styles.sectionMovies} ${isTvMode ? styles.sectionCardTv : ""}`} ref={moviesSectionRef}>
           <header className={styles.sectionTop}>
-            <h3 className={styles.sectionTitle}>Movies</h3>
+            <button type="button" className={styles.browseBackBtn} onClick={backToMoviesHome}>
+              ‹ Movies home
+            </button>
             <div className={styles.sectionTopMeta}>
               <span className={styles.sectionHint}>
                 {totalFilteredMovies} result{totalFilteredMovies === 1 ? "" : "s"}
@@ -3046,9 +3082,9 @@ export default function MoviesView({
             </div>
           </div>
         </section>
+        )}
       </div>
       {mobileEdgeTools}
-      {desktopHeroUtility}
       {desktopSearchOverlay}
       {isMobileFilterUi ? (
         <>

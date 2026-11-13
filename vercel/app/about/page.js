@@ -3,68 +3,68 @@ import { getLocaleFromRequest } from "../../lib/i18n/server";
 
 export const metadata = {
   title: "About WEBTVBD",
-  description: "Learn what WEBTVBD offers, who it serves, and how the platform organizes live TV and movies.",
+  description: "WEBTVBD publishes practical guides about TVs, streaming, radio and home networks for viewers in Bangladesh, and runs a sign-in viewing area for its members.",
   alternates: { canonical: "/about" },
 };
 
 const COPY = {
   en: {
     eyebrow: "About WEBTVBD",
-    title: "Streaming access built for fast channel discovery",
+    title: "Helping Bangladeshi households get more from TV, streaming and radio",
     intro:
-      "WEBTVBD organizes live TV channels and on-demand movies into a single browser-based experience designed for quick playback, simple navigation, and multilingual viewers.",
-    noticeTitle: "Important service notice",
+      "WEBTVBD is a small editorial team in Bangladesh. We write practical, plainly worded guides about televisions, streaming devices, home internet and radio, along with stories about the history of broadcasting in the country.",
+    noticeTitle: "Rights and responsible viewing",
     noticeBody:
-      "WEBTVBD is committed to displaying only material it is authorized to provide or reference. Listings are reviewed, restricted, or removed when authorization cannot be confirmed, a credible rights concern is received, or technical and safety requirements are not met.",
-    home: "Open Home",
+      "WEBTVBD only lists material it is permitted to provide or link to. Listings are reviewed, restricted or removed when permission cannot be confirmed, when a credible rights concern is received, or when technical or safety requirements are not met.",
+    home: "Read the latest guides",
     contact: "Contact WEBTVBD",
-    whatWeDo: "What we do",
+    whatWeDo: "What we publish",
     whatWeDoBody:
-      "WEBTVBD helps viewers browse live channels by group, switch between TV and movie browsing, and resume content quickly across devices. The platform focuses on practical playback, curation, and lightweight access rather than cluttered portal-style navigation.",
-    whoFor: "Who the platform is for",
-    viewers: "Viewers",
-    viewersBody: "People who want a simple catalog of live channels and movie content without unnecessary steps before playback.",
-    mobileFirst: "Mobile-first users",
-    mobileFirstBody: "Users on phones and lower-powered devices who need a responsive interface with fast route loading and compact controls.",
-    returning: "Returning visitors",
-    returningBody: "Signed-in visitors who benefit from favorites, recent items, continue-watching, and category-driven discovery.",
-    searchTraffic: "Search traffic",
-    searchTrafficBody: "Public watch pages and informational pages help search engines understand the site and route visitors to relevant content.",
-    editorial: "Editorial approach",
+      "Step-by-step help with real problems — buffering, Wi-Fi, soundbars, picture settings, power cuts, data costs — plus explainers on how cable, DTH, IPTV and OTT services differ, how to stay safe from fake apps and scams, and how radio and cinema developed in Bangladesh. Each article lists its sources and the date it was last reviewed.",
+    whoFor: "Who we write for",
+    viewers: "Families",
+    viewersBody: "Households that want to set up and use their TV, internet and devices without technical jargon.",
+    mobileFirst: "Mobile viewers",
+    mobileFirstBody: "People who watch and listen mostly on phones and want to save data and battery.",
+    returning: "Older viewers and carers",
+    returningBody: "Parents, grandparents and the people who help them, with guides written for clarity and accessibility.",
+    searchTraffic: "Members",
+    searchTrafficBody: "Registered members can also sign in to the WEBTVBD viewing area, which includes a TV guide-style channel directory and an FM radio player.",
+    editorial: "How we work",
     editorialBody:
-      "Channel groups, movie categories, articles, and public information pages are maintained to make the site easier to understand, easier to review, and more trustworthy for visitors, advertisers, and search engines.",
+      "Articles are written and checked by the WEBTVBD Editorial Desk against official documentation and published sources. We update guides when products or services change and correct mistakes openly — see our editorial and corrections policies.",
     rights: "Rights and removals",
     rightsBody:
-      "If you are a copyright owner, publisher, or authorized representative and need any material reviewed or removed, use the public contact or DMCA page so the item can be checked and handled quickly.",
+      "If you are a copyright owner, publisher or authorised representative and need any material reviewed or removed, use the contact or DMCA page and we will check and act on it promptly.",
   },
   bn: {
     eyebrow: "WEBTVBD সম্পর্কে",
-    title: "দ্রুত চ্যানেল খুঁজে পাওয়ার জন্য তৈরি স্ট্রিমিং অ্যাক্সেস",
+    title: "টিভি, স্ট্রিমিং আর রেডিও থেকে আরও ভালো অভিজ্ঞতা পেতে বাংলাদেশি পরিবারের পাশে",
     intro:
-      "WEBTVBD লাইভ টিভি চ্যানেল এবং অন-ডিমান্ড মুভিকে একটি ব্রাউজারভিত্তিক অভিজ্ঞতায় গুছিয়ে আনে, যাতে দ্রুত প্লেব্যাক, সহজ নেভিগেশন এবং বহুভাষী ভিউয়ারদের জন্য ব্যবহার আরামদায়ক হয়।",
-    noticeTitle: "গুরুত্বপূর্ণ সার্ভিস নোটিশ",
+      "WEBTVBD বাংলাদেশের একটি ছোট সম্পাদকীয় দল। আমরা টেলিভিশন, স্ট্রিমিং ডিভাইস, বাসার ইন্টারনেট আর রেডিও নিয়ে সহজ ভাষায় ব্যবহারিক গাইড লিখি, সঙ্গে দেশের সম্প্রচারের ইতিহাসের গল্প।",
+    noticeTitle: "অধিকার ও দায়িত্বশীল দেখা",
     noticeBody:
-      "WEBTVBD কেবল অনুমোদিতভাবে provide বা reference করা যায় এমন material দেখাতে প্রতিশ্রুতিবদ্ধ। Authorization নিশ্চিত না হলে, বিশ্বাসযোগ্য rights concern এলে অথবা technical ও safety requirement পূরণ না হলে listing review, restrict বা remove করা হয়।",
-    home: "হোম খুলুন",
-    contact: "WEBTVBD-র সাথে যোগাযোগ",
-    whatWeDo: "আমরা কী করি",
+      "WEBTVBD শুধু সেই কনটেন্টই তালিকাভুক্ত করে যা দেখানো বা লিংক করার অনুমতি আছে। অনুমতি নিশ্চিত না হলে, বিশ্বাসযোগ্য অধিকার-সংক্রান্ত অভিযোগ এলে কিংবা কারিগরি বা নিরাপত্তার শর্ত পূরণ না হলে তালিকা পর্যালোচনা, সীমিত বা সরিয়ে ফেলা হয়।",
+    home: "সাম্প্রতিক গাইড পড়ুন",
+    contact: "WEBTVBD-র সঙ্গে যোগাযোগ",
+    whatWeDo: "আমরা কী প্রকাশ করি",
     whatWeDoBody:
-      "WEBTVBD ভিউয়ারদের গ্রুপ অনুযায়ী লাইভ চ্যানেল ব্রাউজ করতে, টিভি ও মুভির মধ্যে সহজে বদল করতে এবং বিভিন্ন ডিভাইসে দ্রুত কনটেন্টে ফিরতে সাহায্য করে। প্ল্যাটফর্মটি জটিল পোর্টাল-স্টাইল নেভিগেশনের বদলে ব্যবহারিক প্লেব্যাক, কিউরেশন এবং লাইটওয়েট অ্যাক্সেসে গুরুত্ব দেয়।",
-    whoFor: "কার জন্য এই প্ল্যাটফর্ম",
-    viewers: "ভিউয়ার",
-    viewersBody: "যারা অপ্রয়োজনীয় ধাপ ছাড়া লাইভ চ্যানেল ও মুভি কনটেন্টের সহজ ক্যাটালগ চান।",
-    mobileFirst: "মোবাইল-ফার্স্ট ব্যবহারকারী",
-    mobileFirstBody: "যারা ফোন বা কম শক্তির ডিভাইসে দ্রুত রুট লোডিং ও কমপ্যাক্ট কন্ট্রোলসহ responsive interface চান।",
-    returning: "ফিরে আসা ভিজিটর",
-    returningBody: "সাইন-ইন করা ভিজিটর যারা favorites, recent items, continue-watching এবং category-based discovery থেকে উপকৃত হন।",
-    searchTraffic: "সার্চ ট্রাফিক",
-    searchTrafficBody: "পাবলিক watch page এবং informational page সার্চ ইঞ্জিনকে সাইট বুঝতে সাহায্য করে এবং প্রাসঙ্গিক ভিজিটরদের route করে।",
-    editorial: "সম্পাদনাগত দৃষ্টিভঙ্গি",
+      "বাস্তব সমস্যার ধাপে ধাপে সমাধান—বাফারিং, Wi-Fi, সাউন্ডবার, ছবির সেটিং, লোডশেডিং, ডেটা খরচ—সঙ্গে কেবল, DTH, IPTV আর OTT-র পার্থক্য, ভুয়া অ্যাপ ও প্রতারণা থেকে বাঁচার উপায়, এবং বাংলাদেশে রেডিও ও চলচ্চিত্রের পথচলা। প্রতিটি লেখায় সূত্র আর সর্বশেষ পর্যালোচনার তারিখ থাকে।",
+    whoFor: "আমরা কাদের জন্য লিখি",
+    viewers: "পরিবার",
+    viewersBody: "যারা কারিগরি জটিলতা ছাড়া টিভি, ইন্টারনেট আর ডিভাইস সেট আপ ও ব্যবহার করতে চান।",
+    mobileFirst: "মোবাইল দর্শক",
+    mobileFirstBody: "যারা বেশিরভাগ সময় ফোনে দেখেন ও শোনেন, আর ডেটা ও ব্যাটারি বাঁচাতে চান।",
+    returning: "বয়স্ক দর্শক ও তাঁদের সহায়তাকারী",
+    returningBody: "বাবা-মা, দাদা-দাদি আর যাঁরা তাঁদের সাহায্য করেন—সহজবোধ্য ও অ্যাক্সেসযোগ্য গাইড।",
+    searchTraffic: "সদস্য",
+    searchTrafficBody: "নিবন্ধিত সদস্যরা WEBTVBD-এর ভিউয়িং অংশে সাইন ইন করতে পারেন, যেখানে টিভি গাইডের মতো চ্যানেল তালিকা আর একটি এফএম রেডিও প্লেয়ার আছে।",
+    editorial: "আমরা যেভাবে কাজ করি",
     editorialBody:
-      "চ্যানেল গ্রুপ, মুভি ক্যাটাগরি, আর্টিকেল এবং পাবলিক তথ্যভিত্তিক পেজগুলো এমনভাবে রক্ষণাবেক্ষণ করা হয় যাতে সাইটটি review করা সহজ হয়, বুঝতে সহজ হয় এবং visitor, advertiser ও search engine-এর কাছে বেশি বিশ্বাসযোগ্য লাগে।",
+      "প্রতিটি লেখা WEBTVBD সম্পাদকীয় ডেস্ক অফিসিয়াল ডকুমেন্টেশন ও প্রকাশিত সূত্রের সঙ্গে মিলিয়ে লেখে ও যাচাই করে। পণ্য বা সেবা বদলালে গাইড হালনাগাদ করা হয় এবং ভুল প্রকাশ্যে সংশোধন করা হয়—আমাদের সম্পাদনা ও সংশোধন নীতিমালা দেখুন।",
     rights: "অধিকার ও অপসারণ",
     rightsBody:
-      "আপনি যদি copyright owner, publisher বা authorized representative হন এবং কোনো কনটেন্ট review বা remove করতে চান, তাহলে public contact বা DMCA page ব্যবহার করুন যাতে বিষয়টি দ্রুত যাচাই ও পরিচালনা করা যায়।",
+      "আপনি কপিরাইট মালিক, প্রকাশক বা অনুমোদিত প্রতিনিধি হলে এবং কোনো কনটেন্ট পর্যালোচনা বা অপসারণ প্রয়োজন হলে Contact বা DMCA পাতা ব্যবহার করুন; আমরা দ্রুত যাচাই করে ব্যবস্থা নেব।",
   },
 };
 
@@ -81,7 +81,7 @@ export default async function AboutPage() {
         body: copy.noticeBody,
       }}
       actions={[
-        { href: "/", label: copy.home },
+        { href: "/articles", label: copy.home },
         { href: "/contact", label: copy.contact, variant: "secondary" },
       ]}
       sections={[

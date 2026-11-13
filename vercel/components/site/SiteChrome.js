@@ -13,7 +13,7 @@ function shouldHidePublicChrome(pathname, hasClientSession) {
   return path.startsWith("/watch/") || path.startsWith("/movie/") || path === "/radio";
 }
 
-export default function SiteChrome({ hasClientSession = false, viewerEntryHref = "/client-login", radioHref = "/client-login?next=%2Fradio", children }) {
+export default function SiteChrome({ hasClientSession = false, viewerEntryHref = "/client-login", radioHref = "/client-login?next=%2Fradio", moviesHref = "/client-login?next=%2Fwatch%3Fmode%3Dmovies", children }) {
   const pathname = usePathname();
   const path = String(pathname || "");
   const hidePublicChrome = shouldHidePublicChrome(pathname, hasClientSession);
@@ -21,7 +21,7 @@ export default function SiteChrome({ hasClientSession = false, viewerEntryHref =
 
   return (
     <>
-      {!hidePublicChrome ? <PublicSiteHeader viewerEntryHref={viewerEntryHref} radioHref={radioHref} /> : null}
+      {!hidePublicChrome ? <PublicSiteHeader viewerEntryHref={viewerEntryHref} radioHref={radioHref} moviesHref={moviesHref} /> : null}
       {children}
       {!hidePublicChrome ? <PublicSiteFooter /> : null}
       {!hidePublicChrome ? <PublicConsentManager enableAds={isEditorialContent} /> : null}

@@ -147,7 +147,7 @@ export default function ClientAuthTabs({
   return (
     <div className={styles.formShellWrap}>
       <div className={styles.formHeaderRow}>
-        <PublicLocaleToggle className={styles.localeToggleBtn} />
+        <PublicLocaleToggle />
       </div>
       <div className={styles.formShell}>
         <FacebookHashHandler />

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useI18n } from "../i18n/LanguageProvider";
+import { Clapperboard, Radio, Tv } from "lucide-react";
 import PublicLocaleToggle from "./PublicLocaleToggle";
 import styles from "./public-pages.module.css";
 
@@ -33,7 +34,7 @@ const SOCIAL_LINKS = [
   },
 ];
 
-export default function PublicSiteHeader({ viewerEntryHref = "/client-login", radioHref = "/client-login?next=%2Fradio", homeHref = "/" }) {
+export default function PublicSiteHeader({ viewerEntryHref = "/client-login", radioHref = "/client-login?next=%2Fradio", moviesHref = "/client-login?next=%2Fwatch%3Fmode%3Dmovies", homeHref = "/" }) {
   const pathname = usePathname();
   const path = String(pathname || "");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -83,11 +84,17 @@ export default function PublicSiteHeader({ viewerEntryHref = "/client-login", ra
           <Link href={homeHref} className={styles.siteBrand} aria-label="WEBTVBD home">
             <Image src="/logo.png" alt="WEBTVBD" width={156} height={49} className={styles.siteBrandLogo} priority />
           </Link>
-          <Link href={radioHref} className={styles.mobileTopRadioLink}>
-            {t("publicSite.radioLink")}
+          <Link href={radioHref} replace className={styles.mobileTopRadioLink} aria-label={t("publicSite.radioLink")}>
+            <Radio size={15} strokeWidth={2.2} aria-hidden="true" />
+            <span>{t("publicSite.radioLink")}</span>
           </Link>
-          <Link href={viewerEntryHref} className={styles.mobileTopLoginLink}>
-            {t("publicSite.clientLogin")}
+          <Link href={moviesHref} replace className={`${styles.mobileTopRadioLink} ${styles.mobileTopMoviesLink}`} aria-label={t("publicSite.moviesLink")}>
+            <Clapperboard size={15} strokeWidth={2.2} aria-hidden="true" />
+            <span>{t("publicSite.moviesLink")}</span>
+          </Link>
+          <Link href={viewerEntryHref} replace className={styles.mobileTopLoginLink} aria-label={t("publicSite.clientLogin")}>
+            <Tv size={15} strokeWidth={2.2} aria-hidden="true" />
+            <span>{t("publicSite.clientLogin")}</span>
           </Link>
           <button
             type="button"
@@ -146,11 +153,17 @@ export default function PublicSiteHeader({ viewerEntryHref = "/client-login", ra
               ))}
             </nav>
             <div className={styles.mobileDrawerUtility}>
-              <PublicLocaleToggle className={styles.headerLocaleButton} />
-              <Link href={viewerEntryHref} className={styles.headerLoginLink}>
+              <PublicLocaleToggle />
+              <Link href={viewerEntryHref} replace className={styles.headerLoginLink}>
+                <Tv size={15} strokeWidth={2.2} aria-hidden="true" />
                 {t("publicSite.clientLogin")}
               </Link>
-              <Link href={radioHref} className={styles.headerRadioLink}>
+              <Link href={moviesHref} replace className={styles.headerRadioLink}>
+                <Clapperboard size={15} strokeWidth={2.2} aria-hidden="true" />
+                {t("publicSite.moviesLink")}
+              </Link>
+              <Link href={radioHref} replace className={styles.headerRadioLink}>
+                <Radio size={15} strokeWidth={2.2} aria-hidden="true" />
                 {t("publicSite.radioLink")}
               </Link>
             </div>

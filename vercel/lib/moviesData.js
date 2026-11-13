@@ -940,11 +940,102 @@ export async function getMoviesCatalogForUser(userId) {
     from += chunk.length;
   }
 
-  const [movies, categories, continueWatching] = await Promise.all([
+  const [movies, categories, continueWatching, sidebar] = await Promise.all([
     hydrateMoviesForUser(admin, userId, movieRows),
     loadCategoryListWithCounts(admin),
     loadContinueWatchingForUser(admin, userId, 20),
+    loadMovieSidebarSummaryForUser(admin, userId),
   ]);
 
-  return { movies, categories, continueWatching };
+  // the menu (languages, genres, counts) needs the same summary the paged bootstrap sends
+  return {
+    movies,
+    categories,
+    continueWatching,
+    stats: sidebar.stats,
+    genres: sidebar.genres,
+    languages: sidebar.languages,
+    years: sidebar.years,
+  };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Movies home rows (Netflix-style): a few short rows instead of one long paged grid.
+const MOVIE_ROW_SIZE = 18;
+const MOVIE_ROW_MIN = 8;
+const MOVIE_ROW_CATEGORY_ORDER = ["bangla", "kolkata-bangla", "hindi", "english", "love-story"];
+const MOVIE_ROW_GENRES = ["Action", "Comedy", "Thriller", "Romance", "Horror", "Drama", "Crime", "Animation"];
+
+async function loadMovieRowIdsUncached() {
+  const admin = getSupabaseAdmin();
+  const [movieRows, categories, mapRows] = await Promise.all([
+    loadPublishedMovieRows(admin),
+    loadMovieCategories(admin),
+    loadMovieCategoryMapRows(admin),
+  ]);
+  const categoryById = new Map(categories.map((row) => [Number(row?.id), row]));
+  const idsByCategory = new Map();
+  for (const row of mapRows) {
+    const category = categoryById.get(Number(row?.category_id));
+    if (!category) continue;
+    const slug = normalizeCategorySlug(category?.slug || category?.name || "");
+    const set = idsByCategory.get(slug) || new Set();
+    set.add(Number(row?.movie_id));
+    idsByCategory.set(slug, set);
+  }
+  const rows = [];
+  // movieRows are newest first (updated_at desc)
+  rows.push({ key: "new", title: "Recently added", filter: {}, ids: movieRows.slice(0, MOVIE_ROW_SIZE).map((r) => Number(r.id)) });
+  const slugs = [
+    ...MOVIE_ROW_CATEGORY_ORDER,
+    ...categories.map((c) => normalizeCategorySlug(c?.slug || c?.name || "")).filter((s) => !MOVIE_ROW_CATEGORY_ORDER.includes(s)),
+  ];
+  for (const slug of slugs) {
+    const set = idsByCategory.get(slug);
+    if (!set) continue;
+    const list = movieRows.filter((r) => set.has(Number(r.id)));
+    if (list.length < MOVIE_ROW_MIN) continue;
+    const category = categories.find((c) => normalizeCategorySlug(c?.slug || c?.name || "") === slug);
+    rows.push({
+      key: `category-${slug}`,
+      title: text(category?.name) || slug,
+      filter: { category: slug },
+      total: list.length,
+      ids: list.slice(0, MOVIE_ROW_SIZE).map((r) => Number(r.id)),
+    });
+  }
+  for (const genre of MOVIE_ROW_GENRES) {
+    const key = genre.toLowerCase();
+    const list = movieRows.filter((r) => toStringList(r?.imdb_genres).some((g) => text(g).toLowerCase() === key));
+    if (list.length < MOVIE_ROW_MIN) continue;
+    rows.push({ key: `genre-${key}`, title: genre, filter: { genre: key }, total: list.length, ids: list.slice(0, MOVIE_ROW_SIZE).map((r) => Number(r.id)) });
+  }
+  const byId = {};
+  for (const r of movieRows) byId[Number(r.id)] = r;
+  const needed = new Set(rows.flatMap((row) => row.ids));
+  const rowData = {};
+  for (const id of needed) rowData[id] = byId[id];
+  return { rows, rowData };
+}
+
+const loadMovieRowIds = unstable_cache(loadMovieRowIdsUncached, ["movie-home-rows-v1"], { revalidate: 300 });
+
+export async function getMovieRowsForUser(userId) {
+  const admin = getSupabaseAdmin();
+  const { rows, rowData } = await loadMovieRowIds();
+  const ids = Array.from(new Set(rows.flatMap((row) => row.ids)));
+  const hydrated = await hydrateMoviesForUser(
+    admin,
+    userId,
+    ids.map((id) => rowData[id]).filter(Boolean),
+    { orderIds: ids }
+  );
+  const byId = new Map(hydrated.map((movie) => [Number(movie?.id), movie]));
+  return rows.map((row) => ({
+    key: row.key,
+    title: row.title,
+    filter: row.filter,
+    total: row.total || 0,
+    movies: row.ids.map((id) => byId.get(id)).filter(Boolean),
+  }));
 }

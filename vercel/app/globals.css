@@ -113,7 +113,9 @@ body {
 }
 
 :lang(bn) {
-  font-family: var(--font-bangla);
+  /* Latin letters inside Bangla text use the Latin face; Bengali glyphs fall through to Siyam Rupali */
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, var(--font-bangla);
+  letter-spacing: normal;
 }
 
 button,
