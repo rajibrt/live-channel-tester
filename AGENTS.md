@@ -14,6 +14,12 @@ At the beginning of a task:
 4. Work primarily in `vercel/` for the production Next.js website. The repository root also contains older Python/local-agent and Firebase tooling.
 5. Before finishing any material task, update the current handoff if its state changed and append an entry to the Work ledger. Record facts, commands/checks, commit/deployment status, and remaining work. Never include passwords, tokens, cookies, private keys, or full environment-variable values.
 6. Keep the **Production infrastructure map** below current. When you discover or change anything about servers, services, domains, deploy flow, storage, database, or scheduled jobs, update the map in the same task (with the date verified) so the next agent does not have to search again. Record the previous value when something changes.
+7. **Before any push or deploy, check for pending work elsewhere and deploy together** (user rule, 2026-11-13). Several sessions and branches often work at once, and every push to `origin/master` deploys production. Before pushing:
+   - `git fetch origin` and check `git log --oneline HEAD..origin/master` (someone else may have deployed; rebase or merge onto it first — never force-push, never overwrite their commits).
+   - `git worktree list` and `git branch -a --no-merged origin/master` — look for other worktrees/branches with unmerged commits, and `git status --short` in each worktree for uncommitted work.
+   - Check linked/parallel Claude sessions (session list or the ledger below) for work that is finished locally but not yet deployed, or still in progress on the same files.
+   - If anything is pending: tell the user what it is and where, and agree whether to deploy it together, wait, or deploy only your part. Merge other branches only with the user's explicit OK; resolve conflicts carefully so no one's change is lost.
+   - Deploy related changes together in one coordinated push (one build), then verify the whole site, not just your part (`curl` key routes, `npm run audit:public`, a quick check of every area that changed), and record in the ledger what was deployed from which branch/session.
 
 ## Playlist / channel-link import (skill — read first)
 
@@ -79,6 +85,7 @@ All running compose services now use `dokploy-network` for Traefik (Isolated Dep
 
 ### Deploy procedure (current reality)
 
+0. First do start-procedure step 7: check other branches, worktrees and sessions for pending work and coordinate one joint deploy.
 1. Commit on the working branch, fast-forward `origin/master` (no force push).
 2. Dokploy Autodeploy builds `master` automatically on push. Pressing **Deploy** in Dokploy rebuilds again (extra build on the server).
 3. Verify live: `curl -I https://webtvbd.com/dashboard` (expect 307 → `/login` when signed out), `cd vercel && npm run audit:public`.
@@ -751,3 +758,8 @@ Re-check `git status` every time. This list is a historical snapshot, not permis
 - Code (user approved, "Yes, deploy"): new `lib/youtubeSource.js`; `VideoPlayer.js` shows YouTube's embed for YouTube sources (IFrame API: ready/playing confirm, error → failover); M3U and `/playlist/<token>/live/<id>` skip YouTube links (channel left out of the M3U when it has no other link); health cron treats YouTube links as live. Tested locally on a temporary dev page (deleted before commit): all three play, bad YouTube link fails over to HLS, plain HLS unaffected, local M3U builds with no YouTube links. Production build of the clean commit passed; pushed `928e91c` to master; Dokploy build 2026-11-13T154836Z. Verified new code live via the smart redirect skipping YouTube.
 - Data: `channel_sources` 3234/3235/3236 (label `youtube-official`, priority -10, URLs `https://www.youtube.com/channel/<UC…>/live`); audio-only sources 1758, 1730, 2591 deactivated; channels 862, 12, 902 set LIVE with `stream_url` = YouTube URL. Backups `backups/youtube-sources-added-2026-11-13.json`, `backups/youtube-golive-before-2026-11-13.json`. `/watch/862-ntv`, `/watch/12-atn-news`, `/watch/902-channel-24` return 200.
 - Not verified: logged-in playback on production and on phones (iPhone autoplay may need a tap). The skill (`.claude/skills/playlist-import/SKILL.md`) records the YouTube rule and channel ids.
+
+### 2026-11-13 - Removed the "Muted" status line under the TV player; joint-deploy rule
+
+- User: the "Muted" text between the player controls and the now-playing card is not needed. `VideoPlayer.js`: the line under the controls is removed and the top-right in-video HUD no longer repeats "Muted" (the top-left unmute button already says it); other audio notes (no audio track, autoplay) still show on the video.
+- User rule added as start-procedure step 7 (check other branches/worktrees/sessions before any push; coordinate one joint deploy). Pre-deploy check run: origin/master had no new commits, no unmerged branches, only the stale kilo worktree at 4078f8e, other sessions in this repo idle; only `docs/` and `.claude/launch.json` (other sessions) left uncommitted.

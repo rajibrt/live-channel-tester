@@ -1322,7 +1322,8 @@ export default function VideoPlayer({
         ) : null}
 
         {showVolumeHud ? <div className={styles.volumeHud}>Volume {volumePercent}%</div> : null}
-        {hasStream && audioStatusMessage ? (
+        {/* "Muted" is already on the unmute button at the top left; show only other audio notes */}
+        {hasStream && audioStatusMessage && audioStatusMessage !== "Muted" ? (
           <div className={styles.volumeHud} style={{ top: "18px", bottom: "auto" }}>
             {audioStatusMessage}
           </div>
@@ -1804,11 +1805,6 @@ export default function VideoPlayer({
           <span>{volumePercent}%</span>
         </div>
       </div>
-      {hasStream && audioStatusMessage ? (
-        <p style={{ margin: "8px 0 0", color: "var(--muted-foreground)", fontSize: "0.92rem" }}>
-          {audioStatusMessage}
-        </p>
-      ) : null}
 
       {channel ? (
         <article className={`${styles.channelInfo} ${isTvMode ? styles.channelInfoTv : ""} ${isDark ? styles.darkGlass : styles.lightGlass}`}>
