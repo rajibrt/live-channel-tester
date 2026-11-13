@@ -62,7 +62,7 @@ function buildSmoothLineModel(values, width = 760, height = 280) {
   return { width, height, pad, path, area, points, yMax, peakIndex };
 }
 
-function TrendPanel({ panel }) {
+function TrendPanel({ panel, bare = false }) {
   const values = panel.data.map((row) => Number(row?.value || 0));
   const total = values.reduce((sum, value) => sum + value, 0);
   const chart = useMemo(() => buildSmoothLineModel(values, 760, 280), [values]);
@@ -88,14 +88,16 @@ function TrendPanel({ panel }) {
   };
 
   return (
-    <div className={styles.trendPanel}>
-      <div className={styles.trendPanelHead}>
-        <p>{panel.title}</p>
-        <strong>{formatShortCount(total)}</strong>
-      </div>
+    <div className={bare ? undefined : styles.trendPanel}>
+      {bare ? null : (
+        <div className={styles.trendPanelHead}>
+          <p>{panel.title}</p>
+          <strong>{formatShortCount(total)}</strong>
+        </div>
+      )}
       <svg
         viewBox={`0 0 ${chart.width} ${chart.height}`}
-        className={styles.trendSvg}
+        className={bare ? styles.trendSvgBare : styles.trendSvg}
         aria-hidden="true"
         onMouseMove={(event) => {
           const rect = event.currentTarget.getBoundingClientRect();
@@ -161,22 +163,49 @@ function TrendPanel({ panel }) {
         </text>
         <text x={chart.width - chart.pad.right} y={chart.height - 10} className={styles.trendAxisLabel} textAnchor="end">{tail?.label || "-"}</text>
       </svg>
-      <div className={styles.trendPanelFoot}>
+      {bare ? null : <div className={styles.trendPanelFoot}>
         <span>{head?.label || "-"}</span>
         <span>Peak: {chart.points[chart.peakIndex]?.value || 0}</span>
         <span>{tail?.label || "-"}</span>
-      </div>
+      </div>}
     </div>
   );
 }
 
+// One chart with period tabs. Values are unique signed-in viewers per bucket,
+// so the summary shows the peak and the average instead of a sum.
 export default function UserArrivalTrendCharts({ trendPanels = [] }) {
+  const [activeKey, setActiveKey] = useState(trendPanels[0]?.key || "");
+  const panel = trendPanels.find((item) => item.key === activeKey) || trendPanels[0];
+  if (!panel) return null;
+  const values = panel.data.map((row) => Number(row?.value || 0));
+  const peak = values.length ? Math.max(...values) : 0;
+  const avg = values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0;
   return (
-    <div className={styles.trendGrid}>
-      {trendPanels.map((panel) => (
-        <TrendPanel key={panel.key} panel={panel} />
-      ))}
+    <div className={styles.trendTabsWrap}>
+      <div className={styles.trendTabsBar}>
+        <div className={styles.trendTabs} role="tablist" aria-label="Period">
+          {trendPanels.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              role="tab"
+              aria-selected={item.key === panel.key}
+              className={item.key === panel.key ? styles.trendTabActive : styles.trendTab}
+              onClick={() => setActiveKey(item.key)}
+            >
+              {item.title}
+            </button>
+          ))}
+        </div>
+        <p className={styles.trendSummary}>
+          Peak <strong>{formatShortCount(peak)}</strong>
+          <span aria-hidden="true">·</span>
+          Avg <strong>{avg >= 10 ? Math.round(avg) : avg.toFixed(1)}</strong>
+          <span className={styles.trendSummaryUnit}>per {panel.unit || "bucket"}</span>
+        </p>
+      </div>
+      <TrendPanel key={panel.key} panel={panel} bare />
     </div>
   );
 }
-

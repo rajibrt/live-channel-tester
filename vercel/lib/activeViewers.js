@@ -99,25 +99,34 @@ export async function getActiveViewerSnapshot({ activeWindowSeconds = 180, lookb
     return { count: viewers.length, viewers, generated_at: now.toISOString() };
   }
 
-  const { data: users } = await admin
-    .from("client_users")
-    .select("user_id,email,full_name,mobile_number,is_active")
-    .eq("is_active", true);
-
-  const activeUsers = Array.isArray(users) ? users : [];
-  if (!activeUsers.length) {
-    return { count: 0, viewers: [], generated_at: now.toISOString() };
-  }
-
-  const userIds = activeUsers.map((u) => String(u.user_id || "")).filter(Boolean);
+  // Signed-in viewers: read recent events first, then look up only the users
+  // that appear in them (an .in() over every client id is too long a query).
   const { data: events } = await admin
     .from("client_activity_events")
     .select("user_id,event_type,event_data,created_at")
-    .in("user_id", userIds)
     .in("event_type", [...ACTIVITY_EVENTS, "client_login"])
     .gte("created_at", lookback.toISOString())
+    .not("user_id", "is", null)
     .order("created_at", { ascending: false })
     .limit(10000);
+
+  const recentIds = [
+    ...new Set(
+      (Array.isArray(events) ? events : [])
+        .filter((evt) => ACTIVITY_EVENTS.has(String(evt?.event_type || "")) && safeDate(evt?.created_at) >= activeCutoff)
+        .map((evt) => String(evt?.user_id || "").trim())
+        .filter(Boolean)
+    ),
+  ];
+  if (!recentIds.length) {
+    return { count: 0, viewers: [], generated_at: now.toISOString() };
+  }
+
+  const { data: users } = await admin
+    .from("client_users")
+    .select("user_id,email,full_name,mobile_number,is_active")
+    .in("user_id", recentIds);
+  const activeUsers = (Array.isArray(users) ? users : []).filter((u) => u.is_active !== false);
 
   const byUser = new Map(
     activeUsers.map((u) => [

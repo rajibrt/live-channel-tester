@@ -3635,3 +3635,70 @@
 .deleteBtn:hover {
   background: color-mix(in oklab, var(--destructive) 68%, var(--card));
 }
+
+/* Overview viewer chart: period tabs (UserArrivalTrendCharts) */
+.trendTabsWrap {
+  min-width: 0;
+}
+
+.trendTabsBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.trendTabs {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 10px;
+  background: color-mix(in oklab, var(--foreground) 6%, transparent);
+}
+
+.trendTab,
+.trendTabActive {
+  border: 0;
+  border-radius: 8px;
+  padding: 4px 12px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  background: transparent;
+  color: var(--muted-foreground);
+}
+
+.trendTabActive {
+  background: var(--card);
+  color: var(--foreground);
+  box-shadow: var(--shadow-sm);
+}
+
+.trendSummary {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+
+.trendSummary strong {
+  font-size: 15px;
+  color: var(--foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+.trendSummaryUnit {
+  font-size: 11px;
+}
+
+.trendSvgBare {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 760 / 280;
+}

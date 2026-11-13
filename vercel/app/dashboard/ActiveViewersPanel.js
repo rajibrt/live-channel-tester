@@ -22,16 +22,19 @@ function formatDuration(totalSeconds) {
   return `${s}s`;
 }
 
-export default function ActiveViewersPanel({ title = "Watching Now", viewers = [] }) {
+export default function ActiveViewersPanel({ title = "Watching Now", viewers = [], className = "", labelClassName = "", valueClassName = "", hintClassName = "" }) {
   const count = Array.isArray(viewers) ? viewers.length : 0;
 
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
-        <button type="button" className={`${styles.statCard} ${styles.statCardButton}`}>
-          <p>{title}</p>
-          <strong>{count}</strong>
-          <small className={styles.metaMuted}>Click to view active sessions</small>
+        <button type="button" className={className || `${styles.statCard} ${styles.statCardButton}`}>
+          <p className={labelClassName || undefined}>
+            {className ? <span className={count ? "liveDotOn" : "liveDotOff"} aria-hidden="true" /> : null}
+            {title}
+          </p>
+          <strong className={valueClassName || undefined}>{count}</strong>
+          <small className={hintClassName || styles.metaMuted}>{count ? "View who is watching" : "No one in the last 3 min"}</small>
         </button>
       </AlertDialogTrigger>
 
@@ -39,7 +42,7 @@ export default function ActiveViewersPanel({ title = "Watching Now", viewers = [
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription>
-            Guest visitors and logged-in clients active on the website in the recent window.
+            Signed-in viewers active on the website in the last 3 minutes.
           </AlertDialogDescription>
         </AlertDialogHeader>
 

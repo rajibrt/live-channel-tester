@@ -1,597 +1,466 @@
 import Link from "next/link";
-import { Bell } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowDownRight,
+  ArrowUpRight,
+  Bell,
+  CheckCircle2,
+  Clapperboard,
+  Link2,
+  ListVideo,
+  Radio,
+  Tv,
+  UserCheck,
+  Activity,
+} from "lucide-react";
 import { getSupabaseAdmin } from "../../lib/supabaseAdmin";
 import { getActiveViewerSnapshot } from "../../lib/activeViewers";
 import { getDashboardReports } from "../../lib/dashboardReports";
 import { requireAdmin } from "../../lib/auth";
-import styles from "./page.module.css";
-import CopyUrlButton from "./CopyUrlButton";
+import base from "./page.module.css";
+import styles from "./overview.module.css";
 import ActiveViewersPanel from "./ActiveViewersPanel";
 import UserArrivalTrendCharts from "./UserArrivalTrendCharts";
 
 async function getData() {
   const supabase = getSupabaseAdmin();
-  const [{ data: playlists }, { data: tokens }, { data: jobRun }, { data: pushSubscriptions }, activeViewers, reports] = await Promise.all([
-    supabase
-      .from("playlists")
-      .select("slug,name,channel_count,updated_at")
-      .order("updated_at", { ascending: false }),
-    supabase
-      .from("playlist_tokens")
-      .select("playlist_slug,token,is_active")
-      .eq("is_active", true),
+  const [{ data: playlists }, { count: activeTokens }, { data: jobRun }, { data: pushRows }, activeViewers, reports] = await Promise.all([
+    supabase.from("playlists").select("slug,name,channel_count").order("updated_at", { ascending: false }),
+    supabase.from("playlist_tokens").select("token", { count: "exact", head: true }).eq("is_active", true),
     supabase
       .from("job_runs")
-      .select("job_name,last_run_at,last_status,last_message,last_total,last_live,last_dead,is_enabled")
+      .select("last_run_at,last_status,is_enabled")
       .eq("job_name", "playlist_health_hourly")
       .maybeSingle(),
-    supabase
-      .from("client_push_subscriptions")
-      .select("user_id,endpoint,is_active,updated_at")
-      .eq("is_active", true)
-      .order("updated_at", { ascending: false }),
+    supabase.from("client_push_subscriptions").select("user_id").eq("is_active", true).limit(10000),
     getActiveViewerSnapshot(),
     getDashboardReports(),
   ]);
-  const tokenBySlug = Object.fromEntries((tokens || []).map((t) => [t.playlist_slug, t.token]));
-  const activePushRows = Array.isArray(pushSubscriptions) ? pushSubscriptions.filter((row) => row?.user_id) : [];
-  const activePushUserIds = [...new Set(activePushRows.map((row) => String(row.user_id)))];
-
-  let pushEnabledClients = [];
-  if (activePushUserIds.length) {
-    const { data: clientUsers } = await supabase
-      .from("client_users")
-      .select("user_id,full_name,email,mobile_number,is_active,approval_status")
-      .in("user_id", activePushUserIds);
-
-    const clientById = new Map((clientUsers || []).map((row) => [String(row.user_id), row]));
-    const groupedByUser = activePushRows.reduce((map, row) => {
-      const key = String(row.user_id);
-      const bucket = map.get(key) || [];
-      bucket.push(row);
-      map.set(key, bucket);
-      return map;
-    }, new Map());
-
-    pushEnabledClients = Array.from(groupedByUser.entries())
-      .map(([userId, rows]) => {
-        const client = clientById.get(userId) || {};
-        const latestUpdatedAt = rows
-          .map((row) => row?.updated_at)
-          .filter(Boolean)
-          .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0] || null;
-
-        return {
-          user_id: userId,
-          full_name: String(client.full_name || "").trim(),
-          email: String(client.email || "").trim(),
-          mobile_number: String(client.mobile_number || "").trim(),
-          approval_status: String(client.approval_status || "").trim(),
-          is_active: typeof client.is_active === "boolean" ? client.is_active : true,
-          subscription_count: rows.length,
-          updated_at: latestUpdatedAt,
-        };
-      })
-      .sort((a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime());
-  }
-
-  return {
-    playlists: playlists || [],
-    tokenBySlug,
-    jobRun: jobRun || null,
-    activeViewers,
-    reports,
-    pushEnabledClients,
-  };
+  const pushUsers = new Set((pushRows || []).map((row) => String(row?.user_id || "")).filter(Boolean)).size;
+  return { playlists: playlists || [], activeTokens: Number(activeTokens || 0), jobRun: jobRun || null, pushUsers, activeViewers, reports };
 }
 
 function formatDuration(totalSeconds) {
-  const seconds = Math.max(0, Number(totalSeconds || 0));
+  const seconds = Math.max(0, Math.round(Number(totalSeconds || 0)));
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
-  const s = Math.floor(seconds % 60);
   if (h > 0) return `${h}h ${m}m`;
-  if (m > 0) return `${m}m ${s}s`;
-  return `${s}s`;
+  if (m > 0) return `${m}m`;
+  return `${seconds}s`;
 }
 
-function toPercent(part, whole) {
-  const p = Number(part || 0);
-  const w = Number(whole || 0);
-  if (w <= 0) return 0;
-  return Math.max(0, Math.min(100, Math.round((p / w) * 100)));
+function formatCount(value) {
+  return Number(value || 0).toLocaleString("en-US");
 }
 
-function formatShortCount(value) {
-  const n = Number(value || 0);
-  if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
-  return String(n);
+function timeAgo(value) {
+  const at = new Date(value || "");
+  if (Number.isNaN(at.getTime())) return "-";
+  const minutes = Math.max(0, Math.round((Date.now() - at.getTime()) / 60000));
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 48) return `${hours}h ago`;
+  return `${Math.round(hours / 24)}d ago`;
+}
+
+// Change against the previous period. `lowerIsBetter` flips the colour.
+function Delta({ current, previous, lowerIsBetter = false, points = false }) {
+  const cur = Number(current || 0);
+  const prev = Number(previous || 0);
+  if (!prev && !cur) return <span className={styles.deltaFlat}>No change</span>;
+  if (!prev) return <span className={lowerIsBetter ? styles.deltaBad : styles.deltaGood}>New</span>;
+  const diff = points ? cur - prev : ((cur - prev) / prev) * 100;
+  if (Math.abs(diff) < 0.5) return <span className={styles.deltaFlat}>No change</span>;
+  const up = diff > 0;
+  const good = lowerIsBetter ? !up : up;
+  const Icon = up ? ArrowUpRight : ArrowDownRight;
+  const label = points
+    ? `${Math.abs(diff).toFixed(1)} pts`
+    : Math.abs(diff) >= 1000 ? ">999%" : `${Math.round(Math.abs(diff))}%`;
+  return (
+    <span className={good ? styles.deltaGood : styles.deltaBad}>
+      <Icon size={13} aria-hidden="true" />
+      {label}
+    </span>
+  );
+}
+
+function Kpi({ label, value, delta, sub }) {
+  return (
+    <article className={styles.kpi}>
+      <p className={styles.kpiLabel}>{label}</p>
+      <strong className={styles.kpiValue}>{value}</strong>
+      <div className={styles.kpiFoot}>
+        {delta}
+        {sub ? <span className={styles.kpiSub}>{sub}</span> : null}
+      </div>
+    </article>
+  );
+}
+
+function Thumb({ src, alt, fallback, poster = false }) {
+  return (
+    <span className={poster ? styles.poster : styles.thumb} aria-hidden="true">
+      {src ? <img src={src} alt={alt} loading="lazy" /> : <span>{fallback}</span>}
+    </span>
+  );
+}
+
+function initials(name) {
+  return String(name || "?")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+}
+
+function RankList({ rows, empty, render }) {
+  if (!rows.length) return <p className={styles.empty}>{empty}</p>;
+  const max = Math.max(...rows.map((row) => row.metric), 1);
+  return (
+    <ol className={styles.rankList}>
+      {rows.map((row, index) => {
+        const item = render(row);
+        return (
+          <li key={item.key} className={styles.rankRow}>
+            <span className={styles.rankNo}>{index + 1}</span>
+            {item.thumb}
+            <span className={styles.rankBody}>
+              <span className={styles.rankName} title={item.name}>{item.name}</span>
+              {item.meta ? <span className={styles.rankMeta}>{item.meta}</span> : null}
+              <span className={styles.rankBar} aria-hidden="true">
+                <span style={{ width: `${Math.max(6, Math.round((row.metric / max) * 100))}%` }} />
+              </span>
+            </span>
+            <span className={styles.rankValue}>{item.value}</span>
+          </li>
+        );
+      })}
+    </ol>
+  );
 }
 
 export default async function DashboardPage() {
-  // Layout and page render in parallel; check auth here too so the heavy
-  // report queries never run for signed-out visitors.
+  // Layout and page render in parallel; check auth here too so the report
+  // queries never run for signed-out visitors.
   await requireAdmin();
-  const { playlists, tokenBySlug, jobRun, activeViewers, reports, pushEnabledClients } = await getData();
-  const base = process.env.PUBLIC_PLAYLIST_BASE_URL || "";
-  const activeTokenCount = Object.keys(tokenBySlug).length;
-  const lastRunText = jobRun?.last_run_at
-    ? new Date(jobRun.last_run_at).toLocaleString()
-    : "Not run yet";
-  const cronEnabled = typeof jobRun?.is_enabled === "boolean" ? jobRun.is_enabled : true;
-  const cronOk = cronEnabled && String(jobRun?.last_status || "").toLowerCase() === "ok";
-  const loginMethods = Object.entries(reports?.login_methods_24h || {}).slice(0, 5);
-  const totalLogins24 = loginMethods.reduce((sum, [, value]) => sum + Number(value || 0), 0);
-  const topChannels7d = Array.isArray(reports?.top_channels_7d) ? reports.top_channels_7d : [];
-  const topChannelMax = Math.max(...topChannels7d.map((row) => Number(row?.watch_seconds || 0)), 0);
+  const { playlists, activeTokens, jobRun, pushUsers, activeViewers, reports } = await getData();
+  const { kpi, users, link_health: health, radio, totals } = reports;
+  const healthSlug = health.primary_playlist || playlists[0]?.slug || "";
+  const healthHref = healthSlug ? `/dashboard/playlists/${healthSlug}?tab=health` : "/dashboard/playlists";
 
-  const pendingApprovals = Number(reports?.pending_approvals || 0);
-  const approvedUsers = Number(reports?.approved_users || 0);
-  const approvalTotal = pendingApprovals + approvedUsers;
-  const pendingPct = toPercent(pendingApprovals, approvalTotal);
-  const approvedPct = Math.max(0, 100 - pendingPct);
-  const visitorTrend = reports?.visitor_trend || reports?.user_login_trend || {};
-  const guestVisitorTrend = reports?.guest_visitor_trend || {};
-  const clientViewerTrend = reports?.client_viewer_trend || {};
+  const attention = [];
+  if (users.pending > 0) {
+    attention.push({ key: "pending", tone: "warn", icon: UserCheck, text: `${users.pending} sign-up${users.pending === 1 ? "" : "s"} waiting for approval`, href: "/dashboard/clients" });
+  }
+  if (health.failing_channels > 0) {
+    attention.push({ key: "failing", tone: "bad", icon: AlertTriangle, text: `${health.failing_channels} channel${health.failing_channels === 1 ? "" : "s"} failing for viewers`, href: healthHref });
+  }
+  if (health.dead_channels > 0) {
+    attention.push({ key: "dead", tone: "warn", icon: Tv, text: `${health.dead_channels} dead channel${health.dead_channels === 1 ? "" : "s"} hidden from viewers`, href: healthHref });
+  }
+  if (health.single_link_channels > 0) {
+    attention.push({ key: "single", tone: "info", icon: Link2, text: `${formatCount(health.single_link_channels)} channels have no backup link`, href: healthHref });
+  }
+
+  const trend = reports.viewer_trend;
   const trendPanels = [
-    { key: "all-day", title: "All Viewers 24h", data: Array.isArray(visitorTrend.day) ? visitorTrend.day : [] },
-    { key: "all-week", title: "All Viewers 7d", data: Array.isArray(visitorTrend.week) ? visitorTrend.week : [] },
-    { key: "all-month", title: "All Viewers 30d", data: Array.isArray(visitorTrend.month) ? visitorTrend.month : [] },
-    { key: "all-year", title: "All Viewers 12m", data: Array.isArray(visitorTrend.year) ? visitorTrend.year : [] },
+    { key: "day", title: "24h", unit: "hour", data: trend.day },
+    { key: "week", title: "7d", unit: "day", data: trend.week },
+    { key: "month", title: "30d", unit: "day", data: trend.month },
+    { key: "year", title: "12m", unit: "month", data: trend.year },
   ];
-  const guestTrendPanels = [
-    { key: "guest-day", title: "Guests 24h", data: Array.isArray(guestVisitorTrend.day) ? guestVisitorTrend.day : [] },
-    { key: "guest-week", title: "Guests 7d", data: Array.isArray(guestVisitorTrend.week) ? guestVisitorTrend.week : [] },
-    { key: "client-day", title: "Logged-in 24h", data: Array.isArray(clientViewerTrend.day) ? clientViewerTrend.day : [] },
-    { key: "client-week", title: "Logged-in 7d", data: Array.isArray(clientViewerTrend.week) ? clientViewerTrend.week : [] },
-  ];
-  const topViewerChannels7d = Array.isArray(reports?.top_viewer_channels_7d) ? reports.top_viewer_channels_7d : [];
-  const recentViewerEvents = Array.isArray(reports?.recent_viewer_events) ? reports.recent_viewer_events : [];
+
+  const cronOn = Boolean(jobRun?.is_enabled);
+  const totalChannels = playlists.reduce((sum, p) => sum + (Number(p.channel_count) || 0), 0);
+  const loginTotal = users.logins_24h || 0;
 
   return (
-    <>
-      <section className={`${styles.stats} ${styles.statsCompact4}`}>
-        <article className={styles.statCard}>
-          <p>Total Playlists</p>
-          <strong>{playlists.length}</strong>
-        </article>
-        <article className={styles.statCard}>
-          <p>Active Tokens</p>
-          <strong>{activeTokenCount}</strong>
-        </article>
-        <article className={styles.statCard}>
-          <p>Total Channels</p>
-          <strong>{playlists.reduce((sum, p) => sum + (Number(p.channel_count) || 0), 0)}</strong>
-        </article>
-        <ActiveViewersPanel title="Watching Now" viewers={activeViewers?.viewers || []} />
+    <div className={styles.overview}>
+      <section className={styles.attention} aria-label="Needs attention">
+        {attention.length ? (
+          attention.map(({ key, tone, icon: Icon, text, href }) => (
+            <Link key={key} href={href} className={`${styles.attentionItem} ${styles[`tone_${tone}`]}`}>
+              <Icon size={15} aria-hidden="true" />
+              <span>{text}</span>
+            </Link>
+          ))
+        ) : (
+          <span className={`${styles.attentionItem} ${styles.tone_ok}`}>
+            <CheckCircle2 size={15} aria-hidden="true" />
+            <span>All clear: no pending sign-ups or failing channels</span>
+          </span>
+        )}
       </section>
 
-      <section className={`${styles.stats} ${styles.statsCompact4}`}>
-        <article className={styles.statCard}>
-          <p>Guest Visitors (24h)</p>
-          <strong>{Number(reports?.guest_unique_24h || 0)}</strong>
-          <small className={styles.metaMuted}>7d unique: {Number(reports?.guest_unique_7d || 0)}</small>
-        </article>
-        <article className={styles.statCard}>
-          <p>Logged-in Viewers (24h)</p>
-          <strong>{Number(reports?.client_unique_24h || 0)}</strong>
-          <small className={styles.metaMuted}>7d unique: {Number(reports?.client_unique_7d || 0)}</small>
-        </article>
-        <article className={styles.statCard}>
-          <p>Total Viewers (24h)</p>
-          <strong>{Number(reports?.total_unique_viewers_24h || 0)}</strong>
-          <small className={styles.metaMuted}>Events: {Number(reports?.guest_events_24h || 0) + Number(reports?.client_viewer_events_24h || 0)}</small>
-        </article>
-        <article className={styles.statCard}>
-          <p>Guest Watch Time (24h)</p>
-          <strong>{formatDuration(reports?.guest_watch_seconds_24h)}</strong>
-          <small className={styles.metaMuted}>Tracked without login</small>
-        </article>
+      <section className={styles.kpiGrid} aria-label="Key numbers">
+        <ActiveViewersPanel
+          title="Watching now"
+          viewers={activeViewers?.viewers || []}
+          className={`${styles.kpi} ${styles.kpiButton}`}
+          labelClassName={styles.kpiLabel}
+          valueClassName={styles.kpiValue}
+          hintClassName={styles.kpiSub}
+        />
+        <Kpi
+          label="Active viewers · 24h"
+          value={formatCount(kpi.active_viewers_24h.current)}
+          delta={<Delta {...kpi.active_viewers_24h} />}
+          sub="vs previous 24h"
+        />
+        <Kpi
+          label="Watch time · 24h"
+          value={formatDuration(kpi.watch_seconds_24h.current)}
+          delta={<Delta {...kpi.watch_seconds_24h} />}
+          sub="live TV"
+        />
+        <Kpi
+          label="Plays · 24h"
+          value={formatCount(kpi.plays_24h.current)}
+          delta={<Delta {...kpi.plays_24h} />}
+          sub="TV + movies"
+        />
+        <Kpi
+          label="Failure rate · 24h"
+          value={`${kpi.failure_rate_24h.current}%`}
+          delta={<Delta {...kpi.failure_rate_24h} lowerIsBetter points />}
+          sub="of TV plays"
+        />
+        <Kpi
+          label="New users · 7d"
+          value={formatCount(kpi.new_users_7d.current)}
+          delta={<Delta {...kpi.new_users_7d} />}
+          sub="vs previous 7d"
+        />
       </section>
 
-      <section className={`${styles.stats} ${styles.statsCompact4}`}>
-        <article className={styles.statCard}>
-          <p>Total Sessions</p>
-          <strong>{Number(reports?.total_sessions || 0)}</strong>
-          <small className={styles.metaMuted}>Last 24h: {Number(reports?.sessions_24h || 0)}</small>
-        </article>
-        <article className={styles.statCard}>
-          <p>Total Users</p>
-          <strong>{Number(reports?.total_users || 0)}</strong>
-          <small className={styles.metaMuted}>New users (7d): {Number(reports?.new_users_7d || 0)}</small>
-        </article>
-        <article className={styles.statCard}>
-          <p>Total Watch Sessions</p>
-          <strong>{Number(reports?.total_watch_sessions || 0)}</strong>
-          <small className={styles.metaMuted}>Last 24h: {Number(reports?.watch_sessions_24h || 0)}</small>
-        </article>
-        <article className={styles.statCard}>
-          <p>Client Approval</p>
-          <strong>{pendingApprovals} Pending</strong>
-          <small className={styles.metaMuted}>Approved: {approvedUsers} | Facebook: {Number(reports?.facebook_users || 0)}</small>
-        </article>
-      </section>
-
-      <section className={`${styles.stats} ${styles.statsCompact4}`}>
-        <article className={styles.statCard}>
-          <p>Watch Time (24h)</p>
-          <strong>{formatDuration(reports?.watch_seconds_24h)}</strong>
-          <small className={styles.metaMuted}>Active users (24h): {Number(reports?.active_users_24h || 0)}</small>
-        </article>
-        <article className={styles.statCard}>
-          <p>Total Playback Attempts</p>
-          <strong>{Number(reports?.total_playback_attempts || 0)}</strong>
-          <small className={styles.metaMuted}>Last 7 days: {Number(reports?.playback_attempts_7d || 0)}</small>
-        </article>
-        <article className={styles.statCard}>
-          <p>Total Playback Failures</p>
-          <strong>{Number(reports?.total_playback_failures || 0)}</strong>
-          <small className={styles.metaMuted}>Last 24h: {Number(reports?.playback_failures_24h || 0)}</small>
-        </article>
-        <article className={styles.statCard}>
-          <p>Avg Session (24h)</p>
-          <strong>{formatDuration(reports?.avg_watch_seconds_per_session_24h)}</strong>
-          <small className={styles.metaMuted}>
-            Unique channels: {Number(reports?.unique_channels_24h || 0)}
-          </small>
-        </article>
-      </section>
-
-      <section className={`${styles.stats} ${styles.statsCompact3}`}>
-        <article className={styles.card}>
-          <h2>Push Enabled</h2>
-          <p className={styles.hint}>Clients who currently have push notifications enabled.</p>
-          <p className={styles.metaLine}>
-            <Bell size={14} />
-            Total Active: <strong>{pushEnabledClients.length}</strong>
-          </p>
-        </article>
-      </section>
-
-      <section className={styles.chartsGrid}>
-        <article className={`${styles.card} ${styles.chartCard}`}>
-          <h2>Login Mix (24h)</h2>
-          <p className={styles.hint}>Sign-in methods in the last 24 hours.</p>
-          <div className={styles.miniBars}>
-            {loginMethods.length ? (
-              loginMethods.map(([method, count], index) => {
-                const safeCount = Number(count || 0);
-                const pct = toPercent(safeCount, totalLogins24 || 1);
-                return (
-                  <div key={method} className={styles.miniBarRow}>
-                    <div className={styles.miniBarLabel}>
-                      <span>{method}</span>
-                      <strong>{formatShortCount(safeCount)}</strong>
-                    </div>
-                    <div className={styles.miniBarTrack}>
-                      <span
-                        className={`${styles.miniBarFill} ${styles[`barTone${(index % 5) + 1}`]}`}
-                        style={{ width: `${Math.max(8, pct)}%` }}
-                        aria-hidden="true"
-                      />
-                    </div>
-                  </div>
-                );
-              })
-            ) : (
-              <p className={styles.pending}>No login method data yet.</p>
-            )}
-          </div>
-        </article>
-
-        <article className={`${styles.card} ${styles.chartCard}`}>
-          <h2>Approval Snapshot</h2>
-          <p className={styles.hint}>Current user approval state.</p>
-          <div className={styles.donutWrap}>
-            <div
-              className={styles.donutChart}
-              style={{
-                background: `conic-gradient(var(--chart-2) 0% ${approvedPct}%, var(--destructive) ${approvedPct}% 100%)`,
-              }}
-              aria-hidden="true"
-            >
-              <div className={styles.donutCenter}>
-                <strong>{approvalTotal}</strong>
-                <span>Users</span>
-              </div>
+      <section className={styles.mainGrid}>
+        <article className={styles.panel}>
+          <header className={styles.panelHead}>
+            <div>
+              <h2>Viewers</h2>
+              <p>Unique signed-in viewers</p>
             </div>
-            <div className={styles.donutLegend}>
-              <p><span className={`${styles.legendDot} ${styles.legendApproved}`} /> Approved: {approvedUsers}</p>
-              <p><span className={`${styles.legendDot} ${styles.legendPending}`} /> Pending: {pendingApprovals}</p>
-            </div>
-          </div>
-        </article>
-
-        <article className={`${styles.card} ${styles.chartCard}`}>
-          <h2>Top Channels (7d)</h2>
-          <p className={styles.hint}>Quick watch-time ranking.</p>
-          <div className={styles.miniBars}>
-            {topChannels7d.slice(0, 5).length ? (
-              topChannels7d.slice(0, 5).map((row, index) => {
-                const seconds = Number(row?.watch_seconds || 0);
-                const pct = topChannelMax > 0 ? Math.round((seconds / topChannelMax) * 100) : 0;
-                return (
-                  <div key={`${row.channel_id}-${index}`} className={styles.miniBarRow}>
-                    <div className={styles.miniBarLabel}>
-                      <span title={row.channel_name || row.channel_id || "-"}>{row.channel_name || row.channel_id || "-"}</span>
-                      <strong>{formatDuration(seconds)}</strong>
-                    </div>
-                    <div className={styles.miniBarTrack}>
-                      <span
-                        className={`${styles.miniBarFill} ${styles[`barTone${(index % 5) + 1}`]}`}
-                        style={{ width: `${Math.max(10, pct)}%` }}
-                        aria-hidden="true"
-                      />
-                    </div>
-                  </div>
-                );
-              })
-            ) : (
-              <p className={styles.pending}>No watch data found for last 7 days.</p>
-            )}
-          </div>
-        </article>
-      </section>
-
-      <section className={styles.lineTrendSection}>
-        <article className={`${styles.card} ${styles.chartCard}`}>
-          <h2>Viewer Analytics</h2>
-          <p className={styles.hint}>Unique guest and logged-in viewers grouped by day, week, month, and year.</p>
+          </header>
           <UserArrivalTrendCharts trendPanels={trendPanels} />
         </article>
+
+        <article className={styles.panel}>
+          <header className={styles.panelHead}>
+            <div>
+              <h2>Users</h2>
+              <p>{formatCount(users.total)} accounts</p>
+            </div>
+            <Link href="/dashboard/clients" className={styles.panelLink}>Clients</Link>
+          </header>
+          <dl className={styles.facts}>
+            <div><dt>Approved</dt><dd>{formatCount(users.approved)}</dd></div>
+            <div><dt>Pending</dt><dd className={users.pending ? styles.factWarn : undefined}>{formatCount(users.pending)}</dd></div>
+            <div><dt>Facebook sign-ups</dt><dd>{formatCount(users.facebook)}</dd></div>
+            <div><dt><Bell size={13} aria-hidden="true" /> Push enabled</dt><dd>{formatCount(pushUsers)}</dd></div>
+          </dl>
+          <h3 className={styles.subHead}>Sign-ins · 24h <span>{loginTotal}</span></h3>
+          {users.login_methods_24h.length ? (
+            <div className={styles.splitBar} aria-hidden="true">
+              {users.login_methods_24h.map(([method, count], index) => (
+                <span key={method} className={styles[`seg${(index % 4) + 1}`]} style={{ flexGrow: count }} />
+              ))}
+            </div>
+          ) : null}
+          <ul className={styles.legend}>
+            {users.login_methods_24h.length ? (
+              users.login_methods_24h.map(([method, count], index) => (
+                <li key={method}>
+                  <span className={`${styles.legendDot} ${styles[`seg${(index % 4) + 1}`]}`} />
+                  {method.replace(/_/g, " ")}
+                  <strong>{count}</strong>
+                </li>
+              ))
+            ) : (
+              <li className={styles.empty}>No sign-ins in the last 24 hours.</li>
+            )}
+          </ul>
+          <h3 className={styles.subHead}>All time</h3>
+          <dl className={styles.facts}>
+            <div><dt>Sign-ins</dt><dd>{formatCount(totals.logins)}</dd></div>
+            <div><dt>TV plays</dt><dd>{formatCount(totals.playback_attempts)}</dd></div>
+          </dl>
+        </article>
       </section>
 
-      <section className={styles.lineTrendSection}>
-        <article className={`${styles.card} ${styles.chartCard}`}>
-          <h2>Guest vs Logged-in</h2>
-          <p className={styles.hint}>Separate comparison for visitors without login and signed-in clients.</p>
-          <UserArrivalTrendCharts trendPanels={guestTrendPanels} />
+      <section className={styles.topGrid} aria-label="Top content">
+        <article className={styles.panel}>
+          <header className={styles.panelHead}>
+            <div>
+              <h2><Tv size={16} aria-hidden="true" /> Top channels</h2>
+              <p>Watch time, last 7 days</p>
+            </div>
+          </header>
+          <RankList
+            rows={reports.top_channels_7d.map((row) => ({ ...row, metric: row.watch_seconds }))}
+            empty="No watch history in the last 7 days."
+            render={(row) => ({
+              key: row.channel_id,
+              name: row.channel_name,
+              meta: `${row.viewers} viewer${row.viewers === 1 ? "" : "s"}`,
+              value: formatDuration(row.watch_seconds),
+              thumb: <Thumb src={row.logo_url} alt="" fallback={initials(row.channel_name)} />,
+            })}
+          />
+        </article>
+
+        <article className={styles.panel}>
+          <header className={styles.panelHead}>
+            <div>
+              <h2><Clapperboard size={16} aria-hidden="true" /> Top movies</h2>
+              <p>Viewers, last 7 days · {formatCount(totals.published_movies)} published</p>
+            </div>
+            <Link href="/dashboard/movies" className={styles.panelLink}>Movies</Link>
+          </header>
+          <RankList
+            rows={reports.top_movies_7d.map((row) => ({ ...row, metric: row.viewers }))}
+            empty="No movie plays in the last 7 days."
+            render={(row) => ({
+              key: row.movie_id,
+              name: row.title,
+              meta: [row.release_year, `${row.plays} play${row.plays === 1 ? "" : "s"}`].filter(Boolean).join(" · "),
+              value: `${row.viewers}`,
+              thumb: <Thumb src={row.poster_url} alt="" fallback={initials(row.title)} poster />,
+            })}
+          />
+        </article>
+
+        <article className={styles.panel}>
+          <header className={styles.panelHead}>
+            <div>
+              <h2><Radio size={16} aria-hidden="true" /> Top radio</h2>
+              <p>
+                {radio.available
+                  ? `Plays since launch · ${radio.listened_24h} of ${radio.stations} stations played today`
+                  : "Radio tables not found"}
+              </p>
+            </div>
+            <Link href="/dashboard/radio" className={styles.panelLink}>Radio</Link>
+          </header>
+          <RankList
+            rows={(radio.top || []).map((row) => ({ ...row, metric: row.plays }))}
+            empty="No radio plays recorded yet."
+            render={(row) => ({
+              key: row.id,
+              name: row.name,
+              meta: row.frequency,
+              value: formatCount(row.plays),
+              thumb: <Thumb src={row.logo_url} alt="" fallback={initials(row.name)} />,
+            })}
+          />
         </article>
       </section>
 
-      <section className={styles.grid}>
-        <article className={styles.card}>
-          <h2>Playlists</h2>
-          <p className={styles.hint}>Create/update playlist and rotate permanent token.</p>
-          <Link href="/dashboard/playlists" className={styles.navCta}>Open Playlists</Link>
+      <section className={styles.reliabilityGrid} aria-label="Reliability">
+        <article className={styles.panel}>
+          <header className={styles.panelHead}>
+            <div>
+              <h2>Failed plays by channel</h2>
+              <p>Player errors reported by viewers, last 7 days</p>
+            </div>
+          </header>
+          {reports.failed_channels_7d.length ? (
+            <div className={base.tableWrap}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th>Channel</th>
+                    <th>Failed</th>
+                    <th>Tries</th>
+                    <th>Rate</th>
+                    <th>Last failure</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {reports.failed_channels_7d.map((row) => (
+                    <tr key={row.channel_id}>
+                      <td className={styles.cellName}>{row.channel_name}</td>
+                      <td>{row.failures}</td>
+                      <td>{row.attempts}</td>
+                      <td>
+                        <span className={row.failure_rate_pct >= 50 ? styles.rateBad : row.failure_rate_pct >= 20 ? styles.rateWarn : styles.rateOk}>
+                          {row.failure_rate_pct}%
+                        </span>
+                      </td>
+                      <td className={styles.cellMuted}>{timeAgo(row.last_failed_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className={styles.empty}>No failed plays in the last 7 days.</p>
+          )}
         </article>
-        <article className={styles.card}>
-          <h2>Channels</h2>
-          <p className={styles.hint}>Attach stream URLs and metadata to a playlist.</p>
-          <Link href="/dashboard/channels" className={styles.navCta}>Open Channels</Link>
+
+        <article className={styles.panel}>
+          <header className={styles.panelHead}>
+            <div>
+              <h2>Link health</h2>
+              <p>From viewer playback results on every link</p>
+            </div>
+            <Link href={healthHref} className={styles.panelLink}>Health</Link>
+          </header>
+          <dl className={styles.healthStats}>
+            <div><dt>Live</dt><dd className={styles.factOk}>{formatCount(health.live_channels)}</dd></div>
+            <div><dt>Dead</dt><dd className={health.dead_channels ? styles.factWarn : undefined}>{formatCount(health.dead_channels)}</dd></div>
+            <div><dt>Failing</dt><dd className={health.failing_channels ? styles.factBad : undefined}>{formatCount(health.failing_channels)}</dd></div>
+            <div><dt>One link only</dt><dd>{formatCount(health.single_link_channels)}</dd></div>
+          </dl>
+          <h3 className={styles.subHead}>Failing for viewers</h3>
+          {health.failing_list.length ? (
+            <ul className={styles.failList}>
+              {health.failing_list.map((row) => (
+                <li key={row.channel_id}>
+                  <Thumb src={row.logo_url} alt="" fallback={initials(row.channel_name)} />
+                  <span className={styles.rankBody}>
+                    <span className={styles.rankName}>{row.channel_name}</span>
+                    <span className={styles.rankMeta}>
+                      {row.failures} failed · {row.plays} played · {row.playlist_slug}
+                    </span>
+                  </span>
+                  <span className={styles.cellMuted}>{timeAgo(row.last_failed_at)}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className={styles.empty}>No channel is failing for viewers.</p>
+          )}
         </article>
-        <article className={styles.card}>
-          <h2>Client Users</h2>
-          <p className={styles.hint}>Create viewer accounts and control login access.</p>
-          <Link href="/dashboard/clients" className={styles.navCta}>Open Clients</Link>
-        </article>
-        <article className={styles.card}>
-          <h2>Push Enabled</h2>
-          <p className={styles.hint}>Clients who currently have push notifications enabled.</p>
-          <p className={styles.metaLine}>
-            <Bell size={14} />
-            Total Active: <strong>{pushEnabledClients.length}</strong>
-          </p>
-        </article>
-        <article className={styles.card}>
-          <h2>Articles</h2>
-          <p className={styles.hint}>Manage editorial articles, guides, and featured reading content.</p>
-          <Link href="/dashboard/articles" className={styles.navCta}>Open Articles</Link>
-        </article>
-        <article className={styles.card}>
-          <h2>Announcements</h2>
-          <p className={styles.hint}>Post ticker updates, maintenance notices, and alert-style announcements.</p>
-          <Link href="/dashboard/announcements" className={styles.navCta}>Open Announcements</Link>
-        </article>
-        <article className={styles.card}>
-          <h2>Last Cron Run</h2>
-          <p className={styles.hint}>Hourly playlist health auto-check status.</p>
-          <p className={styles.metaLine}>
-            <span className={`${styles.statusDot} ${cronOk ? styles.statusLive : styles.statusDead}`} aria-hidden="true" />
-            <strong>{lastRunText}</strong> | Cron: <strong>{cronEnabled ? "ON" : "OFF"}</strong>
-          </p>
-          <p className={styles.metaLine}>
-            Total: <strong>{Number(jobRun?.last_total || 0)}</strong> | LIVE: <strong>{Number(jobRun?.last_live || 0)}</strong> | DEAD: <strong>{Number(jobRun?.last_dead || 0)}</strong>
-          </p>
-          {jobRun?.last_message ? <p className={styles.hint}>{jobRun.last_message}</p> : null}
-          <form method="post" action="/api/admin/cron/toggle" className={styles.metaActions}>
-            <input type="hidden" name="enabled" value={cronEnabled ? "false" : "true"} />
-            <button type="submit" className={cronEnabled ? styles.secondaryBtn : styles.primaryBtn}>
-              Turn Cron {cronEnabled ? "OFF" : "ON"}
-            </button>
+      </section>
+
+      <section className={styles.systemStrip} aria-label="Library and system">
+        <Link href="/dashboard/playlists" className={styles.systemItem}>
+          <ListVideo size={15} aria-hidden="true" />
+          <span><strong>{playlists.length}</strong> playlists · <strong>{formatCount(totalChannels)}</strong> channel slots · <strong>{activeTokens}</strong> active M3U link{activeTokens === 1 ? "" : "s"}</span>
+        </Link>
+        <Link href="/dashboard/movies" className={styles.systemItem}>
+          <Clapperboard size={15} aria-hidden="true" />
+          <span><strong>{formatCount(totals.published_movies)}</strong> movies</span>
+        </Link>
+        <Link href="/dashboard/radio" className={styles.systemItem}>
+          <Radio size={15} aria-hidden="true" />
+          <span><strong>{radio.stations || 0}</strong> radio stations</span>
+        </Link>
+        <span className={styles.systemItem}>
+          <Activity size={15} aria-hidden="true" />
+          <span>
+            Server auto-check: <strong>{cronOn ? "On" : "Off"}</strong>
+            {jobRun?.last_run_at ? ` · last run ${new Date(jobRun.last_run_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}` : ""}
+          </span>
+          <form method="post" action="/api/admin/cron/toggle" className={styles.inlineForm}>
+            <input type="hidden" name="enabled" value={cronOn ? "false" : "true"} />
+            <button type="submit" className={styles.tinyBtn}>{cronOn ? "Turn off" : "Turn on"}</button>
           </form>
-        </article>
-        <article className={styles.card}>
-          <h2>Local Check</h2>
-          <p className={styles.hint}>Run Local IP/ISP check with progress + live preview.</p>
-          <Link href="/dashboard/local-check" className={styles.navCta}>Open Local Check</Link>
-        </article>
+        </span>
       </section>
-
-      <details className={`${styles.card} ${styles.tableCard} ${styles.collapsibleCard}`}>
-        <summary className={styles.collapsibleSummary}>Detailed Tables</summary>
-        <div className={styles.collapsibleBody}>
-          <h2>Top Channels (Last 7 Days)</h2>
-          <p className={styles.hint}>Highest total watch-time channels from client watch history.</p>
-          <div className={styles.tableWrap}>
-            <table>
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Channel</th>
-                  <th>Views</th>
-                  <th>Watch Time</th>
-                </tr>
-              </thead>
-              <tbody>
-                {topChannels7d.length ? (
-                  topChannels7d.map((row, index) => (
-                    <tr key={`${row.channel_id}-${index}`}>
-                      <td>{index + 1}</td>
-                      <td>{row.channel_name || row.channel_id || "-"}</td>
-                      <td>{Number(row.views || 0)}</td>
-                      <td>{formatDuration(row.watch_seconds)}</td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={4} className={styles.pending}>No watch data found for the last 7 days.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          <h2 className={styles.tableTitleGap}>Playlists</h2>
-          <div className={styles.tableWrap}>
-            <table>
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Slug</th>
-                  <th>Channels</th>
-                  <th>Token URL</th>
-                </tr>
-              </thead>
-              <tbody>
-                {playlists.map((p) => {
-                  const token = tokenBySlug[p.slug];
-                  const url = token && base ? `${base}/playlist/${token}.m3u` : "";
-                  return (
-                    <tr key={p.slug}>
-                      <td>
-                        <Link href={`/dashboard/playlists/${p.slug}`} className={styles.url}>
-                          {p.name}
-                        </Link>
-                      </td>
-                      <td>{p.slug}</td>
-                      <td>{p.channel_count}</td>
-                      <td>
-                        {url ? (
-                          <div className={styles.urlCell}>
-                            <a href={url} target="_blank" rel="noreferrer" className={styles.url}>
-                              {url}
-                            </a>
-                            <CopyUrlButton value={url} />
-                          </div>
-                        ) : (
-                          <span className={styles.pending}>Generate token</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          <h2 className={styles.tableTitleGap}>Top Failed Channels (Last 7 Days)</h2>
-          <p className={styles.hint}>Channels users repeatedly tried to play but failed.</p>
-          <div className={styles.tableWrap}>
-            <table>
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Channel</th>
-                  <th>Failures</th>
-                  <th>Attempts</th>
-                  <th>Fail Rate</th>
-                  <th>Last Failed</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(Array.isArray(reports?.top_playback_failures_7d) ? reports.top_playback_failures_7d : []).length ? (
-                  (reports.top_playback_failures_7d || []).map((row, index) => (
-                    <tr key={`${row.channel_id}-${index}`}>
-                      <td>{index + 1}</td>
-                      <td>{row.channel_name || row.channel_id || "-"}</td>
-                      <td>{Number(row.failures || 0)}</td>
-                      <td>{Number(row.attempts || 0)}</td>
-                      <td>{Number(row.failure_rate_pct || 0)}%</td>
-                      <td>{row.last_failed_at ? new Date(row.last_failed_at).toLocaleString() : "-"}</td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={6} className={styles.pending}>No failed playback data found for the last 7 days.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          <h2 className={styles.tableTitleGap}>Top Viewer Channels (Guest + Logged-in, Last 7 Days)</h2>
-          <p className={styles.hint}>Channels ranked by unique tracked viewers across guest and client sessions.</p>
-          <div className={styles.tableWrap}>
-            <table>
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Channel</th>
-                  <th>Guest Viewers</th>
-                  <th>Logged-in Viewers</th>
-                  <th>Events</th>
-                  <th>Tracked Watch Time</th>
-                </tr>
-              </thead>
-              <tbody>
-                {topViewerChannels7d.length ? (
-                  topViewerChannels7d.map((row, index) => (
-                    <tr key={`${row.channel_id}-${index}`}>
-                      <td>{index + 1}</td>
-                      <td>{row.channel_name || row.channel_id || "-"}</td>
-                      <td>{Number(row.guest_viewers || 0)}</td>
-                      <td>{Number(row.client_viewers || 0)}</td>
-                      <td>{Number(row.events || 0)}</td>
-                      <td>{formatDuration(row.watch_seconds)}</td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={6} className={styles.pending}>No unified viewer channel data found yet.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          <h2 className={styles.tableTitleGap}>Recent Viewer History</h2>
-          <p className={styles.hint}>Latest guest and logged-in viewer activity captured by the analytics table.</p>
-          <div className={styles.tableWrap}>
-            <table>
-              <thead>
-                <tr>
-                  <th>Time</th>
-                  <th>Viewer</th>
-                  <th>Event</th>
-                  <th>Route</th>
-                  <th>Content</th>
-                  <th>Duration</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentViewerEvents.length ? (
-                  recentViewerEvents.map((row, index) => (
-                    <tr key={`${row.created_at}-${index}`}>
-                      <td>{row.created_at ? new Date(row.created_at).toLocaleString() : "-"}</td>
-                      <td>{row.viewer_type === "client" ? "Logged-in" : "Guest"} {row.viewer_key ? `(${row.viewer_key})` : ""}</td>
-                      <td>{row.event_type || "-"}</td>
-                      <td>{row.route || "-"}</td>
-                      <td>{row.channel_name || row.movie_title || "-"}</td>
-                      <td>{Number(row.watch_seconds || 0) > 0 ? formatDuration(row.watch_seconds) : "-"}</td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={6} className={styles.pending}>No viewer history found yet. Run the new SQL migration first if this stays empty.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </details>
-    </>
+    </div>
   );
 }
