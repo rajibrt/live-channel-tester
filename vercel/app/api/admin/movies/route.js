@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "../../../../lib/adminApi";
 import { getSupabaseAdmin } from "../../../../lib/supabaseAdmin";
+import { firstSourceUrl, saveMovieSources } from "../../../../lib/movieSourcesAdmin";
 import { normalizeStreamUrl } from "../../../../lib/streamUrl";
 import { csvToList, normalizeImdbId } from "../../../../lib/imdbData";
 import { detectVideoQualityLabel } from "../../../../lib/videoQuality";
@@ -160,7 +161,7 @@ export async function POST(request) {
   const releaseYear = toInt(payload?.release_year, 0) || null;
   const runtimeSeconds = toInt(payload?.runtime_seconds, 0);
   const isPublished = Boolean(payload?.is_published ?? true);
-  const sourceUrl = normalizeStreamUrl(payload?.source_url);
+  const sourceUrl = firstSourceUrl(payload);
   const imdbId = normalizeImdbId(payload?.imdb_id);
   const imdbUrl = String(payload?.imdb_url || "").trim();
   const imdbRating = toDecimal(payload?.imdb_rating, null);
@@ -232,18 +233,8 @@ export async function POST(request) {
     if (mapErr) return NextResponse.json({ error: mapErr.message || "Failed to save categories" }, { status: 500 });
   }
 
-  await admin.from("movie_sources").delete().eq("movie_id", movieId);
-  if (sourceUrl) {
-    const { error: sourceErr } = await admin.from("movie_sources").insert({
-      movie_id: movieId,
-      label: "default",
-      source_url: sourceUrl,
-      is_active: true,
-      sort_order: 0,
-      updated_at: now,
-    });
-    if (sourceErr) return NextResponse.json({ error: sourceErr.message || "Failed to save source" }, { status: 500 });
-  }
+  const { error: sourcesErr } = await saveMovieSources(admin, movieId, payload);
+  if (sourcesErr) return NextResponse.json({ error: sourcesErr }, { status: 500 });
 
   return NextResponse.json({ ok: true, id: String(movieId) });
 }

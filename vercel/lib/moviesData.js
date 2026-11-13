@@ -100,12 +100,28 @@ function toMovieShape(movie, categoryRows, sourceRows, progressRow, isFavorite) 
   const normalizedSource = normalizeStreamUrl(firstSource?.source_url || "");
   const privateDirectRaw = String(process.env.STREAM_PRIVATE_DIRECT_PLAYBACK || "true").trim();
   const usePrivateDirectPlayback = !/^(0|false|no|off)$/i.test(privateDirectRaw);
-  const isPrivateSource = normalizedSource ? isPrivateNetworkUrl(normalizedSource) : false;
-  const playbackUrl = normalizedSource
-    ? (usePrivateDirectPlayback && isPrivateSource
-        ? normalizedSource
-        : toStreamProxyUrl(normalizedSource) || normalizedSource)
-    : "";
+  const toPlaybackUrl = (raw) =>
+    raw
+      ? usePrivateDirectPlayback && isPrivateNetworkUrl(raw)
+        ? raw
+        : toStreamProxyUrl(raw) || raw
+      : "";
+  const playbackUrl = toPlaybackUrl(normalizedSource);
+  // Every active link, in admin order; the player fails over between them and prefers
+  // links whose audio the browser can decode (scan data from movie_source_media_info).
+  const toSourceShape = (row) => {
+    const raw = normalizeStreamUrl(row?.source_url || "");
+    return {
+      id: String(row.id),
+      label: text(row.label) || "default",
+      rawUrl: raw,
+      playbackUrl: toPlaybackUrl(raw),
+      audioCodecs: Array.isArray(row.media_info?.audio_codecs) ? row.media_info.audio_codecs : [],
+      browserAudioOk: typeof row.media_info?.browser_audio_ok === "boolean" ? row.media_info.browser_audio_ok : null,
+      reachable: row.media_info ? row.media_info.status !== "unreachable" : null,
+    };
+  };
+  const sourceList = sortedSources.map(toSourceShape).filter((s) => s.rawUrl);
 
   const watchState = deriveWatchState({
     positionSeconds,
@@ -146,18 +162,8 @@ function toMovieShape(movie, categoryRows, sourceRows, progressRow, isFavorite) 
     categorySlugs: (Array.isArray(categoryRows) ? categoryRows : [])
       .map((row) => normalizeCategorySlug(row?.slug || row?.name || ""))
       .filter(Boolean),
-    source: firstSource
-      ? {
-          id: String(firstSource.id),
-          label: text(firstSource.label) || "default",
-          rawUrl: normalizedSource,
-          playbackUrl,
-          audioCodecs: Array.isArray(firstSource.media_info?.audio_codecs) ? firstSource.media_info.audio_codecs : [],
-          browserAudioOk:
-            typeof firstSource.media_info?.browser_audio_ok === "boolean" ? firstSource.media_info.browser_audio_ok : null,
-          reachable: firstSource.media_info ? firstSource.media_info.status !== "unreachable" : null,
-        }
-      : null,
+    source: sourceList[0] || null,
+    sources: sourceList,
     rawPlaybackUrl: normalizedSource,
     playbackUrl,
     isFavorite: Boolean(isFavorite),

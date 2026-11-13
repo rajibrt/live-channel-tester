@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import MovieBackupLinks from "./MovieBackupLinks";
 import { ArrowLeft, Clapperboard, FolderPlus, Pencil, Trash2 } from "lucide-react";
 import {
   resolveBrowserPlaybackUrl,
@@ -231,6 +232,7 @@ const EMPTY_MOVIE_FORM = {
   release_year: "",
   runtime_seconds: "",
   source_url: "",
+  extra_sources: [],
   imdb_id: "",
   imdb_url: "",
   imdb_rating: "",
@@ -1685,6 +1687,15 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
         release_year: Number(movieForm.release_year || 0),
         runtime_seconds: Number(movieForm.runtime_seconds || 0),
         source_url: movieForm.source_url,
+        // Main link first, then backup links (the player fails over in this order).
+        sources: [
+          { url: movieForm.source_url, label: "default", is_active: true },
+          ...(movieForm.extra_sources || []).map((src) => ({
+            url: src.url,
+            label: src.label || "backup",
+            is_active: src.is_active !== false,
+          })),
+        ].filter((src) => String(src.url || "").trim()),
         imdb_id: movieForm.imdb_id,
         imdb_url: movieForm.imdb_url,
         imdb_rating: movieForm.imdb_rating === "" ? null : Number(movieForm.imdb_rating),
@@ -1893,7 +1904,10 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
 
   const openMovieEditor = (row) => {
     if (!row) return;
-    const firstSource = Array.isArray(row.sources) ? row.sources[0] : null;
+    const sortedSources = (Array.isArray(row.sources) ? row.sources : [])
+      .slice()
+      .sort((a, b) => Number(a?.sort_order || 0) - Number(b?.sort_order || 0) || Number(a?.id || 0) - Number(b?.id || 0));
+    const firstSource = sortedSources.find((src) => src?.is_active !== false) || sortedSources[0] || null;
     const next = {
       id: String(row.id || ""),
       title: String(row.title || ""),
@@ -1904,6 +1918,13 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
       release_year: String(row.release_year || ""),
       runtime_seconds: String(row.runtime_seconds || ""),
       source_url: String(firstSource?.source_url || ""),
+      extra_sources: sortedSources
+        .filter((src) => src !== firstSource && String(src?.source_url || "").trim())
+        .map((src) => ({
+          url: String(src.source_url || ""),
+          label: String(src.label || "backup"),
+          is_active: src.is_active !== false,
+        })),
       imdb_id: String(row.imdb_id || ""),
       imdb_url: String(row.imdb_url || ""),
       imdb_rating: row.imdb_rating == null ? "" : String(row.imdb_rating),
@@ -3513,7 +3534,7 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
               <input value={movieForm.backdrop_url} onChange={(e) => setMovieForm((prev) => ({ ...prev, backdrop_url: e.target.value }))} />
             </label>
             <label className={styles.field}>
-              <span>Source URL</span>
+              <span>Main link (Source URL)</span>
               <div className={styles.sourcePreviewRow}>
                 <input
                   value={movieForm.source_url}
@@ -3586,6 +3607,26 @@ export default function ManageMovies({ initialCategories = [], initialMovies = [
                 <option value="hidden">Hidden</option>
               </select>
             </label>
+          </div>
+
+          <div className={styles.formGrid}>
+            <MovieBackupLinks
+              styles={styles}
+              mainUrl={movieForm.source_url}
+              links={movieForm.extra_sources}
+              onChange={(next) => setMovieForm((prev) => ({ ...prev, extra_sources: next }))}
+              onPreview={(url) => openPreviewForSource(String(movieForm.title || "Link Test Preview"), url)}
+              onMakeMain={(index) =>
+                setMovieForm((prev) => {
+                  const extras = (prev.extra_sources || []).slice();
+                  const [picked] = extras.splice(index, 1);
+                  if (!picked) return prev;
+                  const oldMain = String(prev.source_url || "").trim();
+                  if (oldMain) extras.unshift({ url: oldMain, label: "default", is_active: true });
+                  return { ...prev, source_url: picked.url, extra_sources: extras };
+                })
+              }
+            />
           </div>
 
           <div className={styles.formGrid}>

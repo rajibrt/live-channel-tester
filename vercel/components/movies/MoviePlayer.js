@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowLeft,
   CheckCircle2,
@@ -313,8 +313,32 @@ function getSeekUpperBound(video, fallbackSeconds = 0) {
   return Math.max(0, toSeconds(fallbackSeconds))
 }
 
+// All active links of a movie, admin order, with links whose audio the browser cannot
+// decode (scan data) or that the scan found unreachable moved to the end.
+function orderMovieSources(movie) {
+  const list = Array.isArray(movie?.sources) && movie.sources.length
+    ? movie.sources
+    : movie?.source
+      ? [movie.source]
+      : []
+  const seen = new Set()
+  const unique = list.filter((s) => {
+    const key = String(s?.rawUrl || s?.playbackUrl || '')
+    if (!key || seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+  const rank = (s) => (s?.reachable === false ? 2 : s?.browserAudioOk === false ? 1 : 0)
+  return unique
+    .map((s, i) => ({ s, i }))
+    .sort((a, b) => rank(a.s) - rank(b.s) || a.i - b.i)
+    .map((x) => x.s)
+}
+
+const MOVIE_STARTUP_FAILOVER_MS = 20000
+
 export default function MoviePlayer({
-  movie,
+  movie: movieProp,
   isTvMode = false,
   startFrom = null,
   replayToken = 0,
@@ -330,6 +354,20 @@ export default function MoviePlayer({
   isGuest = false,
 }) {
   const { t } = useI18n()
+  // Multi-link playback: `movie` below is the movie with its currently active link.
+  const orderedSources = useMemo(() => orderMovieSources(movieProp), [movieProp])
+  const sourceKey = `${movieProp?.id || ''}|${orderedSources.map((s) => s.rawUrl || s.playbackUrl).join('\n')}`
+  const [sourceState, setSourceState] = useState({ key: sourceKey, index: 0 })
+  const sourceIndex = sourceState.key === sourceKey ? sourceState.index : 0
+  const activeSource = orderedSources[Math.min(sourceIndex, Math.max(0, orderedSources.length - 1))] || null
+  const movie = useMemo(
+    () =>
+      activeSource
+        ? { ...movieProp, source: activeSource, rawPlaybackUrl: activeSource.rawUrl, playbackUrl: activeSource.playbackUrl }
+        : movieProp,
+    [movieProp, activeSource],
+  )
+  const failoverAutoplayRef = useRef(false)
   const playerWrapRef = useRef(null)
   const videoRef = useRef(null)
   const hlsRef = useRef(null)
@@ -355,6 +393,41 @@ export default function MoviePlayer({
   const [audioIssueDismissed, setAudioIssueDismissed] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
 
+  // A new movie (or a changed link list) starts again from its first link.
+  useEffect(() => {
+    failoverAutoplayRef.current = false
+  }, [sourceKey])
+
+  // Move to the movie's next link, resuming at the current position. Returns false
+  // when there is no other link (the caller then shows its own message).
+  const switchToNextSource = useCallback(
+    (reason) => {
+      const nextIndex = sourceIndex + 1
+      if (nextIndex >= orderedSources.length) return false
+      const video = videoRef.current
+      const position = video ? toSeconds(video.currentTime) + toSeconds(transcodeOffsetRef.current) : 0
+      if (position > 0) seekStartFromRef.current = position
+      failoverAutoplayRef.current = true
+      setAudioIssue(null)
+      setStatusText(
+        t('player.tryingBackupLink')
+          .replace('{current}', String(nextIndex + 1))
+          .replace('{total}', String(orderedSources.length)),
+      )
+      onTrackActivityRef.current?.('movie_source_failover', {
+        movie_id: String(movieProp?.id || ''),
+        reason: String(reason || ''),
+        from_source_id: String(orderedSources[sourceIndex]?.id || ''),
+        to_source_id: String(orderedSources[nextIndex]?.id || ''),
+      })
+      setSourceState({ key: sourceKey, index: nextIndex })
+      return true
+    },
+    [movieProp?.id, orderedSources, sourceIndex, sourceKey, t],
+  )
+  const switchToNextSourceRef = useRef(switchToNextSource)
+  switchToNextSourceRef.current = switchToNextSource
+
   useEffect(() => {
     onProgressSavedRef.current = onProgressSaved
   }, [onProgressSaved])
@@ -367,12 +440,17 @@ export default function MoviePlayer({
     onTrackActivityRef.current = onTrackActivity
   }, [onTrackActivity])
 
+  // New movie: forget seek/duration state. (Not on a link switch of the same movie:
+  // switchToNextSource keeps the position in seekStartFromRef.)
   useEffect(() => {
     seekStartFromRef.current = null
     setSeekNonce(0)
     setScrubValue(null)
     setMediaDurationSeconds(0)
     setProbedDurationSeconds(0)
+  }, [movie?.id])
+
+  useEffect(() => {
     setAudioIssueDismissed(false)
     setLinkCopied(false)
     const knownCodecs = Array.isArray(movie?.source?.audioCodecs) ? movie.source.audioCodecs : []
@@ -385,7 +463,7 @@ export default function MoviePlayer({
     } else {
       setAudioIssue(null)
     }
-  }, [movie?.id, movie?.source?.audioCodecs, movie?.source?.browserAudioOk])
+  }, [movie?.id, movie?.source?.rawUrl, movie?.source?.audioCodecs, movie?.source?.browserAudioOk])
 
   useEffect(() => {
     if (!autoEnterFullscreen || typeof window === 'undefined') return undefined
@@ -664,6 +742,11 @@ export default function MoviePlayer({
     }
 
     const handleError = () => {
+      onTrackActivityRef.current?.('movie_playback_failed', {
+        movie_id: String(movie?.id || ''),
+        source_id: String(movie?.source?.id || ''),
+      })
+      if (switchToNextSourceRef.current('error')) return
       if (shouldAvoidServerTranscode(rawMovieUrl)) {
         setStatusText(
           'Playback failed (server cannot access private source; using direct playback only)',
@@ -671,9 +754,6 @@ export default function MoviePlayer({
       } else {
         setStatusText('Playback failed')
       }
-      onTrackActivityRef.current?.('movie_playback_failed', {
-        movie_id: String(movie?.id || ''),
-      })
     }
 
     video.addEventListener('loadedmetadata', handleLoadedMetadata)
@@ -689,11 +769,32 @@ export default function MoviePlayer({
     setIsPaused(video.paused)
 
     let cancelled = false
+    // After an automatic switch the viewer was already watching: keep playing.
+    const shouldAutoplay = autoStartPlayback || failoverAutoplayRef.current
+    // A link that has not produced a frame within the window is treated as dead
+    // (only once playback was requested, so a paused "press Play" state is not judged).
+    let startupTimer = null
+    let startedPlaying = false
+    const armStartupTimer = () => {
+      if (startupTimer || startedPlaying || orderedSources.length < 2) return
+      startupTimer = setTimeout(() => {
+        startupTimer = null
+        if (cancelled || startedPlaying || video.readyState >= 2) return
+        switchToNextSourceRef.current('startup_timeout')
+      }, MOVIE_STARTUP_FAILOVER_MS)
+    }
+    const onFirstPlaying = () => {
+      startedPlaying = true
+      if (startupTimer) clearTimeout(startupTimer)
+      startupTimer = null
+    }
+    video.addEventListener('playing', onFirstPlaying)
+    video.addEventListener('play', armStartupTimer)
     const startNativePlayback = () => {
       video.muted = false
       video.volume = 1
       applyNativeSource(sourceForPlayback)
-      if (!autoStartPlayback) {
+      if (!shouldAutoplay) {
         setIsPaused(true)
         setStatusText('Ready. Press Play to start normal mode.')
         return
@@ -773,6 +874,9 @@ export default function MoviePlayer({
 
     return () => {
       cancelled = true
+      if (startupTimer) clearTimeout(startupTimer)
+      video.removeEventListener('playing', onFirstPlaying)
+      video.removeEventListener('play', armStartupTimer)
       clearInterval(intervalRef.current)
       intervalRef.current = null
       postProgress('unmount')
@@ -797,6 +901,7 @@ export default function MoviePlayer({
     }
   }, [
     autoStartPlayback,
+    orderedSources.length,
     movie?.id,
     movie?.playbackUrl,
     movie?.rawPlaybackUrl,
@@ -849,6 +954,8 @@ export default function MoviePlayer({
       }
       if (!noAudio) return
       const codecs = Array.isArray(movie?.source?.audioCodecs) ? movie.source.audioCodecs : []
+      // Another link of the same movie may carry browser-playable audio: switch to it.
+      if (switchToNextSourceRef.current('no_audio')) return
       setAudioIssue((prev) => prev || { reason: 'detected', codecs })
       onTrackActivityRef.current?.('movie_audio_unsupported', {
         movie_id: movie?.id ? String(movie.id) : '',

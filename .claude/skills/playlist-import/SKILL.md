@@ -165,12 +165,31 @@ Always end with:
 - **Radio:** tables `radio_stations` (region group) and `radio_station_sources` (ordered links,
   viewer counters). Checks: stream answers with audio (`ffprobe` codec mp3/aac), CORS header (needed
   for the live spectrum), HTTPS preferred. Identity by stream metadata / station site. No frame check.
-- **Movies:** tables `movies` / `movie_sources`; sources are mostly ISP-local FTP. Check reachability
-  and the audio codec (`movie_source_media_info`, `scripts/scan-movie-media-info.mjs`) — AC3/EAC3/DTS
-  will not play in Chrome. Match by title + year; avoid duplicates.
+- **Movies (started 2026-11-13):** tables `movies` / `movie_sources` (ordered by `sort_order`, many
+  links per movie). The player (`components/movies/MoviePlayer.js`) tries the links in order, moves
+  links with known browser-unplayable audio or unreachable status (`movie_source_media_info`) to the
+  end, fails over on error / 20 s without a frame / no decoded audio after ~4 s, and resumes at the
+  same position. Admin movie form: "Main link" + "Backup links" (`MovieBackupLinks.js`); the save API
+  (`lib/movieSourcesAdmin.js`) stores the exact ordered list and never drops other links on a
+  single-link save.
+  - Servers reachable from the user's network (2026-11-13): Discovery FTP `https://cdn1.discoveryftp.net/Movies/…`,
+    DhakaFlix `http://172.16.50.7/DHAKA-FLIX-7/…` and `http://172.16.50.14/DHAKA-FLIX-14/…` (h5ai),
+    FTPBD `https://server2|3|5.ftpbd.net/FTP-n/…` (Apache; `_reencoded.mp4` files are h264 + AAC),
+    cinehub24 `http://cinehub24.com/ftp/Movies/…`, Circle FTP `http://index.circleftp.net/FILE/…`.
+    Not usable: ICC FTP 10.16.100.244 (firewall login), 10.1.1.1 (no listing), dhakaflix.com (parked).
+    These are BDIX servers: reachable from most BD ISPs, but only the user's ISP was tested.
+  - Scripts `vercel/scripts/movie-import/`: `01-crawl-index.mjs` (directory listings → file list),
+    `02-dump-movies.mjs`, `03-match.py` (normalised title + year from file or folder name; skips
+    samples/episodes, ambiguous matches and URLs already stored), `04-probe.py` (range request +
+    ffprobe: video codec/height, audio codecs, duration; resumable), `05-select.py` (max 4 new links
+    per movie, one per new server first, no 4K, no files under 40 min, browser-audio + h264 preferred;
+    order = existing playable, new browser-audio, other new, existing bad-audio).
+  - Do not add a URL that is already stored for that movie. Present the review CSV before writing.
 - When starting either, extend this file with its own section and scripts.
 
 ## Change log
+
+- 2026-11-13: movies — multi-link player/admin, BDIX server list, movie-import scripts.
 
 - 2026-11-13: official YouTube live sources (rule + channel ids).
 
