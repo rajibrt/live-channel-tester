@@ -265,6 +265,11 @@ export default function IptvHomeClient({
       : [],
     { persist: cookieConsent === "accepted", clearOnDisable: cookiePrefsReady }
   );
+  // Favourites / recent are only sent to the server after the viewer changed them here. Sending
+  // the list from the first render could overwrite the saved list with an empty or stale one
+  // (e.g. a page rendered while the server was restarting during a deploy).
+  const favoritesDirtyRef = useRef(false);
+  const recentDirtyRef = useRef(false);
   const [isTvDevice, setIsTvDevice] = useState(false);
   const [forceTvMode, setForceTvMode] = useState(false);
   const [clientPrefsReady, setClientPrefsReady] = useState(false);
@@ -1647,7 +1652,9 @@ export default function IptvHomeClient({
     if (!hasRestoredChannel && cookieConsent === "accepted") return;
     const payload = {
       favorites,
+      favorites_changed: favoritesDirtyRef.current,
       recent: cookieConsent === "accepted" ? recent : [],
+      recent_changed: recentDirtyRef.current && cookieConsent === "accepted",
       last_channel_id: cookieConsent === "accepted" ? String(selectedChannel?.id || "") : "",
       theme: isDark ? "dark" : "light",
       cookie_prefs: {
@@ -1744,6 +1751,7 @@ export default function IptvHomeClient({
   }, [allChannels, mode, favorites, selectedCategory, channelSearch, recent, recentSet]);
 
   const toggleFavorite = (channelId) => {
+    favoritesDirtyRef.current = true;
     const key = normalizeChannelId(channelId);
     setFavorites((prev) => {
       const has = prev.some((id) => normalizeChannelId(id) === key);
@@ -1762,6 +1770,7 @@ export default function IptvHomeClient({
     setHomeMode("tv");
     setSelectedChannel(channel);
     if (cookieConsent === "accepted") {
+      recentDirtyRef.current = true;
       setRecent((prev) => {
         const channelId = normalizeChannelId(channel.id);
         const next = [channelId, ...prev.filter((id) => normalizeChannelId(id) !== channelId)];

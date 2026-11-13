@@ -43,7 +43,9 @@ export default function MovieGrid({
           DEFAULT_GRID_GAP;
         const minWidth =
           Number.parseFloat(stylesMap.getPropertyValue("--movie-grid-min")) || DEFAULT_GRID_MIN_WIDTH;
-        const columns = Math.max(1, Math.floor((currentGrid.clientWidth + gap) / (minWidth + gap)));
+        // the real number of columns the browser laid out (the width estimate can differ)
+        const laidOut = String(stylesMap.gridTemplateColumns || "").split(" ").filter(Boolean).length;
+        const columns = laidOut || Math.max(1, Math.floor((currentGrid.clientWidth + gap) / (minWidth + gap)));
         const sampleCard = currentGrid.querySelector("[data-movie-card='true']");
         const cardHeight = sampleCard instanceof HTMLElement ? sampleCard.getBoundingClientRect().height : 0;
         const top = currentGrid.getBoundingClientRect().top;

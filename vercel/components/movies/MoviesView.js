@@ -1178,6 +1178,15 @@ export default function MoviesView({
     !normalizedYear &&
     !String(search || "").trim() &&
     !String(searchDraft || "").trim();
+  // The grid fits N cards per row; load pages in a multiple of N so the last row is full.
+  // The first page arrives with the default size, so re-request it once the columns are known.
+  useEffect(() => {
+    if (variant !== "browse" || isTvMode || isHomeBrowse || hasLocalClientFilters) return;
+    if (Number(initialPageSize || 0) === moviesPageSize) return;
+    onPageChange?.(currentPage, moviesPageSize);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [moviesPageSize, initialPageSize, isHomeBrowse]);
+
   const backToMoviesHome = () => {
     setShowAllGrid(false);
     clearAllFilters();
