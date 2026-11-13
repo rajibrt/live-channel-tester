@@ -23,11 +23,28 @@ export default function PublicConsentManager({ enableAds = false }) {
     setConsent(nextConsent);
   }
 
+  // AdSense loads on every monetizable page: Google's certified consent message (European
+  // regulations, set up in AdSense > Privacy & messaging) runs inside it and asks EEA/UK/Swiss
+  // visitors itself, and reviewers must see the ad code. A visitor who declines our banner gets
+  // non-personalised ads only. Our banner still controls analytics (StatCounter).
+  useEffect(() => {
+    if (!enableAds || consent !== "declined") return;
+    (window.adsbygoogle = window.adsbygoogle || []).requestNonPersonalizedAds = 1;
+  }, [enableAds, consent]);
+
   return (
     <>
+      {enableAds && consent !== "loading" ? (
+        <>
+          {/* set before the loader runs, so the first ad request already respects a decline */}
+          <Script id="adsense-npa" strategy="afterInteractive">
+            {`try{if(localStorage.getItem("${CONSENT_KEY}")==="declined"){(window.adsbygoogle=window.adsbygoogle||[]).requestNonPersonalizedAds=1}}catch(e){}`}
+          </Script>
+          <PublicAdSenseScript />
+        </>
+      ) : null}
       {consent === "accepted" ? (
         <>
-          {enableAds ? <PublicAdSenseScript /> : null}
           <Script id="statcounter-config" strategy="afterInteractive">
             {`window.sc_project=12383019;window.sc_invisible=1;window.sc_security="596c1a94";`}
           </Script>
