@@ -90,16 +90,26 @@ function rememberWorkingSource(channelId, url) {
 
 async function tryStartPlayback(video, { allowMutedFallback = false } = {}) {
   if (!video) return false;
-  try {
-    await video.play();
-    return { started: true, usedMutedFallback: false };
-  } catch {
-    if (!allowMutedFallback || video.muted) return { started: false, usedMutedFallback: false };
+  // Only the browser's autoplay block (NotAllowedError) justifies a muted start. Other rejections
+  // (AbortError when a channel switch or failover replaces the source, a still-loading stream)
+  // are retried with sound instead of silently muting the next channel.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      await video.play();
+      return { started: true, usedMutedFallback: false };
+    } catch (err) {
+      if (err?.name === "NotAllowedError") break;
+      if (attempt === 2) return { started: false, usedMutedFallback: false };
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      if (!video.currentSrc && !video.src) return { started: false, usedMutedFallback: false };
+    }
   }
+  // Once the viewer has interacted with the page, the browser allows sound: never mute then.
+  const activated = typeof navigator !== "undefined" && navigator.userActivation?.hasBeenActive;
+  if (!allowMutedFallback || video.muted || activated) return { started: false, usedMutedFallback: false };
 
   try {
     video.muted = true;
-    video.volume = 0;
     await video.play();
     return { started: true, usedMutedFallback: true };
   } catch {
@@ -518,6 +528,21 @@ export default function VideoPlayer({
         setAudioStatusMessage(
           autoplayMutedRef.current ? "Muted by browser autoplay. Click the sound icon to unmute." : ""
         );
+        if (autoplayMutedRef.current) {
+          // The browser only allowed a muted start (no click on the page yet). The first click,
+          // tap or key anywhere turns the sound on, so the viewer never has to find the button.
+          const unmuteOnGesture = (event) => {
+            if (event?.type === "keydown" && event.code === "KeyM") return; // M toggles mute itself
+            document.removeEventListener("pointerdown", unmuteOnGesture, true);
+            document.removeEventListener("keydown", unmuteOnGesture, true);
+            if (!autoplayMutedRef.current || userMutedRef.current || videoRef.current !== video) return;
+            autoplayMutedRef.current = false;
+            applyPreferredAudio(video, { forceAudible: true });
+            setAudioStatusMessage("");
+          };
+          document.addEventListener("pointerdown", unmuteOnGesture, true);
+          document.addEventListener("keydown", unmuteOnGesture, true);
+        }
         if (!result?.started) {
           if (video.error) {
             failSource("play_rejected");
